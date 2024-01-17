@@ -15,11 +15,23 @@
     <a href="https://www.ipb.uni-bonn.de/people/cyrill-stachniss/"><strong>Cyrill Stachniss</strong></a>
   </p>
   <p align="center"><a href="https://www.ipb.uni-bonn.de"><strong>University of Bonn</strong></a>
-  <h3 align="center"><a href="https://arxiv.org/abs/2210.02299">Preprint</a> | Video</a></h3>
+  <h3 align="center">Preprint</a> | Video</a></h3>
   <div align="center"></div>
 </p>
 
+**TL;DR: PIN-SLAM is a full-fledged implicit neural LiDAR SLAM system including odometry, loop closure detection, and globally consistent mapping**
 
+----
+
+![pin_slam_teaser](https://github.com/PRBonn/PIN_SLAM/assets/34207278/b5ab4c89-cdbe-464e-afbe-eb432b42fccc)
+
+*Globally consistent point-based implicit neural (PIN) map built with PIN-SLAM in Bonn. The high-fidelity mesh can be reconstructed from the neural point map.*
+
+----
+
+![pin_slam_loop_compare](https://github.com/PRBonn/PIN_SLAM/assets/34207278/7dadd438-5a46-451a-9add-c9c08dcae277)
+
+*Comparison of (a) the inconsistent mesh with duplicated structures reconstructed by PIN LiDAR odometry, and (b) the globally consistent mesh reconstructed by PIN-SLAM.*
 
 ----
 ## Abstract
