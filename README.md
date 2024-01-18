@@ -15,7 +15,7 @@
     <a href="https://www.ipb.uni-bonn.de/people/cyrill-stachniss/index.html"><strong>Cyrill Stachniss</strong></a>
   </p>
   <p align="center"><a href="https://www.ipb.uni-bonn.de/index.html"><strong>University of Bonn</strong></a>
-  <h3 align="center">Preprint</a> | Video</a></h3>
+  <h3 align="center"><a href="https://arxiv.org/pdf/2401.09101v1.pdf">Preprint</a> | Video</a></h3>
   <div align="center"></div>
 </p>
 
@@ -32,6 +32,16 @@
 ![pin_slam_loop_compare](https://github.com/PRBonn/PIN_SLAM/assets/34207278/7dadd438-5a46-451a-9add-c9c08dcae277)
 
 *Comparison of (a) the inconsistent mesh with duplicated structures reconstructed by PIN LiDAR odometry, and (b) the globally consistent mesh reconstructed by PIN-SLAM.*
+
+
+----
+
+
+| Globally Consistent Mapping | Various Scenarios | RGB-D SLAM Extension |
+| :-: | :-: | :-: |
+| <video src='https://github.com/PRBonn/PIN_SLAM/assets/34207278/b157f24c-0220-4ac4-8cf3-2247aeedfc2e'> | <video src='https://github.com/PRBonn/PIN_SLAM/assets/34207278/0906f7cd-aebe-4fb7-9ad4-514d089329bd'> | <video src='https://github.com/PRBonn/PIN_SLAM/assets/34207278/4519f4a8-3f62-42a1-897e-d9feb66bfcd0'> |
+
+
 
 ----
 ## Abstract
