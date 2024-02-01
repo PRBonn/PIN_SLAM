@@ -42,9 +42,30 @@
 | <video src='https://github.com/PRBonn/PIN_SLAM/assets/34207278/b157f24c-0220-4ac4-8cf3-2247aeedfc2e'> | <video src='https://github.com/PRBonn/PIN_SLAM/assets/34207278/0906f7cd-aebe-4fb7-9ad4-514d089329bd'> | <video src='https://github.com/PRBonn/PIN_SLAM/assets/34207278/4519f4a8-3f62-42a1-897e-d9feb66bfcd0'> |
 
 
+<!-- TABLE OF CONTENTS -->
+<details open="open" style='padding: 10px; border-radius:5px 30px 30px 5px; border-style: solid; border-width: 1px;'>
+  <summary>Table of Contents</summary>
+  <ol>
+    <li>
+      <a href="#abstract">Abstract</a>
+    </li>
+    <li>
+      <a href="#installation">Installation</a>
+    </li>
+    <li>
+      <a href="#run-pin-slam">How to run PIN-SLAM</a>
+    </li>
+    <li>
+      <a href="#related-projects">Related projects</a>
+    </li>
+  </ol>
+</details>
 
 ----
 ## Abstract
+
+<details>
+  <summary>[Details (click to expand)]</summary>
 Accurate and robust localization and mapping are
 essential components for most autonomous robots. In this paper,
 we propose a SLAM system for building globally consistent maps,
@@ -65,7 +86,133 @@ reconstructed as accurate and complete meshes. Finally, thanks to
 the voxel hashing for efficient neural points indexing and the fast
 implicit map-based registration without closest point association,
 PIN-SLAM can run at the sensor frame rate on a moderate GPU.
+</details>
+
 
 ----
-## Codes 
-Coming soon.
+
+## Installation
+
+### Platform requirement
+* Ubuntu OS (tested on 20.04)
+
+* With GPU (recommended) or CPU only (run much slower)
+
+* GPU memory requirement (> 8 GB recommended)
+
+### 1. Set up conda environment
+
+```
+conda create --name pin python=3.8
+conda activate pin
+```
+
+### 2. Install the key requirement pytorch
+
+```
+conda install pytorch==2.0.0 torchvision==0.15.0 torchaudio==2.0.0 pytorch-cuda=11.7 -c pytorch -c nvidia 
+```
+
+The commands depend on your CUDA version. You may check the instructions [here](https://pytorch.org/get-started/previous-versions/).
+
+### 3. Install other dependency
+
+```
+pip install open3d==0.17 scikit-image gtsam wandb tqdm rich roma natsort pyquaternion pypose evo laspy rospkg 
+```
+
+Note that `rospkg` is optional. You can install it if you would like to use PIN-SLAM with ROS.
+
+----
+
+## Run PIN-SLAM
+
+### Clone the repository
+
+```
+git clone git@github.com:PRBonn/PIN_SLAM.git
+cd PIN_SLAM
+```
+
+### Sanity test
+
+For a sanity test, do the following to download an example part (first 100 frames) of the KITTI dataset (seq 00):
+
+```
+sh ./scripts/download_kitti_example.sh
+```
+
+And then run
+
+```
+python pin_slam.py ./config/lidar_slam/run_demo.yaml
+```
+
+You can visualize the SLAM process in PIN-SLAM visualizer and check the results in the `./experiments` folder.
+
+### Run with arbitrary datasets
+
+For an arbitrary data sequence:
+```
+python pin_slam.py path_to_your_config_file.yaml
+```
+
+Generally speaking, you only need to edit in the config file the 
+`pc_path`, which is the path to the folder containing the point cloud (`.bin`, `.ply`, `.pcd` or `.las` format) for each frame.
+
+For pose estimation evaluation, you may also provide the path `pose_path` to the reference pose file and optionally the path `calib_path` to the extrinsic calibration file.
+
+The SLAM results and logs will be output in the `output_root` folder specified in the config file.
+
+### ROS 1 Support
+
+If you are not using PIN-SLAM as a part of a ROS package, you can avoid the catkin stuff and simply run:
+
+```
+python pin_slam_ros.py [path_to_your_config_file] [point_cloud_topic_name] [(optional)point_timestamp_field_name]
+```
+
+For example:
+
+```
+python pin_slam_ros.py ./config/lidar_slam/run_ros_general.yaml /os_cloud_node/points time
+```
+
+After playing the ROS bag or launch the sensor you can then visualize the results in Rviz by:
+
+```
+rviz -d ./config/pin_slam_ros.rviz 
+```
+
+You can also put `pin_slam_ros.py` into a ROS package for `rosrun` or `roslaunch`.
+
+
+### Inspect the results after SLAM
+
+After the SLAM process, you can reconstruct mesh from the PIN map within an arbitrary bounding box with an arbitrary resolution by running:
+
+```
+python vis_pin_map.py [path/to/your/result/folder] [marching_cubes_resolution_m] [(cropped)_map_file.ply]  [output_mesh_file.ply] [mc_nn_threshold]
+```
+
+For example, for the case of the sanity test, run:
+
+```
+python vis_pin_map.py ./experiments/sanity_test_* 0.2 neural_points.ply  mesh_20cm.ply
+```
+
+----
+## Visualizer Instructions
+
+
+
+----
+
+
+## Related Projects
+
+[SHINE-Mapping](https://github.com/PRBonn/SHINE_mapping): Large-Scale 3D Mapping Using Sparse Hierarchical Implicit Neural Representations
+
+[LocNDF](https://github.com/PRBonn/LocNDF/issues/6): Neural Distance Field Mapping for Robot Localization
+
+[KISS-ICP](https://github.com/PRBonn/kiss-icp): A LiDAR odometry pipeline that just works
