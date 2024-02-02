@@ -411,8 +411,6 @@ class PINSLAMer:
 
         return False
    
-    # publish topic and visualize in RViz 
-    # For mesh publishing, take a look at voxblox, https://github.com/ethz-asl/cad-percept, https://github.com/naturerobots/mesh_navigation, https://github.com/naturerobots/mesh_tools, SLAMesh
                     
 if __name__ == "__main__":
 
@@ -436,14 +434,6 @@ if __name__ == "__main__":
 
     slamer = PINSLAMer(config_path, point_cloud_topic, ts_field_name)
     slamer.check_exit()
-
-
-    # if time.time() - slamer.last_message_time > slamer.timeout_duration:
-    #     # Save results and stop the program
-    #     slamer.save_results()
-    #     rospy.signal_shutdown('Timeout reached. Save the results and exit.')
-    # else:
-    #     rospy.spin()
 
 
 
