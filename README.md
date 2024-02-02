@@ -65,6 +65,9 @@
       <a href="#run-pin-slam">How to run PIN-SLAM</a>
     </li>
     <li>
+      <a href="#visualizer-instructions">Visualizer Instructions</a>
+    </li>
+    <li>
       <a href="#related-projects">Related projects</a>
     </li>
   </ol>
