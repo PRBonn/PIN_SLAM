@@ -63,7 +63,7 @@
       <a href="#run-pin-slam">How to run PIN-SLAM</a>
     </li>
     <li>
-      <a href="#visualizer-instructions">Visualizer Instructions</a>
+      <a href="#visualizer-instructions">Visualizer instructions</a>
     </li>
     <li>
       <a href="#contact">Contact</a>
@@ -266,6 +266,6 @@ If you have any questions, please contact:
 
 [SHINE-Mapping](https://github.com/PRBonn/SHINE_mapping): Large-Scale 3D Mapping Using Sparse Hierarchical Implicit Neural Representations
 
-[LocNDF](https://github.com/PRBonn/LocNDF/issues/6): Neural Distance Field Mapping for Robot Localization
+[LocNDF](https://github.com/PRBonn/LocNDF): Neural Distance Field Mapping for Robot Localization
 
 [KISS-ICP](https://github.com/PRBonn/kiss-icp): A LiDAR odometry pipeline that just works
