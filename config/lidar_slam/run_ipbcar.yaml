@@ -1,0 +1,45 @@
+setting:
+  name: "test_ipbcar"
+  output_root: "./experiments"
+  pc_path: "./data/ipb_car/01/ply"
+  pose_path: "./data/ipb_car/01/poses.txt"
+  deskew: True
+process:
+  min_range_m: 3.0
+  max_range_m: 80.0
+sampler:
+  surface_sample_range_m: 0.25
+  surface_sample_n: 4
+  free_sample_begin_ratio: 0.5
+  free_sample_end_dist_m: 1.0
+  free_front_sample_n: 2
+neuralpoints:
+  search_alpha: 0.5
+  weighted_first: False
+loss:
+  main_loss_type: bce
+  loss_weight_on: True
+  dist_weight_scale: 0.8
+  ekional_loss_on: True
+  weight_e: 0.5
+continual:
+  batch_size_new_sample: 3000
+  pool_capacity: 4e7
+tracker:
+  iter_n: 100
+  eigenvalue_check: False
+pgo:
+  map_context: True
+  pgo_freq_frame: 30
+  with_pose_prior: True
+  virtual_side_count: 6
+optimizer: # mapper
+  iters: 15  # iterations per frame
+  batch_size: 16384
+eval:
+  wandb_vis_on: False # log to wandb or not
+  o3d_vis_on: True # visualize the mapping or not
+  sensor_cad_path: ./cad/ipb_car.ply
+  mesh_freq_frame: 50 # reconstruct the mesh every x frames
+  mesh_min_nn: 15
+  save_map: True

@@ -1,0 +1,51 @@
+setting:
+  name: "test_kitti"
+  output_root: "./experiments"
+  pc_path: "./data/kitti/sequences/00/velodyne"
+  label_path: "./data/kitti/sequences/00/labels"
+  pose_path: "./data/kitti/sequences/00/poses.txt"
+  calib_path: "./data/kitti/sequences/00/calib.txt"
+  kitti_correct: True
+  correct_deg: 0.195
+  semantic_on: False
+process:
+  min_range_m: 3.0
+  max_range_m: 80.0
+  min_z_m: -3.5
+sampler:
+  surface_sample_range_m: 0.25 
+  surface_sample_n: 4
+  free_sample_begin_ratio: 0.3
+  free_sample_end_dist_m: 1.0
+  free_front_sample_n: 2
+neuralpoints:
+  search_alpha: 0.5 # increase when you want to be more robust to agressive motions
+  weighted_first: False
+loss:
+  main_loss_type: bce
+  loss_weight_on: True
+  dist_weight_scale: 0.8
+  ekional_loss_on: True
+  weight_e: 0.5
+continual:
+  batch_size_new_sample: 2000
+  pool_capacity: 2e7
+tracker:
+  iter_n: 100
+  GM_grad: 0.1
+  GM_dist: 0.2
+pgo:
+  map_context: True
+  pgo_freq_frame: 20
+  virtual_side_count: 6
+  context_cosdist: 0.25
+  min_loop_travel_ratio: 4.0
+optimizer: # mapper
+  iters: 15  # iterations per frame
+  batch_size: 16384
+eval:
+  wandb_vis_on: False # log to wandb or not
+  o3d_vis_on: True # visualize the mapping or not
+  sensor_cad_path: ./cad/kitti_car.ply
+  mesh_freq_frame: 50 # reconstruct the mesh every x frames
+  save_map: True

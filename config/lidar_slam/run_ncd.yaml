@@ -1,0 +1,48 @@
+setting:
+  name: "test_ncd"
+  output_root: "./experiments"
+  pc_path: "./data/ncd/01/bin"
+  pose_path: "./data/ncd/01/bin/poses.txt" 
+process:
+  min_range_m: 1.5
+  max_range_m: 80.0
+  min_z_m: -10.0
+  vox_down_m: 0.1
+  adaptive_range_on: True
+sampler:
+  surface_sample_range_m: 0.35
+  surface_sample_n: 3
+  free_sample_begin_ratio: 0.3
+  free_sample_end_dist_m: 1.2
+  free_front_sample_n: 2 
+neuralpoints:
+  voxel_size_m: 0.4
+  feature_dim: 8 
+  query_nn_k: 6
+  search_alpha: 0.8
+  use_mid_ts: True
+loss:
+  main_loss_type: bce
+  sigma_sigmoid_m: 0.1
+  loss_weight_on: True
+  dist_weight_scale: 1.0
+  ekional_loss_on: True
+  weight_e: 0.5
+  numerical_grad_on: True
+continual:
+  batch_size_new_sample: 1000
+  pool_capacity: 2e7
+tracker:
+  source_vox_down_m: 0.8
+  iter_n: 100
+pgo:
+  map_context: True
+  pgo_freq_frame: 30
+optimizer: # mapper
+  iters: 15  # iterations per frame
+  batch_size: 16384
+eval:
+  wandb_vis_on: False # log to wandb or not
+  o3d_vis_on: True # visualize the mapping or not
+  mesh_freq_frame: 50 # reconstruct the mesh every x frames
+  save_map: True

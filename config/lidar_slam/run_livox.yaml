@@ -1,0 +1,43 @@
+setting:
+  name: "test_livox"
+  output_root: "./experiments"
+  pc_path: "./data/livox/HKU_ZYM/pcd"
+process:
+  min_range_m: 0.5
+  max_range_m: 30.0
+  min_z_m: -30.0
+  vox_down_m: 0.05
+sampler:
+  surface_sample_range_m: 0.15
+  surface_sample_n: 3
+  free_sample_begin_ratio: 0.3
+  free_sample_end_dist_m: 0.6
+  free_front_sample_n: 3
+neuralpoints:
+  voxel_size_m: 0.15
+  query_nn_k: 8
+  search_alpha: 0.5
+  weighted_first: False
+loss:
+  sigma_sigmoid_m: 0.08
+  loss_weight_on: True
+  dist_weight_scale: 0.5
+  ekional_loss_on: True
+  weight_e: 0.5
+  numerical_grad_on: False
+continual:
+  batch_size_cur_frame: 2000
+  pool_capacity: 2e7
+tracker:
+  source_vox_down_m: 0.2
+  iter_n: 100
+optimizer:
+  mapping_freq_frame: 2
+  iters: 15
+  batch_size: 8192
+eval:
+  wandb_vis_on: False # log to wandb or not
+  o3d_vis_on: True # visualize the mapping or not
+  mesh_freq_frame: 20 # reconstruct the mesh every x frames
+  mesh_min_nn: 15
+  save_map: True

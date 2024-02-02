@@ -1,6 +1,14 @@
 <p align="center">
 
   <h1 align="center">📍PIN-SLAM: LiDAR SLAM Using a Point-Based Implicit Neural Representation for Achieving Global Map Consistency</h1>
+
+  <p align="center">
+    <a href="https://github.com/PRBonn/PIN-SLAM#run-pin-slam"><img src="https://img.shields.io/badge/python-3670A0?style=flat-square&logo=python&logoColor=ffdd54" /></a>
+    <a href="https://github.com/PRBonn/PIN-SLAM#installation"><img src="https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black" /></a>
+    <a href="https://arxiv.org/pdf/2401.09101v1.pdf"><img src="https://img.shields.io/badge/Paper-pdf-<COLOR>.svg?style=flat-square" /></a>
+    <a href="https://lbesson.mit-license.org/"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" /></a>
+  </p>
+  
   <p align="center">
     <a href="https://www.ipb.uni-bonn.de/people/yue-pan/index.html"><strong>Yue Pan</strong></a>
     ·
@@ -20,6 +28,7 @@
 </p>
 
 **TL;DR: PIN-SLAM is a full-fledged implicit neural LiDAR SLAM system including odometry, loop closure detection, and globally consistent mapping**
+
 
 ----
 
@@ -91,6 +100,7 @@ PIN-SLAM can run at the sensor frame rate on a moderate GPU.
 
 ----
 
+
 ## Installation
 
 ### Platform requirement
@@ -98,7 +108,7 @@ PIN-SLAM can run at the sensor frame rate on a moderate GPU.
 
 * With GPU (recommended) or CPU only (run much slower)
 
-* GPU memory requirement (> 8 GB recommended)
+* GPU memory requirement (> 6 GB recommended)
 
 ### 1. Set up conda environment
 
@@ -107,7 +117,7 @@ conda create --name pin python=3.8
 conda activate pin
 ```
 
-### 2. Install the key requirement pytorch
+### 2. Install the key requirement PyTorch
 
 ```
 conda install pytorch==2.0.0 torchvision==0.15.0 torchaudio==2.0.0 pytorch-cuda=11.7 -c pytorch -c nvidia 
@@ -150,9 +160,9 @@ python pin_slam.py ./config/lidar_slam/run_demo.yaml
 
 You can visualize the SLAM process in PIN-SLAM visualizer and check the results in the `./experiments` folder.
 
-### Run with arbitrary datasets
+### Run on your datasets
 
-For an arbitrary data sequence:
+For an arbitrary data sequence, you can run:
 ```
 python pin_slam.py path_to_your_config_file.yaml
 ```
@@ -163,6 +173,8 @@ Generally speaking, you only need to edit in the config file the
 For pose estimation evaluation, you may also provide the path `pose_path` to the reference pose file and optionally the path `calib_path` to the extrinsic calibration file.
 
 The SLAM results and logs will be output in the `output_root` folder specified in the config file.
+
+The training logs can be monitored via [Weights & Bias](wandb.ai) online if you turn the wandb_vis_on option on. If it's your first time using Weights & Bias, you will be requested to register and log in to your wandb account.
 
 ### ROS 1 Support
 
@@ -178,7 +190,7 @@ For example:
 python pin_slam_ros.py ./config/lidar_slam/run_ros_general.yaml /os_cloud_node/points time
 ```
 
-After playing the ROS bag or launch the sensor you can then visualize the results in Rviz by:
+After playing the ROS bag or launching the sensor you can then visualize the results in Rviz by:
 
 ```
 rviz -d ./config/pin_slam_ros.rviz 
@@ -204,7 +216,42 @@ python vis_pin_map.py ./experiments/sanity_test_* 0.2 neural_points.ply  mesh_20
 ----
 ## Visualizer Instructions
 
+We provide a PIN-SLAM visualizer based on [lidar-visualizer](https://github.com/PRBonn/lidar-visualizer) to monitor the SLAM process.
 
+The keyboard callbacks are listed below.
+
+<details>
+  <summary>[Details (click to expand)]</summary>
+
+| Button |                                          Function                                          |
+|:------:|:------------------------------------------------------------------------------------------:|
+|  Space |                                        pause/resume                                        |
+| ESC/Q  |                           exit                                                             |
+|   G    |                     switch between the global/local map visualization                      |
+|   E    |                     switch between the ego/map viewpoint                                   |
+|   F    |                     toggle on/off the current point cloud  visualization                   |
+|   M    |                         toggle on/off the mesh visualization                               |
+|   A    |                 toggle on/off the current frame axis & sensor model visualization          |
+|   P    |                 toggle on/off the neural points map visualization                          |
+|   D    |               toggle on/off the training data pool visualization                           |
+|   I    |               toggle on/off the SDF horizontal slice visualization                         |
+|   T    |              toggle on/off PIN SLAM trajectory visualization                               |
+|   Y    |              toggle on/off the ground truth trajectory visualization                       |
+|   U    |              toggle on/off PIN odometry trajectory visualization                           |
+|   R    |                           re-center the view point                                         |
+|   Z    |              3D screenshot, save the currently visualized entities in the log folder       |
+| Ctrl+9 |                                Set mesh color as normal direction                          |
+|   5    |   switch between point cloud for mapping and for registration (with point-wise weight)     |
+|   7    |                                      switch between black and white background             |
+|   /    |   switch among different neural point color mode, 0: geometric feature, 1: color feature, 2: timestamp, 3: stability, 4: random             |
+|  \[    |  decrease mesh marching cubes voxel size                                                   |
+|  \]    |  increase mesh marching cubes voxel size                                                   |
+|  <     |  decrease mesh nearest neighbor threshold (more complete and more artifacts)               |
+|  >     |  increase mesh nearest neighbor threshold (less complete but more accurate)                |
+|  ↑     |  move up the horizontal SDF slice                                                          |
+|  ↓     |  move down the horizontal SDF slice                                                        |
+
+</details>
 
 ----
 

@@ -1,0 +1,56 @@
+setting:
+  name: "test_replica"
+  output_root: "./experiments"
+  pc_path: "./data/Replica/room0/rgbd_ply"
+  pose_path: "./data/Replica/room0/poses.txt"
+  color_channel: 3
+  first_frame_ref: False
+process:
+  min_range_m: 0.05
+  max_range_m: 10.0
+  min_z_m: -10.0
+  vox_down_m: 0.02
+sampler:
+  surface_sample_range_m: 0.03
+  surface_sample_n: 3
+  free_sample_begin_ratio: 0.3
+  free_sample_end_dist_m: 0.1
+  free_front_sample_n: 1
+neuralpoints:
+  voxel_size_m: 0.05
+  feature_dim: 8
+  query_nn_k: 6
+  search_alpha: 0.2
+loss:
+  main_loss_type: bce
+  sigma_sigmoid_m: 0.01
+  ekional_loss_on: True
+  weight_e: 0.2
+continual:
+  batch_size_new_sample: 4000
+  pool_capacity: 2e7
+tracker:
+  photo_loss: True
+  photo_weight: 0.01
+  eigenvalue_check: False
+  source_vox_down_m: 0.06
+  iter_n: 100
+  min_grad_norm: 0.4
+  max_grad_norm: 2.5
+  GM_grad: 0.3
+  GM_dist: 0.05
+  term_deg: 1e-3
+  term_m: 1e-4
+optimizer:
+  iters: 20  # iterations per frame
+  batch_size: 16384
+  ba_freq_frame: 20
+eval:
+  wandb_vis_on: False # log to wandb or not
+  o3d_vis_on: True # visualize the mapping or not
+  mesh_freq_frame: 100 # reconstruct the mesh every x frames
+  mesh_min_nn: 9
+  sensor_cad_path: ./cad/camera.ply
+  skip_top_voxel: 5
+  save_map: True
+  

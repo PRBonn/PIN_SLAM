@@ -114,7 +114,7 @@ class Config:
 
         # Use all the surface samples or just the exact measurements to build the neural points map
         # If True may lead to larger memory, but is more robust while the reconstruction.
-        self.from_sample_points: bool = True  # TODO 
+        self.from_sample_points: bool = True
         self.from_all_samples: bool = False  # even use the freespace samples (for better ESDF mapping at a cost of larger memory consumption)
         self.map_surface_ratio: float = 0.5 # 3.0 # ratio * surface sample std
 
@@ -165,8 +165,8 @@ class Config:
         self.reg_GM_grad: float = 0.2 # 0.1 # default value changed, the smaller the value, the smaller the weight would be (give even smaller weight to the outliers)
         self.reg_lm_lambda: float = 1e-4 # 1e-3
         self.reg_iter_n: int = 50 # maximum iteration number for registration
-        self.reg_term_thre_deg: float = 0.05
-        self.reg_term_thre_m: float = 0.001
+        self.reg_term_thre_deg: float = 0.01
+        self.reg_term_thre_m: float = 0.0005
         self.eigenvalue_check: bool = True
         self.consist_wieght_on: bool = True
 
@@ -209,7 +209,7 @@ class Config:
         self.weight_n: float = 0.01
         
         self.numerical_grad: bool = True # use numerical gradient as in the paper Neuralangelo
-        self.gradient_decimation: int = 10 # 10 # use just a part of the points for the ekional loss when using the numerical grad, save computing time
+        self.gradient_decimation: int = 10 # use just a part of the points for the ekional loss when using the numerical grad, save computing time
         self.num_grad_step_ratio: float = 0.2 # step as a ratio of the surface sample sigma
 
         self.ekional_loss_on: bool = True
@@ -226,7 +226,7 @@ class Config:
 
         self.dynamic_filter_on: bool = False
         self.dynamic_certainty_thre: float = 4.0
-        self.dynamic_sdf_ratio_thre: float = 1.5 # 1.5
+        self.dynamic_sdf_ratio_thre: float = 1.5
 
         # optimizer
         self.mapping_freq_frame: int = 1
@@ -247,7 +247,7 @@ class Config:
         self.global_loop_on: bool = True # global loop detection using context
         self.local_map_context: bool = False # use local map or scan context for loop closure description
         self.loop_with_feature: bool = False # encode neural point feature in the context
-        self.min_loop_travel_dist_ratio: float = 3.0 # accumulated travel distance should be larger than theis ratio * local map radius to be considered as an valid candidate
+        self.min_loop_travel_dist_ratio: float = 3.5 # accumulated travel distance should be larger than theis ratio * local map radius to be considered as an valid candidate
         self.local_map_context_latency: int = 0 # 10
         self.loop_local_map_time_window: int = 100
         self.context_shape = [20, 60] # [20, 60] 
@@ -496,10 +496,10 @@ class Config:
             self.use_gt_loop = config_args["pgo"].get("gt_loop", False) # only for debugging, not used for real cases
             self.local_map_context = config_args["pgo"].get("map_context", True)
             if self.local_map_context:
-                self.loop_with_feature = config_args["pgo"].get("loop_with_feature", True)
+                self.loop_with_feature = config_args["pgo"].get("loop_with_feature", self.loop_with_feature)
             self.context_virtual_side_count = config_args["pgo"].get("virtual_side_count", self.context_virtual_side_count)
             self.pgo_freq = config_args["pgo"].get("pgo_freq_frame", self.pgo_freq)
-            self.pgo_with_pose_prior = config_args["pgo"].get("with_pose_prior", True)
+            self.pgo_with_pose_prior = config_args["pgo"].get("with_pose_prior", self.pgo_with_pose_prior)
             # default cov (constant for all the edges)
             self.pgo_tran_std = config_args["pgo"].get("tran_std", self.pgo_tran_std)
             self.pgo_rot_std = config_args["pgo"].get("rot_std", self.pgo_rot_std)

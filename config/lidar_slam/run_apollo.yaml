@@ -1,0 +1,48 @@
+setting:
+  name: "test_apollo"
+  output_root: "./experiments"
+  pc_path: "./data/Apollo/sequences/00/velodyne"
+  pose_path: "./data/Apollo/sequences/00/poses.txt" 
+  first_frame_ref: True
+process:
+  min_range_m: 3.0
+  max_range_m: 60.0
+  vox_down_m: 0.08
+sampler:
+  surface_sample_range_m: 0.25 
+  surface_sample_n: 4
+  free_sample_begin_ratio: 0.5
+  free_sample_end_dist_m: 1.0
+  free_front_sample_n: 2 
+neuralpoints:
+  voxel_size_m: 0.3
+  feature_dim: 8
+  query_nn_k: 6
+  search_alpha: 0.5
+  use_mid_ts: True
+loss:
+  main_loss_type: bce
+  sigma_sigmoid_m: 0.08
+  loss_weight_on: True
+  dist_weight_scale: 0.8
+  ekional_loss_on: True
+  weight_e: 0.5
+continual:
+  batch_size_new_sample: 2000
+  pool_capacity: 2e7
+tracker:
+  source_vox_down_m: 0.8
+  iter_n: 50
+pgo:
+  map_context: True
+  pgo_freq_frame: 30
+optimizer: # mapper
+  iters: 15  # iterations per frame
+  batch_size: 16384
+eval:
+  wandb_vis_on: False # log to wandb or not
+  o3d_vis_on: True # visualize the mapping or not
+  sensor_cad_path: ./cad/ipb_car.ply
+  mesh_freq_frame: 50 # reconstruct the mesh every x frames
+  mesh_min_nn: 15
+  save_map: True
