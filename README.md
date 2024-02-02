@@ -3,8 +3,8 @@
   <h1 align="center">📍PIN-SLAM: LiDAR SLAM Using a Point-Based Implicit Neural Representation for Achieving Global Map Consistency</h1>
 
   <p align="center">
-    <a href="https://github.com/PRBonn/PIN-SLAM#run-pin-slam"><img src="https://img.shields.io/badge/python-3670A0?style=flat-square&logo=python&logoColor=ffdd54" /></a>
-    <a href="https://github.com/PRBonn/PIN-SLAM#installation"><img src="https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black" /></a>
+    <a href="https://github.com/PRBonn/PIN_SLAM#run-pin-slam"><img src="https://img.shields.io/badge/python-3670A0?style=flat-square&logo=python&logoColor=ffdd54" /></a>
+    <a href="https://github.com/PRBonn/PIN_SLAM#installation"><img src="https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black" /></a>
     <a href="https://arxiv.org/pdf/2401.09101v1.pdf"><img src="https://img.shields.io/badge/Paper-pdf-<COLOR>.svg?style=flat-square" /></a>
     <a href="https://lbesson.mit-license.org/"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" /></a>
   </p>
@@ -29,8 +29,6 @@
 
 **TL;DR: PIN-SLAM is a full-fledged implicit neural LiDAR SLAM system including odometry, loop closure detection, and globally consistent mapping**
 
-
-----
 
 ![pin_slam_teaser](https://github.com/PRBonn/PIN_SLAM/assets/34207278/b5ab4c89-cdbe-464e-afbe-eb432b42fccc)
 
@@ -68,12 +66,15 @@
       <a href="#visualizer-instructions">Visualizer Instructions</a>
     </li>
     <li>
+      <a href="#contact">Contact</a>
+    </li>
+    <li>
       <a href="#related-projects">Related projects</a>
     </li>
   </ol>
 </details>
 
-----
+
 ## Abstract
 
 <details>
@@ -100,8 +101,6 @@ implicit map-based registration without closest point association,
 PIN-SLAM can run at the sensor frame rate on a moderate GPU.
 </details>
 
-
-----
 
 
 ## Installation
@@ -136,7 +135,6 @@ pip install open3d==0.17 scikit-image gtsam wandb tqdm rich roma natsort pyquate
 
 Note that `rospkg` is optional. You can install it if you would like to use PIN-SLAM with ROS.
 
-----
 
 ## Run PIN-SLAM
 
@@ -155,11 +153,13 @@ For a sanity test, do the following to download an example part (first 100 frame
 sh ./scripts/download_kitti_example.sh
 ```
 
-And then run
+And then run:
 
 ```
 python pin_slam.py ./config/lidar_slam/run_demo.yaml
 ```
+
+Use `run_demo_cpu.yaml` if you don't have GPU on your computer. Use `run_demo_no_vis.yaml` if you are running on a server without a X service. 
 
 You can visualize the SLAM process in PIN-SLAM visualizer and check the results in the `./experiments` folder.
 
@@ -173,11 +173,12 @@ python pin_slam.py path_to_your_config_file.yaml
 Generally speaking, you only need to edit in the config file the 
 `pc_path`, which is the path to the folder containing the point cloud (`.bin`, `.ply`, `.pcd` or `.las` format) for each frame.
 
-For pose estimation evaluation, you may also provide the path `pose_path` to the reference pose file and optionally the path `calib_path` to the extrinsic calibration file.
+For pose estimation evaluation, you may also provide the path `pose_path` to the reference pose file and optionally the path `calib_path` to the extrinsic calibration file. Note the pose file and calibration file should be in the [KITTI odometry data format](https://www.cvlibs.net/datasets/kitti/eval_odometry.php).
 
 The SLAM results and logs will be output in the `output_root` folder specified in the config file.
 
-The training logs can be monitored via [Weights & Bias](wandb.ai) online if you turn the wandb_vis_on option on. If it's your first time using Weights & Bias, you will be requested to register and log in to your wandb account.
+The training logs can be monitored via [Weights & Bias](wandb.ai) online if you turn on the `wandb_vis_on` option in the config file. If it's your first time using Weights & Bias, you will be requested to register and log in to your wandb account.
+
 
 ### ROS 1 Support
 
@@ -216,7 +217,6 @@ For example, for the case of the sanity test, run:
 python vis_pin_map.py ./experiments/sanity_test_* 0.2 neural_points.ply  mesh_20cm.ply
 ```
 
-----
 ## Visualizer Instructions
 
 We provide a PIN-SLAM visualizer based on [lidar-visualizer](https://github.com/PRBonn/lidar-visualizer) to monitor the SLAM process.
@@ -256,7 +256,10 @@ The keyboard callbacks are listed below.
 
 </details>
 
-----
+## Contact
+If you have any questions, please contact:
+
+- Yue Pan {[yue.pan@igg.uni-bonn.de]()}
 
 
 ## Related Projects
