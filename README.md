@@ -200,6 +200,8 @@ After playing the ROS bag or launching the sensor you can then visualize the res
 rviz -d ./config/pin_slam_ros.rviz 
 ```
 
+If you are running without a powerful GPU, PIN-SLAM may not run at the sensor frame rate. You need to play the rosbag with a lower rate to run PIN-SLAM properly.
+
 You can also put `pin_slam_ros.py` into a ROS package for `rosrun` or `roslaunch`.
 
 
@@ -243,16 +245,17 @@ The keyboard callbacks are listed below.
 |   U    |              toggle on/off PIN odometry trajectory visualization                           |
 |   R    |                           re-center the view point                                         |
 |   Z    |              3D screenshot, save the currently visualized entities in the log folder       |
+|   B    |                  toggle on/off back face rendering                                         |
+|   W    |                  toggle on/off mesh wireframe                                              |
 | Ctrl+9 |                                Set mesh color as normal direction                          |
 |   5    |   switch between point cloud for mapping and for registration (with point-wise weight)     |
 |   7    |                                      switch between black and white background             |
 |   /    |   switch among different neural point color mode, 0: geometric feature, 1: color feature, 2: timestamp, 3: stability, 4: random             |
-|  \[    |  decrease mesh marching cubes voxel size                                                   |
-|  \]    |  increase mesh marching cubes voxel size                                                   |
 |  <     |  decrease mesh nearest neighbor threshold (more complete and more artifacts)               |
 |  >     |  increase mesh nearest neighbor threshold (less complete but more accurate)                |
-|  ↑     |  move up the horizontal SDF slice                                                          |
-|  ↓     |  move down the horizontal SDF slice                                                        |
+|  \[/\] |  decrease/increase mesh marching cubes voxel size                                          |
+|  ↑/↓   |  move up/down the horizontal SDF slice                                                     |
+|  +/-   |                  increase/decrease point size                                              |
 
 </details>
 

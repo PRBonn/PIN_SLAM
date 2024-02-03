@@ -28,7 +28,6 @@ loss:
   dist_weight_scale: 1.0
   ekional_loss_on: True
   weight_e: 0.5
-  numerical_grad_on: True
 continual:
   batch_size_new_sample: 1000
   pool_capacity: 2e7
@@ -45,4 +44,5 @@ eval:
   wandb_vis_on: False # log to wandb or not
   o3d_vis_on: True # visualize the mapping or not
   mesh_freq_frame: 50 # reconstruct the mesh every x frames
+  mesh_min_nn: 18
   save_map: True

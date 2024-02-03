@@ -23,7 +23,6 @@ loss:
   dist_weight_scale: 0.8
   ekional_loss_on: True
   weight_e: 0.5
-  numerical_grad_on: True
 continual:
   batch_size_new_sample: 2000
   pool_capacity: 2e7
