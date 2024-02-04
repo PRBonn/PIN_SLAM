@@ -145,7 +145,7 @@ class Config:
 
         # replay based (data pool related)
         self.window_radius: float = 50.0 # unit: m
-        self.pool_capacity: int = int(5e6)
+        self.pool_capacity: int = int(1e7)
         self.bs_new_sample: int = 2048 # number of the sample per batch for the current frame's data, half of all the data
         self.new_certainty_thre: float = 1.0
         self.pool_filter_freq: int = 5 
@@ -237,7 +237,7 @@ class Config:
         self.iters: int = 15
         self.init_iter_ratio: int = 40
         self.opt_adam: bool = True  # use adam or sgd
-        self.bs: int = 8192
+        self.bs: int = 16384
         self.lr: float = 0.01
         self.lr_pose: float = 1e-3
         self.weight_decay: float = 0. # 1e-7
@@ -290,7 +290,7 @@ class Config:
         
         # mesh reconstruction, marching cubes related
         self.mc_res_m: float = 0.1
-        self.pad_voxel: int = 1
+        self.pad_voxel: int = 2
         self.skip_top_voxel: int = 2 
 
         self.mc_mask_on: bool = True # use mask for marching cubes to avoid the artifacts
@@ -515,9 +515,9 @@ class Config:
         # mapping optimizer
         if "optimizer" in config_args:
             self.mapping_freq_frame = config_args["optimizer"].get("mapping_freq_frame", 1)
-            self.iters = config_args["optimizer"].get("iters", 10) # mapping iters per frame
+            self.iters = config_args["optimizer"].get("iters", self.iters) # mapping iters per frame
             self.init_iter_ratio = config_args["optimizer"].get("init_iter_ratio", self.init_iter_ratio) # iteration count ratio for the first frame (a kind of warm-up) #iter = init_iter_ratio*iter
-            self.bs = config_args["optimizer"].get("batch_size", 16384)
+            self.bs = config_args["optimizer"].get("batch_size", self.bs)
             self.lr = float(config_args["optimizer"].get("learning_rate", self.lr))
 
             # bundle adjustment
