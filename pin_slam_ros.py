@@ -48,7 +48,7 @@ class PINSLAMer:
                                             
         self.config = Config()
         self.config.load(config_path)
-        argv = ["python pin_slam_ros.py", config_path, point_cloud_topic, ts_field_name]
+        argv = ["pin_slam_ros.py", config_path, point_cloud_topic, ts_field_name]
         self.run_path = setup_experiment(self.config, argv)
 
         self.ts_field_name = ts_field_name

@@ -7,7 +7,7 @@ process:
   max_range_m: 80.0 # maximum distance filter for each frame
   adaptive_range_on: True
 sampler:
-  surface_sample_range_m: 0.25
+  surface_sample_range_m: 0.3
   surface_sample_n: 3
   free_sample_begin_ratio: 0.3
   free_sample_end_dist_m: 1.0
@@ -33,6 +33,7 @@ tracker:
 pgo:
   map_context: True
   pgo_freq_frame: 30
+  virtual_side_count: 6
 optimizer: # mapper
   iters: 15  # iterations per frame
   batch_size: 10000

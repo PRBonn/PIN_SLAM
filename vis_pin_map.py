@@ -85,15 +85,17 @@ def vis_pin_map():
         cropped_ply_path = os.path.join(result_folder, "map", crop_file_name)
         cropped_pc = o3d.io.read_point_cloud(cropped_ply_path)
         mesh_aabb = cropped_pc.get_axis_aligned_bounding_box()
-        chunks_aabb = split_chunks(cropped_pc, mesh_aabb, mesh_vox_size_m*500) 
+        chunks_aabb = split_chunks(cropped_pc, mesh_aabb, mesh_vox_size_m*300) 
         print("Load cropped region")
     else:
         neural_pcd = neural_points.get_neural_points_o3d(query_global=True, color_mode=2, random_down_ratio=down_rate)
         mesh_aabb = neural_points.get_map_o3d_bbx()
         if mesh_vox_size_m is not None:
-            chunks_aabb = split_chunks(neural_pcd, mesh_aabb, mesh_vox_size_m*500) 
+            chunks_aabb = split_chunks(neural_pcd, mesh_aabb, mesh_vox_size_m*300) 
         # print("AABB for meshing: ", mesh_aabb)
-
+    
+    print("Number of chunks for reconstruction:", len(chunks_aabb))
+    
     neural_pcd = neural_points.get_neural_points_o3d(query_global=True, color_mode=2, random_down_ratio=down_rate)
     neural_pcd_cropped = neural_pcd.crop(mesh_aabb)
     cropped_np_out_path = os.path.join(result_folder, "map", "out_ts_" + crop_file_name)

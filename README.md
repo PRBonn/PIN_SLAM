@@ -171,7 +171,8 @@ python pin_slam.py path_to_your_config_file.yaml
 ```
 
 Generally speaking, you only need to edit in the config file the 
-`pc_path`, which is the path to the folder containing the point cloud (`.bin`, `.ply`, `.pcd` or `.las` format) for each frame.
+`pc_path`, which is the path to the folder containing the point cloud (`.bin`, `.ply`, `.pcd` or `.las` format) for each frame. 
+For ROS bag, you can use `./scripts/rosbag2ply.py` to extract the point cloud in `.ply` format.
 
 For pose estimation evaluation, you may also provide the path `pose_path` to the reference pose file and optionally the path `calib_path` to the extrinsic calibration file. Note the pose file and calibration file should be in the [KITTI odometry data format](https://www.cvlibs.net/datasets/kitti/eval_odometry.php).
 
@@ -199,6 +200,8 @@ After playing the ROS bag or launching the sensor you can then visualize the res
 ```
 rviz -d ./config/pin_slam_ros.rviz 
 ```
+
+The process will stop and the results and logs will be saved in the `output_root` folder if no new message are received for more than 30 seconds.
 
 If you are running without a powerful GPU, PIN-SLAM may not run at the sensor frame rate. You need to play the rosbag with a lower rate to run PIN-SLAM properly.
 

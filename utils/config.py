@@ -125,7 +125,7 @@ class Config:
 
         # map management
         self.prune_map_on: bool = False
-        self.max_prune_certainty: float = 1.0 # neural point pruning threshold
+        self.max_prune_certainty: float = 2.0 # neural point pruning threshold
 
         # positional encoding related [not used]
         self.use_gaussian_pe: bool = False # use Gaussian Fourier or original log positional encoding
