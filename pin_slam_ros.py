@@ -48,7 +48,8 @@ class PINSLAMer:
                                             
         self.config = Config()
         self.config.load(config_path)
-        self.run_path = setup_experiment(self.config)
+        argv = ["python pin_slam_ros.py", config_path, point_cloud_topic, ts_field_name]
+        self.run_path = setup_experiment(self.config, argv)
 
         self.ts_field_name = ts_field_name
         
@@ -300,8 +301,11 @@ class PINSLAMer:
             header = std_msgs.msg.Header()
             header.stamp = rospy.Time.now()
             header.frame_id = self.global_frame_name 
-
-            neural_points_np = self.neural_points.neural_points[::self.config.publish_np_map_down_rate].detach().cpu().numpy().astype(np.float32)
+            neural_point_count = self.neural_points.count()
+            down_rate_level = neural_point_count // 500000
+            down_rate_level = min(down_rate_level, len(self.config.publish_np_map_down_rate_list)-1)
+            publish_np_map_down_rate = self.config.publish_np_map_down_rate_list[down_rate_level] 
+            neural_points_np = self.neural_points.neural_points[::publish_np_map_down_rate].detach().cpu().numpy().astype(np.float32)
             # neural_points_feature_np = self.neural_points.geo_features[:-1,0:3].detach().cpu().numpy().astype(np.float32) # how to convert to rgb that we actually needed
             # neural_features_vis = F.normalize(neural_features_vis, p=2, dim=1)
             # TODO: add rgb (time or feature as rgb)
@@ -371,7 +375,7 @@ class PINSLAMer:
                 loop_id = None
                 if loop_candidate_mask.any(): # have at least one candidate
                     # firstly try to detect the local loop
-                    loop_id, loop_dist, loop_transform = detect_local_loop(dist_to_past, loop_candidate_mask, self.dataset.pgo_poses, self.pgm.drift_radius, cur_frame_id, self.loop_reg_failed_count, dist_thre=self.config.voxel_size_m*5.0)
+                    loop_id, loop_dist, loop_transform = detect_local_loop(dist_to_past, loop_candidate_mask, self.dataset.pgo_poses, self.pgm.drift_radius, cur_frame_id, self.loop_reg_failed_count, dist_thre=self.config.voxel_size_m*5.0, silence=self.config.silence)
                     if loop_id is None and self.config.global_loop_on: # global loop detection (large drift)
                         loop_id, loop_cos_dist, loop_transform, local_map_context_loop = self.lcd_npmc.detect_global_loop(cur_pgo_poses, self.dataset.pgo_poses, self.pgm.drift_radius*3.0, loop_candidate_mask, self.neural_points)
 

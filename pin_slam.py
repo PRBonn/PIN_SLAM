@@ -172,7 +172,7 @@ def run_pin_slam():
                     loop_id = None
                     if loop_candidate_mask.any(): # have at least one candidate
                         # firstly try to detect the local loop
-                        loop_id, loop_dist, loop_transform = detect_local_loop(dist_to_past, loop_candidate_mask, dataset.pgo_poses, pgm.drift_radius, used_frame_id, loop_reg_failed_count, config.voxel_size_m*5.0)
+                        loop_id, loop_dist, loop_transform = detect_local_loop(dist_to_past, loop_candidate_mask, dataset.pgo_poses, pgm.drift_radius, used_frame_id, loop_reg_failed_count, config.voxel_size_m*5.0, config.silence)
                         if loop_id is None and config.global_loop_on: # global loop detection (large drift)
                             loop_id, loop_cos_dist, loop_transform, local_map_context_loop = lcd_npmc.detect_global_loop(cur_pgo_poses, dataset.pgo_poses, pgm.drift_radius*3.0, loop_candidate_mask, neural_points)
                 if loop_id is not None: # if a loop is found, we refine loop closure transform initial guess with a scan-to-map registration                    

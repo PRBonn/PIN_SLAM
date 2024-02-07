@@ -315,7 +315,7 @@ class Config:
 
         # ROS related 
         self.publish_np_map: bool = True # only for Rviz visualization
-        self.publish_np_map_down_rate: int = 53 # prime number, downsampling for boosting pubishing speed 
+        self.publish_np_map_down_rate_list = [11, 23, 37, 53, 71, 89, 97, 113, 131, 151] # prime number list, downsampling for boosting pubishing speed 
         self.republish_raw_input: bool = False
         self.timeout_duration_s: int = 20 # in seconds
 

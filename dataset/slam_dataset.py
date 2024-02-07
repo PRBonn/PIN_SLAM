@@ -109,6 +109,7 @@ class SLAMDataset(Dataset):
         # or we directly use the world frame as reference
  
         self.processed_frame: int = 0
+        self.shift_ts: float = 0.0
 
         self.lose_track: bool = False # the odometry lose track or not (for robustness)
         self.consecutive_lose_track_frame: int = 0
@@ -175,7 +176,14 @@ class SLAMDataset(Dataset):
         if ts_col > data.shape[1]-1:
             point_ts = None
         else:
-            point_ts = data[:, ts_col] 
+            point_ts = data[:, ts_col]
+
+            if self.processed_frame == 0:
+                self.shift_ts = point_ts[0]
+
+            point_ts = point_ts - self.shift_ts
+
+        # print(point_ts)
         
         point_cloud = data[:,:3]
         

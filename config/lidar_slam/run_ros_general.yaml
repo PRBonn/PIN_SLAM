@@ -3,17 +3,17 @@ setting:
   output_root: "./experiments"
   deskew: True
 process:
-  min_range_m: 1.5
+  min_range_m: 2.5
   max_range_m: 80.0 # maximum distance filter for each frame
   adaptive_range_on: True
 sampler:
-  surface_sample_range_m: 0.3
+  surface_sample_range_m: 0.25
   surface_sample_n: 3
   free_sample_begin_ratio: 0.3
   free_sample_end_dist_m: 1.0
   free_front_sample_n: 2
 neuralpoints:
-  voxel_size_m: 0.3
+  voxel_size_m: 0.4
   feature_dim: 8 
   query_nn_k: 6
   search_alpha: 0.5 # increase when you want to be more robust to agressive motions
@@ -24,12 +24,12 @@ loss:
   ekional_loss_on: True
   weight_e: 0.5
 continual:
-  batch_size_new_sample: 2000
+  batch_size_new_sample: 1500
   pool_capacity: 2e7
-  pool_filter_freq: 5
+  pool_filter_freq: 10
 tracker:
-  source_vox_down_m: 1.0
-  iter_n: 50
+  source_vox_down_m: 0.8
+  iter_n: 100
 pgo:
   map_context: True
   pgo_freq_frame: 30
