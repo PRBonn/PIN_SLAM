@@ -216,6 +216,8 @@ After the SLAM process, you can reconstruct mesh from the PIN map within an arbi
 python vis_pin_map.py [path/to/your/result/folder] [marching_cubes_resolution_m] [(cropped)_map_file.ply]  [output_mesh_file.ply] [mc_nn_threshold]
 ```
 
+The bounding box of `(cropped)_map_file.ply` will be used for the bounding box for mesh reconstruction. `mc_nn_threshold` controls the trade-off between completeness and accuracy. The smaller number (for example `8`) will lead to a more complete mesh with more guessed artifacts. The larger number (for example `15`) will lead to a less complete but more accurate mesh.
+
 For example, for the case of the sanity test, run:
 
 ```
