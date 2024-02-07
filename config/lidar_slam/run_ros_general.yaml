@@ -29,7 +29,7 @@ continual:
   pool_filter_freq: 10
 tracker:
   source_vox_down_m: 0.8
-  iter_n: 100
+  iter_n: 50
 pgo:
   map_context: True
   pgo_freq_frame: 30
