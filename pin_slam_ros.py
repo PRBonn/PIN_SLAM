@@ -44,7 +44,7 @@ class PINSLAMer:
 
         self.global_frame_name = rospy.get_param('~global_frame_name', 'map') # odom 
         self.body_frame_name = rospy.get_param('~body_frame_name', "base_link") 
-        self.sensor_frame_name = rospy.get_param('~sensor_frame_name', "sensor") # child
+        self.sensor_frame_name = rospy.get_param('~sensor_frame_name', "range_sensor") # child
                                             
         self.config = Config()
         self.config.load(config_path)
@@ -89,7 +89,7 @@ class PINSLAMer:
 
         # publisher
         queue_size_ = 10  # Replace with your actual queue size
-        self.traj_pub = rospy.Publisher("/path", nav_msgs.msg.Path, queue_size=queue_size_)
+        self.traj_pub = rospy.Publisher("~pin_path", nav_msgs.msg.Path, queue_size=queue_size_)
         self.path_msg = nav_msgs.msg.Path()
         self.path_msg.header.frame_id = self.global_frame_name
         self.odom_pub = rospy.Publisher("~odometry", Odometry, queue_size=queue_size_)
@@ -159,6 +159,8 @@ class PINSLAMer:
 
         # for the first frame, we need more iterations to do the initialization (warm-up)
         cur_iter_num = self.config.iters * self.config.init_iter_ratio if self.dataset.processed_frame == 0 else self.config.iters
+        if self.config.adaptive_mode and self.dataset.stop_status:
+            cur_iter_num = max(1, cur_iter_num-5)
         if self.dataset.processed_frame == self.config.freeze_after_frame: # freeze the decoder after certain frame 
             freeze_decoders(self.geo_mlp, self.sem_mlp, self.color_mlp, self.config)
         
@@ -373,6 +375,7 @@ class PINSLAMer:
                 dist_to_past = np.linalg.norm(cur_pgo_poses[:,:3,3] - cur_pgo_poses[-1,:3,3], axis=1)
                 loop_candidate_mask = (self.dataset.travel_dist[-1] - self.dataset.travel_dist > self.config.min_loop_travel_dist_ratio*self.config.local_map_radius)
                 loop_id = None
+                local_map_context_loop = False
                 if loop_candidate_mask.any(): # have at least one candidate
                     # firstly try to detect the local loop
                     loop_id, loop_dist, loop_transform = detect_local_loop(dist_to_past, loop_candidate_mask, self.dataset.pgo_poses, self.pgm.drift_radius, cur_frame_id, self.loop_reg_failed_count, dist_thre=self.config.voxel_size_m*5.0, silence=self.config.silence)

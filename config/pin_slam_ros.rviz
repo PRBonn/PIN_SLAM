@@ -55,14 +55,14 @@ Visualization Manager:
       Length: 1
       Name: Axes
       Radius: 0.10000000149011612
-      Reference Frame: sensor
+      Reference Frame: range_sensor
       Show Trail: false
       Value: true
     - Alpha: 0.30000001192092896
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 18.914207458496094
-        Min Value: -32.311973571777344
+        Max Value: 4.875036716461182
+        Min Value: -0.8839179873466492
         Value: true
       Axis: Z
       Channel Name: intensity
@@ -163,7 +163,7 @@ Visualization Manager:
       Radius: 0.029999999329447746
       Shaft Diameter: 0.10000000149011612
       Shaft Length: 0.10000000149011612
-      Topic: /path
+      Topic: /pin_slam/pin_path
       Unreliable: false
       Value: true
   Enabled: true
@@ -194,7 +194,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 46.76142883300781
+      Distance: 62.76740264892578
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -202,17 +202,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: -147.30081176757812
-        Y: 237.91046142578125
-        Z: 0.21336108446121216
+        X: 0
+        Y: 0
+        Z: 0
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.4297964572906494
+      Pitch: 1.5697963237762451
       Target Frame: <Fixed Frame>
-      Yaw: 3.3735806941986084
+      Yaw: 0.7853981852531433
     Saved: ~
 Window Geometry:
   Displays:

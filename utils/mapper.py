@@ -64,6 +64,7 @@ class Mapper():
         self.new_idx = None
 
         self.ba_done_flag = False
+        self.train_less = False
 
         # data pool
         self.coord_pool = torch.empty((0, 3), device=self.device, dtype=self.dtype) # coordinate in each frame's coordinate frame
@@ -298,8 +299,14 @@ class Mapper():
                                        
             self.new_idx += (self.pool_sample_count - self.cur_sample_count) # new idx in the data pool
 
+            new_sample_count = self.new_idx.shape[0]
+            if self.config.adaptive_mode and new_sample_count / self.cur_sample_count < self.config.new_sample_ratio_thre:
+                self.train_less = True
+            else:
+                self.train_less = False
+
             if not self.silence:
-                print("# New sample          : ", self.new_idx.shape[0])
+                print("# New sample          : ", new_sample_count)
 
         T3_3 = get_time()
 
@@ -416,6 +423,9 @@ class Mapper():
     # PIN map online training (mapping) given the fixed pose
     def mapping(self, iter_count): 
 
+        if self.train_less:
+            iter_count = max(1, iter_count-5)
+
         neural_point_feat = list(self.neural_points.parameters())
         geo_mlp_param = list(self.geo_mlp.parameters())
         if self.config.semantic_on:
@@ -523,13 +533,13 @@ class Mapper():
             eikonal_loss = 0.0
             if self.config.ekional_loss_on and self.config.weight_e > 0: # MSE with regards to 1  
                 surface_mask_decimated = surface_mask[::self.config.gradient_decimation]
-                weight_used = (weight.clone())[::self.config.gradient_decimation]
+                # weight_used = (weight.clone())[::self.config.gradient_decimation] # point-wise weight not used
                 if self.config.ekional_add_to == "freespace":
                     g_used = g[~surface_mask_decimated]
-                    weight_used = weight_used[~surface_mask_decimated]
+                    # weight_used = weight_used[~surface_mask_decimated]
                 elif self.config.ekional_add_to == "surface":
                     g_used = g[surface_mask_decimated]
-                    weight_used = weight_used[surface_mask_decimated]
+                    # weight_used = weight_used[surface_mask_decimated]
                 else: # "all"  # both the surface and the freespace, used here # [used]
                     g_used = g
                 eikonal_loss = ((g_used.norm(2, dim=-1) - 1.0) ** 2).mean() # both the surface and the freespace

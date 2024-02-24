@@ -42,6 +42,8 @@ class Config:
         self.dtype = torch.float32 # default torch tensor data type
         self.tran_dtype = torch.float64 # dtype used for all the transformation and poses
 
+        self.adaptive_mode: bool = False # adptive operation on
+
         # dataset specific
         self.kitti_correction_on: bool = False
         self.correction_deg: float = 0.0
@@ -59,7 +61,7 @@ class Config:
 
         # block with such radius, but actually a square (unit: m)
         self.min_z: float = -4.0  # filter for z coordinates (unit: m)
-        self.max_z: float = 100.0
+        self.max_z: float = 60.0
 
         self.rand_downsample: bool = True  # apply random or voxel downsampling to input original point clcoud
         self.vox_down_m: float = 0.05 # the voxel size if using voxel downsampling (unit: m)
@@ -148,7 +150,8 @@ class Config:
         self.pool_capacity: int = int(1e7)
         self.bs_new_sample: int = 2048 # number of the sample per batch for the current frame's data, half of all the data
         self.new_certainty_thre: float = 1.0
-        self.pool_filter_freq: int = 5 
+        self.pool_filter_freq: int = 10 
+        self.new_sample_ratio_thre: float = 0.01 # if smaller than this ratio, we think there's not much new information collected
 
         # tracking
         self.track_on: bool = True
@@ -247,7 +250,7 @@ class Config:
         self.global_loop_on: bool = True # global loop detection using context
         self.local_map_context: bool = False # use local map or scan context for loop closure description
         self.loop_with_feature: bool = False # encode neural point feature in the context
-        self.min_loop_travel_dist_ratio: float = 3.5 # accumulated travel distance should be larger than theis ratio * local map radius to be considered as an valid candidate
+        self.min_loop_travel_dist_ratio: float = 4.0 # accumulated travel distance should be larger than theis ratio * local map radius to be considered as an valid candidate
         self.local_map_context_latency: int = 0 # 10
         self.loop_local_map_time_window: int = 100
         self.context_shape = [20, 60] # [20, 60] 
@@ -463,7 +466,7 @@ class Config:
         # rehersal (replay) based method
         if "continual" in config_args:
             self.pool_capacity = int(float(config_args["continual"].get("pool_capacity", self.pool_capacity)))
-            self.bs_new_sample = int(config_args["continual"].get("batch_size_new_sample", 0))
+            self.bs_new_sample = int(config_args["continual"].get("batch_size_new_sample", self.bs_new_sample))
             self.new_certainty_thre = float(config_args["continual"].get("new_certainty_thre", self.new_certainty_thre))
             self.pool_filter_freq = config_args["continual"].get("pool_filter_freq", 1)
         
@@ -574,9 +577,9 @@ class Config:
 
         if self.local_map_context:
             self.local_map_context_latency = config_args["pgo"].get('local_map_latency', 10) # 10
-            self.context_cosdist_threshold += 0.1
+            self.context_cosdist_threshold += 0.08
             if self.loop_with_feature:
                 # self.context_shape = [10, 60]
-                self.context_cosdist_threshold += 0.05
+                self.context_cosdist_threshold += 0.08
         else:
             self.loop_with_feature = False

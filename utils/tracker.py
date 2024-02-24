@@ -399,7 +399,7 @@ class Tracker():
         if photo_loss_on:
             color_residual = color_pred - colors
             color_residual_mean = torch.mean(torch.abs(color_residual)).item()
-            T = implicit_color_icp(valid_points, sdf_grad, sdf_residual, 
+            T = implicit_color_reg(valid_points, sdf_grad, sdf_residual, 
                                    colors, color_grad, color_residual, w, 
                                    w_photo_loss=self.config.photometric_loss_weight, lm_lambda=lm_lambda)
             cov_mat = None
@@ -520,7 +520,7 @@ def implicit_reg(points, sdf_grad, sdf_residual, weight, lm_lambda = 0., require
     return T, cov_mat, eigenvalues
 
 # functions
-def implicit_color_icp(points, sdf_grad, sdf_residual, colors, color_grad, color_residual, weight, w_photo_loss = 0.1, lm_lambda = 0.):
+def implicit_color_reg(points, sdf_grad, sdf_residual, colors, color_grad, color_residual, weight, w_photo_loss = 0.1, lm_lambda = 0.):
     
     geo_cross = torch.cross(points, sdf_grad)
     J_geo = torch.cat([geo_cross, sdf_grad], -1)  # first rotation, then translation

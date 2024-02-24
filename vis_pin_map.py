@@ -79,7 +79,7 @@ def vis_pin_map():
 
     down_rate = 1
 
-    crop_file_name = "neural_points.ply"
+    crop_file_name = "neural_points.ply" # default name
     if len(sys.argv) > 3: # only use cropped bbx for meshing
         crop_file_name = sys.argv[3]
         cropped_ply_path = os.path.join(result_folder, "map", crop_file_name)

@@ -32,7 +32,7 @@ class NeuralPointMapContextManager:
         if config.loop_with_feature: # use cos dist
             self.ringkey_dist_thre = 0.25 
         else: # use l1 dist
-            self.ringkey_dist_thre = 0.8 * self.des_shape[0] # 16.0 m
+            self.ringkey_dist_thre = (config.max_z - config.min_z) * 0.25 # m
             
         self.ENOUGH_LARGE = config.end_frame+1 # capable of up to ENOUGH_LARGE number of nodes 
 
@@ -232,7 +232,7 @@ class NeuralPointMapContextManager:
 
         # find the best match (sector shifted) scan context in the candidates
         # get the yaw angle and the match frame idx at the same time
-        if (cosdist < self.sc_cosdist_threshold):
+        if (cosdist < self.sc_cosdist_threshold): # the smaller the sc_cosdist_threshold, the more strict
             yawdiff_deg = yaw_diff * (360.0/self.des_shape[1])
 
             if not self.silence:

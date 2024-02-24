@@ -278,8 +278,8 @@ class SLAMDataset(Dataset):
         source_voxel_m = (crop_max_range/self.config.max_range) * self.config.source_vox_down_m
 
         # down sampling (together with the color and semantic entities)
+        original_count = self.cur_point_cloud_torch.shape[0]
         if self.config.rand_downsample:
-            original_count = self.cur_point_cloud_torch.shape[0]
             kept_count = int(original_count*self.config.rand_down_r)
             idx = torch.randint(0, original_count, (kept_count,), device=self.device)
         else:

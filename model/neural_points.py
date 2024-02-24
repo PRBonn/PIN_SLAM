@@ -63,14 +63,16 @@ class NeuralPoints(nn.Module):
 
         self.travel_dist = None # for determine the local map, update from the dataset class for each frame
         self.est_poses = None
+        self.after_pgo = False
 
         # for hashing (large prime numbers)
         self.primes = torch.tensor([73856093, 19349669, 83492791], dtype=self.idx_dtype, device=self.device)
-
+        
         # initialization
         # the global map
         self.buffer_pt_index = torch.full((self.buffer_size,), -1, dtype=self.idx_dtype, device=self.device)
         
+        # TODO: add the second level for recording known and unknown space
         self.neural_points = torch.empty((0, 3), dtype=self.dtype, device=self.device)
         self.point_orientations = torch.empty((0, 4), dtype=self.dtype, device=self.device) # as quaternion
         self.geo_features = torch.empty((1, self.geo_feature_dim), dtype=self.dtype, device=self.device)
@@ -212,6 +214,7 @@ class NeuralPoints(nn.Module):
         grid_coords = (sample_points / cur_resolution).floor().to(self.primes)
         buffer_size = int(self.buffer_size)
         hash = torch.fmod((grid_coords * self.primes).sum(-1), buffer_size)
+        
         hash_idx = self.buffer_pt_index[hash]
 
         # not occupied before or is occupied but already far away (then it would be a hash collision)
@@ -353,6 +356,8 @@ class NeuralPoints(nn.Module):
         # for each neural point, use it ts to find the diff between old and new pose, transform the position and rotate the orientation
         # we use the mid_ts for each neural point
 
+        self.after_pgo = True
+
         if self.config.use_mid_ts:
             used_ts = ((self.point_ts_create + self.point_ts_update) / 2).long() # still as dtype long
         else:
@@ -459,7 +464,7 @@ class NeuralPoints(nn.Module):
 
         grid_coords = (points / cur_resolution).floor().to(self.primes) # [N,3]
         
-        neighbord_cells = grid_coords[..., None, :] + self.neighbor_dx # [N,K,3]
+        neighbord_cells = grid_coords[..., None, :] + self.neighbor_dx # [N,K,3] # int64
 
         T1 = get_time()
     
@@ -495,11 +500,11 @@ class NeuralPoints(nn.Module):
 
         T4 = get_time()
 
-        # print("time for get neighbor idx:", (T1-T0) * 1e3)
+        # print("time for get neighbor idx:", (T1-T0) * 1e3)  # |
         # # print("time for hashing func    :", (T12-T1) * 1e3)
-        # print("time for hashing         :", (T2-T1) * 1e3)
-        # print("time for time filtering  :", (T3-T2) * 1e3) 
-        # print("time for distance        :", (T4-T3) * 1e3) 
+        # print("time for hashing         :", (T2-T1) * 1e3)  # ||||
+        # print("time for time filtering  :", (T3-T2) * 1e3)  # |
+        # print("time for distance        :", (T4-T3) * 1e3)  # |||
 
         return dist2, neighb_idx
     
@@ -553,7 +558,7 @@ class NeuralPoints(nn.Module):
         
         T1 = get_time()
         
-        dists2[idx==-1] = 9e5 # invalid, set to large distance
+        dists2[idx==-1] = 9e3 # invalid, set to large distance
         sorted_dist2, sorted_neigh_idx = torch.sort(dists2, dim=1) # sort according to distance
         sorted_idx = idx.gather(1, sorted_neigh_idx)
         dists2 = sorted_dist2[:,:nn_k] # only take the knn
@@ -598,7 +603,8 @@ class NeuralPoints(nn.Module):
 
         # quat[...,1:] *= -1. # inverse (not needed)
         # This has been doubly checked
-        neighb_vector = apply_quaternion_rotation(quat, neighb_vector) # [N, K, 3] # passive rotation (axis rotation w.r.t point) 
+        if self.after_pgo:
+            neighb_vector = apply_quaternion_rotation(quat, neighb_vector) # [N, K, 3] # passive rotation (axis rotation w.r.t point) 
         neighb_vector[~valid_mask] = torch.zeros(1, 3, device=self.device, dtype=self.dtype)
 
         if self.config.pos_encoding_band > 0:

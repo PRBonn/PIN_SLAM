@@ -159,7 +159,8 @@ def run_pin_slam():
                 pgm.estimate_drift(dataset.travel_dist, used_frame_id) # estimate the current drift
                 if config.pgo_with_pose_prior: # add pose prior
                     pgm.add_pose_prior(used_frame_id, dataset.pgo_poses[used_frame_id])
-
+            
+            local_map_context_loop = False
             if used_frame_id - pgm.last_loop_idx > config.pgo_freq and not dataset.stop_status:
                 if config.use_gt_loop:
                     loop_id, loop_dist, loop_transform = lcd_gt.detect_loop() # T_l<-c
@@ -236,6 +237,8 @@ def run_pin_slam():
 
         # for the first frame, we need more iterations to do the initialization (warm-up)
         cur_iter_num = config.iters * config.init_iter_ratio if used_frame_id == 0 else config.iters
+        if config.adaptive_mode and dataset.stop_status:
+            cur_iter_num = max(1, cur_iter_num-5)
         if used_frame_id == config.freeze_after_frame: # freeze the decoder after certain frame 
             freeze_decoders(geo_mlp, sem_mlp, color_mlp, config)
 
