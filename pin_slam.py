@@ -175,7 +175,12 @@ def run_pin_slam():
                         # firstly try to detect the local loop
                         loop_id, loop_dist, loop_transform = detect_local_loop(dist_to_past, loop_candidate_mask, dataset.pgo_poses, pgm.drift_radius, used_frame_id, loop_reg_failed_count, config.voxel_size_m*5.0, config.silence)
                         if loop_id is None and config.global_loop_on: # global loop detection (large drift)
-                            loop_id, loop_cos_dist, loop_transform, local_map_context_loop = lcd_npmc.detect_global_loop(cur_pgo_poses, dataset.pgo_poses, pgm.drift_radius*3.0, loop_candidate_mask, neural_points)
+                            loop_id, loop_cos_dist, loop_transform, local_map_context_loop = lcd_npmc.detect_global_loop(cur_pgo_poses, dataset.pgo_poses, pgm.drift_radius*3.0, loop_candidate_mask, neural_points)     
+                if loop_id is not None:
+                    if config.loop_z_check_on and abs(loop_transform[2,3]) > config.voxel_size_m*4.0: # for multi-floor buildings, z may cause ambiguilties
+                        loop_id = None
+                        if not config.silence:
+                            print("[bold red]Delta z check failed, reject the loop[/bold red]") 
                 if loop_id is not None: # if a loop is found, we refine loop closure transform initial guess with a scan-to-map registration                    
                     pose_init_np = dataset.pgo_poses[loop_id] @ loop_transform # T_w<-c = T_w<-l @ T_l<-c 
                     pose_init_torch = torch.tensor(pose_init_np, device=config.device, dtype=torch.float64)
@@ -238,7 +243,7 @@ def run_pin_slam():
         # for the first frame, we need more iterations to do the initialization (warm-up)
         cur_iter_num = config.iters * config.init_iter_ratio if used_frame_id == 0 else config.iters
         if config.adaptive_mode and dataset.stop_status:
-            cur_iter_num = max(1, cur_iter_num-5)
+            cur_iter_num = max(1, cur_iter_num-10)
         if used_frame_id == config.freeze_after_frame: # freeze the decoder after certain frame 
             freeze_decoders(geo_mlp, sem_mlp, color_mlp, config)
 

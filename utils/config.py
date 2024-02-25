@@ -41,7 +41,7 @@ class Config:
         self.gpu_id: str = "0"  # used GPU id
         self.dtype = torch.float32 # default torch tensor data type
         self.tran_dtype = torch.float64 # dtype used for all the transformation and poses
-
+        
         self.adaptive_mode: bool = False # adptive operation on
 
         # dataset specific
@@ -257,6 +257,7 @@ class Config:
         self.context_num_candidates: int = 1
         self.context_cosdist_threshold: float = 0.2 # 0.15
         self.context_virtual_side_count: int = 4 # 6
+        self.loop_z_check_on: bool = False # check the z axix difference of the found loop frames to deal with the potential abitary issue in a multi-floor building
 
         self.use_gt_loop: bool = False # use the gt loop closure derived from the gt pose or not (only used for debugging)
         self.max_loop_dist: float = 8.0

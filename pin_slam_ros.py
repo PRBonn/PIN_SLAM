@@ -11,6 +11,7 @@ from geometry_msgs.msg import PoseStamped, TransformStamped
 import nav_msgs.msg
 from nav_msgs.msg import Odometry
 import std_msgs.msg
+from std_srvs.srv import Empty, EmptyResponse, SetBool
 import tf
 import tf2_ros
 import sys
@@ -30,6 +31,10 @@ from utils.mapper import Mapper
 from model.neural_points import NeuralPoints
 from model.decoder import Decoder
 from dataset.slam_dataset import SLAMDataset
+
+# TODO:
+# add ros service to save the map without stop the slam process
+
 
 '''
     📍PIN-SLAM: LiDAR SLAM Using a Point-Based Implicit Neural Representation for Achieving Global Map Consistency
@@ -87,6 +92,10 @@ class PINSLAMer:
         self.loop_corrected = False
         self.loop_reg_failed_count = 0
 
+        # service mesh
+        self.mesh_min_nn = self.config.mesh_min_nn
+        self.mc_res_m = self.config.mc_res_m
+
         # publisher
         queue_size_ = 10  # Replace with your actual queue size
         self.traj_pub = rospy.Publisher("~pin_path", nav_msgs.msg.Path, queue_size=queue_size_)
@@ -105,9 +114,38 @@ class PINSLAMer:
 
         self.last_message_time = time.time()
         self.begin = False
+        
+        # ros service
+        rospy.Service('~save_results', Empty, self.save_slam_result_service_callback)
+        rospy.Service('~save_mesh', Empty, self.save_mesh_service_callback)
 
         # for each frame
         rospy.Subscriber(point_cloud_topic, PointCloud2, self.frame_callback)
+
+    def save_slam_result_service_callback(self, request):
+        # Do something when the service is called
+        rospy.loginfo("Service called, save results")
+        self.save_results(terminate=False)
+
+        return EmptyResponse()
+    
+    def save_mesh_service_callback(self, request):
+
+        rospy.loginfo("Service called, save mesh")
+
+        # update map bbx
+        global_neural_pcd_down = self.neural_points.get_neural_points_o3d(query_global=True, random_down_ratio=23) # prime number
+        self.dataset.map_bbx = global_neural_pcd_down.get_axis_aligned_bounding_box()
+        
+        mc_cm_str = str(round(self.mc_res_m*1e2))
+        mesh_path = os.path.join(self.run_path, "mesh", 'mesh_frame_' + str(self.dataset.processed_frame) + "_" + mc_cm_str + "cm.ply")
+        
+        # figure out how to do it efficiently
+        aabb = global_neural_pcd_down.get_axis_aligned_bounding_box()
+        chunks_aabb = split_chunks(global_neural_pcd_down, aabb, self.mc_res_m*300) # reconstruct in chunks
+        cur_mesh = self.mesher.recon_aabb_collections_mesh(chunks_aabb, self.mc_res_m, mesh_path, False, self.config.semantic_on, self.config.color_on, filter_isolated_mesh=True, mesh_min_nn=self.mesh_min_nn)    
+
+        return EmptyResponse()
 
 
     def frame_callback(self, msg):
@@ -160,7 +198,7 @@ class PINSLAMer:
         # for the first frame, we need more iterations to do the initialization (warm-up)
         cur_iter_num = self.config.iters * self.config.init_iter_ratio if self.dataset.processed_frame == 0 else self.config.iters
         if self.config.adaptive_mode and self.dataset.stop_status:
-            cur_iter_num = max(1, cur_iter_num-5)
+            cur_iter_num = max(1, cur_iter_num-10)
         if self.dataset.processed_frame == self.config.freeze_after_frame: # freeze the decoder after certain frame 
             freeze_decoders(self.geo_mlp, self.sem_mlp, self.color_mlp, self.config)
         
@@ -207,13 +245,16 @@ class PINSLAMer:
 
         while not rospy.is_shutdown():
             # Check if the timeout has occurred
-            if time.time() - self.last_message_time > self.config.timeout_duration_s and self.begin:
+            delta_t_s = time.time() - self.last_message_time
+            # print(delta_t_s)
+
+            if delta_t_s > self.config.timeout_duration_s and self.begin:
                 # Save results and stop the program
-                self.save_results()
+                self.save_results(terminate=True)
                 rospy.signal_shutdown('Timeout reached. Save results and eiit.')
             rate.sleep()
 
-    def save_results(self):
+    def save_results(self, terminate: bool = False):
         
         print("Mission completed")
         
@@ -223,13 +264,15 @@ class PINSLAMer:
             self.pgm.write_g2o(os.path.join(self.run_path, "final_pose_graph.g2o"))
             self.pgm.plot_loops(os.path.join(self.run_path, "loop_plot.png"), vis_now=False)      
 
-        self.neural_points.recreate_hash(None, None, False, False) # merge the final neural point map
-        self.neural_points.prune_map(self.config.max_prune_certainty) # prune uncertain points for the final output 
+        if terminate:
+            self.neural_points.recreate_hash(None, None, False, False) # merge the final neural point map
+            self.neural_points.prune_map(self.config.max_prune_certainty) # prune uncertain points for the final output 
 
         if self.config.save_map:
             neural_pcd = self.neural_points.get_neural_points_o3d(query_global=True, color_mode=0)
             o3d.io.write_point_cloud(os.path.join(self.run_path, "map", "neural_points.ply"), neural_pcd)
-            self.neural_points.clear_temp() # clear temp data for output
+            if terminate:
+                self.neural_points.clear_temp() # clear temp data for output
             save_implicit_map(self.run_path, self.neural_points, self.geo_mlp, self.color_mlp, self.sem_mlp)
 
     def publish_msg(self, input_pc_msg):
@@ -383,6 +426,11 @@ class PINSLAMer:
                         loop_id, loop_cos_dist, loop_transform, local_map_context_loop = self.lcd_npmc.detect_global_loop(cur_pgo_poses, self.dataset.pgo_poses, self.pgm.drift_radius*3.0, loop_candidate_mask, self.neural_points)
 
                 if loop_id is not None: # if a loop is found, we refine loop closure transform initial guess with a scan-to-map registration                    
+                    if self.config.loop_z_check_on and abs(loop_transform[2,3]) > self.config.voxel_size_m*3.0: # for multi-floor buildings, z may cause ambiguilties
+                        loop_id = None
+                        if not self.config.silence:
+                            print("[bold red]Delta z check failed, reject the loop[/bold red]")
+                        return False 
                     pose_init_np = self.dataset.pgo_poses[loop_id] @ loop_transform # T_w<-c = T_w<-l @ T_l<-c 
                     pose_init_torch = torch.tensor(pose_init_np, device=self.config.device, dtype=torch.float64)
                     self.neural_points.recreate_hash(pose_init_torch[:3,3], None, True, True, loop_id) # recreate hash and local map for registration, this is the reason why we'd better to keep the duplicated neural points until the end

@@ -201,11 +201,15 @@ After playing the ROS bag or launching the sensor you can then visualize the res
 rviz -d ./config/pin_slam_ros.rviz 
 ```
 
-The process will stop and the results and logs will be saved in the `output_root` folder if no new message are received for more than 30 seconds.
+You may use the ROS service `save_results` and `save_mesh` to save the results and mesh in the `output_root` folder.
+
+The process will stop and the results and logs will be saved in the `output_root` folder if no new messages are received for more than 30 seconds.
 
 If you are running without a powerful GPU, PIN-SLAM may not run at the sensor frame rate. You need to play the rosbag with a lower rate to run PIN-SLAM properly.
 
 You can also put `pin_slam_ros.py` into a ROS package for `rosrun` or `roslaunch`.
+
+
 
 
 ### Inspect the results after SLAM
