@@ -10,15 +10,12 @@ from utils.config import Config
 def set_dataset_path(config: Config, dataset_name: str, seq: str):
     if dataset_name == "kitti":
         config.name = "kitti_" + seq
-        base_path = config.pc_path.rsplit('/', 2)[0]
-        config.pc_path = os.path.join(base_path, seq, "velodyne")  # input point cloud folder
-        config.pose_path = os.path.join(base_path, seq, "poses.txt")   # input pose file
-        config.calib_path = os.path.join(base_path, seq, "calib.txt")  # input calib file (to sensor frame)
-        config.label_path = os.path.join(base_path, seq, "labels") # input point-wise label path, for semantic mapping (optional)
-        if config.pgo_on and config.use_gt_loop:
-            config.closed_pose_path = os.path.join(base_path, seq, "poses_loopclosed.txt") 
-        if int(seq) > 10:
-            config.pose_path = os.path.join(base_path, seq, "poses_kiss.txt")   # input pose file (test sequences, no gt, take kiss's result as reference)
+        base_path = config.pc_path.rsplit('/', 3)[0]
+        config.pc_path = os.path.join(base_path, 'sequences', seq, "velodyne")  # input point cloud folder
+        pose_file_name = seq + '.txt'
+        config.pose_path = os.path.join(base_path, 'poses', pose_file_name)   # input pose file
+        config.calib_path = os.path.join(base_path, 'sequences', seq, "calib.txt")  # input calib file (to sensor frame)
+        config.label_path = os.path.join(base_path, 'sequences', seq, "labels") # input point-wise label path, for semantic mapping (optional)
     elif dataset_name == "mulran":
         config.name = "mulran_" + seq
         base_path = config.pc_path.rsplit('/', 2)[0]

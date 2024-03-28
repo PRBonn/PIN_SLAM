@@ -2,12 +2,10 @@ setting:
   name: "test_kitti"
   output_root: "./experiments"
   pc_path: "./data/kitti/sequences/00/velodyne"
-  label_path: "./data/kitti/sequences/00/labels"
-  pose_path: "./data/kitti/sequences/00/poses.txt"
+  pose_path: "./data/kitti/poses/00.txt"
   calib_path: "./data/kitti/sequences/00/calib.txt"
   kitti_correct: True
   correct_deg: 0.195
-  semantic_on: False
 process:
   min_range_m: 3.0
   max_range_m: 80.0
