@@ -90,14 +90,12 @@ class Mapper():
             sdf_grad = get_gradient(points_torch, sdf_pred).detach() # use analytical gradient here
             grad_norm = sdf_grad.norm(dim=-1, keepdim=True).squeeze()
 
-        # Strategy 1
-        # measurements at the certain freespace would be filtered
+        # Strategy 1 [used]
+        # measurements at the certain freespace would be filtered 
         # dynamic objects are those have the measurement in the certain freespace 
         static_mask = (certainty < self.config.dynamic_certainty_thre) | (sdf_pred < self.config.dynamic_sdf_ratio_thre * self.config.voxel_size_m)        
 
-        # print(certainty)
-
-        # Strategy 2
+        # Strategy 2 [not used]
         # dynamic objects's sdf are often underestimated or unstable (already used for source point cloud)
         if type_2_on:
             min_grad_norm = 0.3 
@@ -300,7 +298,8 @@ class Mapper():
             self.new_idx += (self.pool_sample_count - self.cur_sample_count) # new idx in the data pool
 
             new_sample_count = self.new_idx.shape[0]
-            if self.config.adaptive_mode and new_sample_count / self.cur_sample_count < self.config.new_sample_ratio_thre:
+            # for fast adaptive operation
+            if self.config.adaptive_iters and new_sample_count / self.cur_sample_count < self.config.new_sample_ratio_thre:
                 self.train_less = True
             else:
                 self.train_less = False
@@ -319,6 +318,7 @@ class Mapper():
         # print("time for pool transforming     (ms):", (T3_1-T3_0)*1e3) # mainly spent here
         # print("time for filtering             (ms):", (T3_2-T3_1)*1e3)
 
+    # get a batch of training samples and labels for map optimization
     def get_batch(self, global_coord = False):
 
         if self.config.bs_new_sample > 0 and self.new_idx is not None and not self.lose_track and not self.dataset.stop_status: 
@@ -359,6 +359,7 @@ class Mapper():
 
         return coord, sdf_label, ts, normal_label, sem_label, color_label, weight
     
+    # get a batch of training samples (only those measured points) and labels for local bundle adjustment
     def get_ba_samples(self, subsample_count):
         
         surface_sample_idx = torch.where(self.sdf_label_pool == 0)[0]
@@ -377,10 +378,12 @@ class Mapper():
 
         return local_coord, weight, ts
     
+    # transform the data pool after pgo pose correction
     def transform_data_pool(self, pose_diff_torch: torch.tensor):
         # pose_diff_torch [N,4,4]
         self.global_coord_pool = transform_batch_torch(self.global_coord_pool, pose_diff_torch[self.time_pool])
 
+    # for visualization
     def get_data_pool_o3d(self, down_rate = 1, only_cur_data = False):
         
         if only_cur_data:
@@ -406,10 +409,6 @@ class Mapper():
         data_pool_pc_o3d.colors = o3d.utility.Vector3dVector(colors)
 
         return data_pool_pc_o3d
-    
-    # deal with the cases when the robot is stop at a position for a long time
-    # we still need to keep some old samples in the pool
-    # otherrwise we will gain the identical information from one view point for a long time
 
     def free_pool(self):
         self.coord_pool = None             
@@ -421,6 +420,7 @@ class Mapper():
         self.normal_label_pool = None
     
     # PIN map online training (mapping) given the fixed pose
+    # the main training function
     def mapping(self, iter_count): 
 
         if self.train_less:
@@ -679,6 +679,7 @@ class Mapper():
             sdf_pred = sdf_pred_mean.squeeze(1)
         return sdf_pred, sdf_std
 
+    # get numerical gradient (smoother than analytical one) with a fixed step
     def get_numerical_gradient(self, x, sdf_x = None, eps = 0.02, two_side = True):
 
         N = x.shape[0]        
@@ -731,6 +732,7 @@ class Mapper():
 
         return gradient
 
+    # as the strategy in Neuralangelo, [not used]
     def get_numerical_gradient_multieps(self, x, sdf_x, certainty, eps, two_side = True):
 
         N = x.shape[0]       

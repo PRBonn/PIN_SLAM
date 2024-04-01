@@ -393,6 +393,7 @@ class Mesher():
 
         return sdf_map_pc
     
+    # reconstruct the mesh from a the map defined by a collection of bounding boxes
     def recon_aabb_collections_mesh(self, aabbs, voxel_size, mesh_path = None, query_locally = False, 
                                     estimate_sem = False, estimate_color = False, mesh_normal = True, \
                                     filter_isolated_mesh = False, filter_free_space_vertices = True,

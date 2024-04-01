@@ -38,11 +38,10 @@ class Config:
         self.seed: int = 42 # random seed for the experiment
         self.num_workers: int = 12 # number of worker for the dataloader
         self.device: str = "cuda"  # use "cuda" or "cpu"
+        self.on_gpu: bool = True
         self.gpu_id: str = "0"  # used GPU id
         self.dtype = torch.float32 # default torch tensor data type
         self.tran_dtype = torch.float64 # dtype used for all the transformation and poses
-        
-        self.adaptive_mode: bool = False # adptive operation on
 
         # dataset specific
         self.kitti_correction_on: bool = False
@@ -164,12 +163,12 @@ class Config:
         self.max_sdf_ratio: float = 5.0 # ratio * surface_sample sigma
         self.max_sdf_std_ratio: float = 1.0 # ratio * surface_sample sigma # 1.0
         self.reg_dist_div_grad_norm: bool = False # divide the sdf by the sdf gradient's norm for fixing overshoting or not
-        self.reg_GM_dist_m: float = 0.5 # 0.3 # default value changed
-        self.reg_GM_grad: float = 0.2 # 0.1 # default value changed, the smaller the value, the smaller the weight would be (give even smaller weight to the outliers)
+        self.reg_GM_dist_m: float = 0.3 # 0.3 # default value changed
+        self.reg_GM_grad: float = 0.1 # 0.1 # default value changed, the smaller the value, the smaller the weight would be (give even smaller weight to the outliers)
         self.reg_lm_lambda: float = 1e-4 # 1e-3
         self.reg_iter_n: int = 50 # maximum iteration number for registration
         self.reg_term_thre_deg: float = 0.01
-        self.reg_term_thre_m: float = 0.0005
+        self.reg_term_thre_m: float = 0.001
         self.eigenvalue_check: bool = True
         self.consist_wieght_on: bool = True
 
@@ -213,7 +212,7 @@ class Config:
         
         self.numerical_grad: bool = True # use numerical gradient as in the paper Neuralangelo
         self.gradient_decimation: int = 10 # use just a part of the points for the ekional loss when using the numerical grad, save computing time
-        self.num_grad_step_ratio: float = 0.2 # step as a ratio of the surface sample sigma
+        self.num_grad_step_ratio: float = 0.2 # step as a ratio of the nerual point resolution
 
         self.ekional_loss_on: bool = True
         self.ekional_add_to: str = 'all' # select from 'all', 'surface', 'freespace'
@@ -237,13 +236,15 @@ class Config:
         self.ba_frame: int = 50 # window size for ba
 
         # to have a better reconstruction results, you need to set a larger iters, a smaller lr
+        self.adaptive_iters: bool = False # adptive map optimization iterations on
         self.iters: int = 15
         self.init_iter_ratio: int = 40
         self.opt_adam: bool = True  # use adam or sgd
         self.bs: int = 16384
         self.lr: float = 0.01
         self.lr_pose: float = 1e-3
-        self.weight_decay: float = 0. # 1e-7
+        # weight_decay is only applied to the latent codes for the l2 regularization (try to added it for each neural point explicitly)
+        self.weight_decay: float = 0.0 # 1e-7 
         self.adam_eps: float = 1e-15
 
         # loop closure detection
@@ -251,12 +252,13 @@ class Config:
         self.local_map_context: bool = False # use local map or scan context for loop closure description
         self.loop_with_feature: bool = False # encode neural point feature in the context
         self.min_loop_travel_dist_ratio: float = 4.0 # accumulated travel distance should be larger than theis ratio * local map radius to be considered as an valid candidate
-        self.local_map_context_latency: int = 0 # 10
+        self.local_map_context_latency: int = 5 # only used for local map context
         self.loop_local_map_time_window: int = 100
-        self.context_shape = [20, 60] # [20, 60] 
+        self.context_shape = [20, 60]
+        self.npmc_max_dist: float = 60.0 
         self.context_num_candidates: int = 1
-        self.context_cosdist_threshold: float = 0.2 # 0.15
-        self.context_virtual_side_count: int = 4 # 6
+        self.context_cosdist_threshold: float = 0.2
+        self.context_virtual_side_count: int = 5
         self.loop_z_check_on: bool = False # check the z axix difference of the found loop frames to deal with the potential abitary issue in a multi-floor building
 
         self.use_gt_loop: bool = False # use the gt loop closure derived from the gt pose or not (only used for debugging)
@@ -266,7 +268,7 @@ class Config:
         self.pgo_on: bool = False
         self.pgo_freq: int = 30 # frequency for detecting loop closure
         self.pgo_with_lm: bool = True # use lm or dogleg # lm seems to be better (why)
-        self.pgo_max_iter: int = 50
+        self.pgo_max_iter: int = 50 # 
         self.pgo_with_pose_prior: bool = False # use the pose prior or not during the pgo
         self.pgo_tran_std: float = 0.04 # m
         self.pgo_rot_std: float = 0.01 # deg
@@ -276,7 +278,7 @@ class Config:
         self.rehash_with_time: bool = True # Do the rehashing based on time difference or higher certainty
 
         # eval
-        self.wandb_vis_on: bool = False
+        self.wandb_vis_on: bool = False # log on weight and bias or not
         self.silence: bool = False # with log or not
         self.o3d_vis_on: bool = True # visualize the mesh in-the-fly using o3d visualzier or not [press space to pasue/resume]
         self.o3d_vis_raw: bool = False # visualize the raw point cloud or the weight source point cloud
@@ -359,6 +361,10 @@ class Config:
 
             self.seed = config_args["setting"].get("random_seed", self.seed)
             self.device = config_args["setting"].get("device", "cuda") # or cpu, on cpu it's about 5 times slower 
+            if self.device == 'cuda':
+                self.on_gpu = True
+            else:
+                self.on_gpu = False
             self.gpu_id = config_args["setting"].get("gpu_id", "0")
 
             self.kitti_correction_on = config_args["setting"].get("kitti_correct", False)
@@ -498,9 +504,9 @@ class Config:
         if self.pgo_on: 
             # loop detection mode
             self.use_gt_loop = config_args["pgo"].get("gt_loop", False) # only for debugging, not used for real cases
-            self.local_map_context = config_args["pgo"].get("map_context", True)
-            if self.local_map_context:
-                self.loop_with_feature = config_args["pgo"].get("loop_with_feature", self.loop_with_feature)
+            self.local_map_context = config_args["pgo"].get("map_context", self.local_map_context)
+            self.loop_with_feature = config_args["pgo"].get("loop_with_feature", self.loop_with_feature)
+            self.local_map_context_latency = config_args["pgo"].get('local_map_latency', self.local_map_context_latency)
             self.context_virtual_side_count = config_args["pgo"].get("virtual_side_count", self.context_virtual_side_count)
             self.pgo_freq = config_args["pgo"].get("pgo_freq_frame", self.pgo_freq)
             self.pgo_with_pose_prior = config_args["pgo"].get("with_pose_prior", self.pgo_with_pose_prior)
@@ -511,6 +517,7 @@ class Config:
             self.use_reg_cov_mat = config_args["pgo"].get("use_reg_cov", False)
             # merge the neural point map or not after the loop
             # merge the map may lead to some holes
+            self.pgo_max_iter = config_args["pgo"].get("pgo_max_iter", self.pgo_max_iter) 
             self.pgo_merge_map = config_args["pgo"].get("merge_map", False) 
             self.context_cosdist_threshold = config_args["pgo"].get("context_cosdist", self.context_cosdist_threshold) 
             self.min_loop_travel_dist_ratio = config_args["pgo"].get("min_loop_travel_ratio", self.min_loop_travel_dist_ratio) 
@@ -519,6 +526,7 @@ class Config:
         # mapping optimizer
         if "optimizer" in config_args:
             self.mapping_freq_frame = config_args["optimizer"].get("mapping_freq_frame", 1)
+            self.adaptive_iters = config_args["optimizer"].get("adaptive_iters", self.adaptive_iters)
             self.iters = config_args["optimizer"].get("iters", self.iters) # mapping iters per frame
             self.init_iter_ratio = config_args["optimizer"].get("init_iter_ratio", self.init_iter_ratio) # iteration count ratio for the first frame (a kind of warm-up) #iter = init_iter_ratio*iter
             self.bs = config_args["optimizer"].get("batch_size", self.bs)
@@ -572,15 +580,7 @@ class Config:
         self.window_radius = max(self.max_range, 6.0) # for the sampling data poo, should not be too small
 
         self.local_map_radius = self.max_range + 2.0 # for the local neural points
-        # self.local_map_radius = 1.05 * self.max_range
+        
+        self.npmc_max_dist = self.local_map_radius * 0.7 # 0.7
         
         self.vis_frame_axis_len = self.max_range/50.0
-
-        if self.local_map_context:
-            self.local_map_context_latency = config_args["pgo"].get('local_map_latency', 10) # 10
-            self.context_cosdist_threshold += 0.08
-            if self.loop_with_feature:
-                # self.context_shape = [10, 60]
-                self.context_cosdist_threshold += 0.08
-        else:
-            self.loop_with_feature = False

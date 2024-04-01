@@ -23,7 +23,7 @@ class DataSampler():
                color_torch):
         # points_torch is in the sensor's local coordinate system, not yet transformed to the global system
 
-        T0 = get_time()
+        # T0 = get_time()
 
         dev = self.dev
 
@@ -100,7 +100,7 @@ class DataSampler():
         if color_torch is not None:
             free_color_behind = torch.zeros(point_num*freespace_behind_sample_n, color_channel, device=dev)
         
-        T1 = get_time()
+        # T1 = get_time()
 
         # all together
         all_sample_displacement = torch.cat((measured_sample_displacement, surface_sample_displacement, free_sample_front_displacement, free_sample_behind_displacement),0)
@@ -163,7 +163,7 @@ class DataSampler():
         if color_torch is not None:
             color_tensor = torch.cat((color_torch, surface_color_tensor, free_color_front, free_color_behind),0)
 
-        T2 = get_time()
+        # T2 = get_time()
         # Convert from the all ray surface + all ray free order to the 
         # ray-wise (surface + free) order
         all_sample_points = all_sample_points.reshape(all_sample_n, -1, 3).transpose(0, 1).reshape(-1, 3)
@@ -182,7 +182,7 @@ class DataSampler():
 
         # ray distance (distances) is not repeated
 
-        T3 = get_time()
+        # T3 = get_time()
 
         # print("time for sampling I:", T1-T0)
         # print("time for sampling II:", T2-T1)

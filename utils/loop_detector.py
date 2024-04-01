@@ -18,27 +18,28 @@ class NeuralPointMapContextManager:
         
         self.mapper = mapper
         self.config = config
-        
-        self.silence = config.silence
-        self.des_shape = config.context_shape
-        self.num_candidates = config.context_num_candidates # 1
-        self.sc_cosdist_threshold = config.context_cosdist_threshold
         self.device = config.device
         self.dtype = config.dtype
         self.tran_dtype = config.tran_dtype
+        self.silence = config.silence
 
-        self.max_length = config.local_map_radius * 0.8
+        self.des_shape = config.context_shape
+        self.num_candidates = config.context_num_candidates # 1
+        self.ringkey_dist_thre = (config.max_z - config.min_z) * 0.25 # m
 
-        if config.loop_with_feature: # use cos dist
-            self.ringkey_dist_thre = 0.25 
-        else: # use l1 dist
-            self.ringkey_dist_thre = (config.max_z - config.min_z) * 0.25 # m
+        self.sc_cosdist_threshold = config.context_cosdist_threshold
+        if config.local_map_context:
+            self.sc_cosdist_threshold += 0.08
+            if config.loop_with_feature:
+                self.sc_cosdist_threshold += 0.08
+                self.ringkey_dist_thre = 0.25 # use cos distance
+                
+        self.max_length = config.npmc_max_dist            
             
         self.ENOUGH_LARGE = config.end_frame+1 # capable of up to ENOUGH_LARGE number of nodes 
 
         self.contexts = [None] * self.ENOUGH_LARGE
         self.ringkeys = [None] * self.ENOUGH_LARGE
-
         self.contexts_feature = [None] * self.ENOUGH_LARGE
         self.ringkeys_feature = [None] * self.ENOUGH_LARGE
 
@@ -155,7 +156,7 @@ class NeuralPointMapContextManager:
 
     def detect_loop(self, candidate_idx, use_feature: bool = False):        
         
-        t1 = get_time()
+        # t1 = get_time()
 
         if candidate_idx.shape[0] == 0:
             return None, None, None
@@ -166,7 +167,7 @@ class NeuralPointMapContextManager:
         else:
             ringkey_history = torch.stack([self.ringkeys[i] for i in candidate_idx])
 
-        t2 = get_time()
+        # t2 = get_time()
 
         min_dist_ringkey = 1e5
         min_loop_idx = None
@@ -209,7 +210,7 @@ class NeuralPointMapContextManager:
         if min_dist_ringkey > self.ringkey_dist_thre:
             return None, None, None
 
-        t3 = get_time()
+        # t3 = get_time()
 
         if use_feature:
             query_sc_feature = self.query_contexts[min_query_idx]
@@ -224,7 +225,7 @@ class NeuralPointMapContextManager:
         if not self.silence:
             print("min context cos dist:", cosdist)
 
-        t4 = get_time()
+        # t4 = get_time()
 
         # print("stack time  :", (t2-t1) * 1e3)
         # print("rk dist time:", (t3-t2) * 1e3)

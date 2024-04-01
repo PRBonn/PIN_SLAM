@@ -28,26 +28,28 @@ from dataset.dataset_indexing import set_dataset_path
     📍PIN-SLAM: LiDAR SLAM Using a Point-Based Implicit Neural Representation for Achieving Global Map Consistency
      Y. Pan et al.
 '''
-def run_pin_slam():
+def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=None):
 
     config = Config()
-    if len(sys.argv) > 1:
-        config.load(sys.argv[1])
+    if config_path is not None:
+        config.load(config_path)
+        set_dataset_path(config, dataset_name, sequence_name)
+        config.seed = seed
+        run_path = setup_experiment(config)
     else:
-        sys.exit("Please provide the path to the config file.\nTry: \
-                  python3 pin_slam.py path_to_config.yaml [dataset_name] [sequence_name] [random_seed]")
-            
-    # specific dataset [optional]
-    if len(sys.argv) > 3:
-        set_dataset_path(config, sys.argv[2], sys.argv[3])
+        if len(sys.argv) > 1:
+            config.load(sys.argv[1])
+        else:
+            sys.exit("Please provide the path to the config file.\nTry: \
+                    python3 pin_slam.py path_to_config.yaml [dataset_name] [sequence_name] [random_seed]")       
+        # specific dataset [optional]
+        if len(sys.argv) > 3:
+            set_dataset_path(config, sys.argv[2], sys.argv[3])
+        if len(sys.argv) > 4: # random seed [optional]
+            config.seed = int(sys.argv[4])
+        run_path = setup_experiment(config, sys.argv)
+        print("[bold green]PIN-SLAM starts[/bold green]","📍" )
 
-    if len(sys.argv) > 4: # random seed [optional]
-        config.seed = int(sys.argv[4])
-    
-    print("[bold green]PIN-SLAM starts[/bold green]","📍" )
-
-    run_path = setup_experiment(config, sys.argv)
-    
     # initialize the mlp decoder
     geo_mlp = Decoder(config, config.geo_mlp_hidden_dim, config.geo_mlp_level, 1)
     sem_mlp = Decoder(config, config.sem_mlp_hidden_dim, config.sem_mlp_level, config.sem_class_count + 1) if config.semantic_on else None
@@ -118,7 +120,7 @@ def run_pin_slam():
                                                    vis_result=config.o3d_vis_on and not config.o3d_vis_raw)
                 cur_pose_torch, cur_odom_cov, weight_pc_o3d, valid_flag = tracking_result
 
-                dataset.lose_track = not valid_flag # NOTE: don't use ~ as bool not
+                dataset.lose_track = not valid_flag
                 mapper.lose_track = not valid_flag
 
                 if not valid_flag and config.o3d_vis_on:
@@ -175,7 +177,7 @@ def run_pin_slam():
                         # firstly try to detect the local loop
                         loop_id, loop_dist, loop_transform = detect_local_loop(dist_to_past, loop_candidate_mask, dataset.pgo_poses, pgm.drift_radius, used_frame_id, loop_reg_failed_count, config.voxel_size_m*5.0, config.silence)
                         if loop_id is None and config.global_loop_on: # global loop detection (large drift)
-                            loop_id, loop_cos_dist, loop_transform, local_map_context_loop = lcd_npmc.detect_global_loop(cur_pgo_poses, dataset.pgo_poses, pgm.drift_radius*3.0, loop_candidate_mask, neural_points)     
+                            loop_id, loop_cos_dist, loop_transform, local_map_context_loop = lcd_npmc.detect_global_loop(cur_pgo_poses, dataset.pgo_poses, pgm.drift_radius*2.0, loop_candidate_mask, neural_points)     
                 if loop_id is not None:
                     if config.loop_z_check_on and abs(loop_transform[2,3]) > config.voxel_size_m*4.0: # for multi-floor buildings, z may cause ambiguilties
                         loop_id = None
@@ -194,17 +196,20 @@ def run_pin_slam():
                         loop_neural_pcd = neural_points.get_neural_points_o3d(query_global=False, color_mode=o3d_vis.neural_points_vis_mode, random_down_ratio=1)
                         o3d_vis.update(points_o3d_init, neural_points=loop_neural_pcd, pause_now=True)
                         o3d_vis.update(weight_pcd, neural_points=loop_neural_pcd, pause_now=True)
+                    pose_refine_np = pose_refine_torch.detach().cpu().numpy()
+                    loop_transform = np.linalg.inv(dataset.pgo_poses[loop_id]) @ pose_refine_np # T_l<-c = T_l<-w @ T_w<-c
+                    if not config.silence:
+                        print("[bold green]Refine loop transformation succeed [/bold green]")
+                    # only conduct pgo when the loop and loop constraint is correct
+                    cur_edge_cov = loop_cov_mat if config.use_reg_cov_mat else None
                     if reg_valid_flag: # refine succeed
-                        pose_refine_np = pose_refine_torch.detach().cpu().numpy()
-                        loop_transform = np.linalg.inv(dataset.pgo_poses[loop_id]) @ pose_refine_np # T_l<-c = T_l<-w @ T_w<-c
-                        if not config.silence:
-                            print("[bold green]Refine loop transformation succeed [/bold green]")
-                        # only conduct pgo when the loop and loop constraint is correct
-                        cur_edge_cov = loop_cov_mat if config.use_reg_cov_mat else None
-                        pgm.add_loop_factor(used_frame_id, loop_id, loop_transform, cov = cur_edge_cov)
+                        reg_valid_flag = pgm.add_loop_factor(used_frame_id, loop_id, loop_transform, cov = cur_edge_cov)
+                    if reg_valid_flag:
                         pgm.optimize_pose_graph() # conduct pgo
                         cur_loop_vis_id = used_frame_id-config.local_map_context_latency if local_map_context_loop else used_frame_id
-                        pgm.loop_edges.append(np.array([loop_id, cur_loop_vis_id],dtype=np.uint32)) # only for vis
+                        pgm.loop_edges_vis.append(np.array([loop_id, cur_loop_vis_id],dtype=np.uint32)) # only for vis
+                        pgm.loop_edges.append(np.array([loop_id, used_frame_id],dtype=np.uint32))
+                        pgm.loop_trans.append(loop_transform)
                         # update the neural points and poses
                         pose_diff_torch = torch.tensor(pgm.get_pose_diff(), device=config.device, dtype=config.dtype)
                         dataset.cur_pose_torch = torch.tensor(pgm.cur_pose, device=config.device, dtype=config.dtype)
@@ -242,7 +247,7 @@ def run_pin_slam():
 
         # for the first frame, we need more iterations to do the initialization (warm-up)
         cur_iter_num = config.iters * config.init_iter_ratio if used_frame_id == 0 else config.iters
-        if config.adaptive_mode and dataset.stop_status:
+        if config.adaptive_iters and dataset.stop_status:
             cur_iter_num = max(1, cur_iter_num-10)
         if used_frame_id == config.freeze_after_frame: # freeze the decoder after certain frame 
             freeze_decoders(geo_mlp, sem_mlp, color_mlp, config)
@@ -329,7 +334,7 @@ def run_pin_slam():
                         cur_sdf_slice = cur_sdf_slice_h
                                 
             pool_pcd = mapper.get_data_pool_o3d(down_rate=17, only_cur_data=o3d_vis.vis_only_cur_samples) if o3d_vis.render_data_pool else None # down rate should be a prime number
-            loop_edges = pgm.loop_edges if config.pgo_on else None
+            loop_edges = pgm.loop_edges_vis if config.pgo_on else None
             o3d_vis.update_traj(dataset.cur_pose_ref, dataset.odom_poses, dataset.gt_poses, dataset.pgo_poses, loop_edges)
             o3d_vis.update(dataset.cur_frame_o3d, dataset.cur_pose_ref, cur_sdf_slice, cur_mesh, neural_pcd, pool_pcd)
             
@@ -350,11 +355,14 @@ def run_pin_slam():
     
     # VI. Save results
     if config.track_on:
-        dataset.write_results(run_path)
+        pose_eval_results = dataset.write_results(run_path)
     if config.pgo_on and pgm.pgo_count>0:
         print("# Loop corrected: ", pgm.pgo_count)
         pgm.write_g2o(os.path.join(run_path, "final_pose_graph.g2o"))
-        pgm.plot_loops(os.path.join(run_path, "loop_plot.png"), vis_now=False)      
+        pgm.write_loops(os.path.join(run_path, "loop_log.txt"))
+        pgm.plot_loops(os.path.join(run_path, "loop_plot.png"), vis_now=False) 
+    else:
+        print('No loop found')     
 
     neural_points.recreate_hash(None, None, False, False) # merge the final neural point map
     neural_points.prune_map(config.max_prune_certainty) # prune uncertain points for the final output 
@@ -374,6 +382,8 @@ def run_pin_slam():
             o3d_vis.ego_view = False
             o3d_vis.update(dataset.cur_frame_o3d, dataset.cur_pose_ref, cur_sdf_slice, cur_mesh, neural_pcd, pool_pcd)
             o3d_vis.update_traj(dataset.cur_pose_ref, dataset.odom_poses, dataset.gt_poses, dataset.pgo_poses, loop_edges)
+    
+    return pose_eval_results
 
 if __name__ == "__main__":
 

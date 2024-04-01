@@ -24,7 +24,7 @@ from utils.tools import get_time, voxel_down_sample_torch, deskewing, transform_
 from utils.semantic_kitti_utils import *
 from eval.eval_traj_utils import *
 
-# TODO: write a new dataloader for RGB-D inputs, not always firstly converting them to KITTI Lidar format
+# TODO: write a new dataloader for RGB-D inputs, not always converting them to KITTI Lidar format
 
 class SLAMDataset(Dataset):
     def __init__(self, config: Config) -> None:
@@ -92,9 +92,10 @@ class SLAMDataset(Dataset):
 
             # pose in the reference frame (might be the first frame used)
             self.poses_ref = self.poses_w  # initialize size
-
             if len(self.poses_w) != self.total_pc_count:
                 sys.exit("Number of the pose and point cloud are not identical")
+            if self.total_pc_count > 2000:
+                config.local_map_context = True
 
             # get the pose in the reference frame
             begin_flag = False
@@ -259,7 +260,7 @@ class SLAMDataset(Dataset):
 
     def preprocess_frame(self, frame_id=0):
 
-        T1 = get_time()
+        # T1 = get_time()
 
         if self.config.adaptive_range_on:
             pc_max_bound, _ = torch.max(self.cur_point_cloud_torch[:, :3], dim=0)
@@ -291,7 +292,7 @@ class SLAMDataset(Dataset):
             self.cur_sem_labels_torch = self.cur_sem_labels_torch[idx]
             self.cur_sem_labels_full = self.cur_sem_labels_full[idx]
         
-        T2 = get_time()
+        # T2 = get_time()
 
         # preprocessing, filtering
         if self.cur_sem_labels_torch is not None:
@@ -305,7 +306,7 @@ class SLAMDataset(Dataset):
         if self.config.kitti_correction_on:
             self.cur_point_cloud_torch = intrinsic_correct(self.cur_point_cloud_torch, self.config.correction_deg)
 
-        T3 = get_time()
+        # T3 = get_time()
 
         # prepare for the registration
         if self.processed_frame == 0: # initialize the first frame, no tracking yet
@@ -371,7 +372,7 @@ class SLAMDataset(Dataset):
                 
             # print("# Source point for registeration : ", cur_source_torch.shape[0])
     
-        T4 = get_time()
+        # T4 = get_time()
     
     def update_odom_pose(self, cur_pose_torch: torch.tensor):
         # needed to be at least the second frame
@@ -498,20 +499,22 @@ class SLAMDataset(Dataset):
 
         time_table = np.array(self.time_table)
         mean_time_s = np.sum(time_table)/self.processed_frame*1.0
-        print("Consuming time per frame      (s):", mean_time_s)
-        print("Calculated over %d frames" % self.processed_frame)
+        if not self.silence:
+            print("Consuming time per frame        (s):", f"{mean_time_s:.3f}")
+            print("Calculated over %d frames" % self.processed_frame)
         np.save(os.path.join(run_path, "time_table.npy"), time_table) # save detailed time table
         plot_timing_detail(time_table, os.path.join(run_path, "time_details.png"), self.config.pgo_on)
 
+        pose_eval = None
+        
         # evaluation report
         if self.gt_pose_provided and len(self.gt_poses) == len(self.odom_poses):
             print("Odometry evaluation:")
             avg_tra, avg_rot = relative_error(self.gt_poses, self.odom_poses) # fix the rotation error issues (done)
             ate_rot, ate_trans, align_mat = absolute_error(self.gt_poses, self.odom_poses, self.config.eval_traj_align)
-            print("Average Translation Error     (%):", avg_tra)
-            print("Average Rotational Error  (deg/m):", avg_rot)
-            print("Absoulte Trajectory Error     (m):", ate_trans)
-            print("Absoulte Rotational Error   (deg):", ate_rot)
+            print("Average Translation Error       (%):", f"{avg_tra:.3f}")
+            print("Average Rotational Error (deg/100m):", f"{avg_rot*100.0:.3f}")
+            print("Absoulte Trajectory Error       (m):", f"{ate_trans:.3f}")
 
             if self.config.wandb_vis_on:
                 wandb_log_content = {'Average Translation Error [%]': avg_tra, 'Average Rotational Error [deg/m]': avg_rot,
@@ -523,10 +526,9 @@ class SLAMDataset(Dataset):
                 print("SLAM evaluation:")
                 avg_tra_slam, avg_rot_slam = relative_error(self.gt_poses, self.pgo_poses)
                 ate_rot_slam, ate_trans_slam, align_mat_slam = absolute_error(self.gt_poses, self.pgo_poses, self.config.eval_traj_align)
-                print("Average Translation Error     (%):", avg_tra_slam)
-                print("Average Rotational Error  (deg/m):", avg_rot_slam)
-                print("Absoulte Trajectory Error     (m):", ate_trans_slam)
-                print("Absoulte Rotational Error   (deg):", ate_rot_slam)
+                print("Average Translation Error       (%):", f"{avg_tra_slam:.3f}")
+                print("Average Rotational Error (deg/100m):", f"{avg_rot_slam*100.0:.3f}")
+                print("Absoulte Trajectory Error       (m):", f"{ate_trans_slam:.3f}")
 
                 if self.config.wandb_vis_on:
                     wandb_log_content = {'SLAM Average Translation Error [%]': avg_tra_slam, 'SLAM Average Rotational Error [deg/m]': avg_rot_slam, 'SLAM Absoulte Trajectory Error [m]': ate_trans_slam, 'SLAM Absoulte Rotational Error [deg]': ate_rot_slam} 
@@ -546,16 +548,19 @@ class SLAMDataset(Dataset):
                         writer.writerow(data)
             except IOError:
                 print("I/O error")
+            
+            if self.config.o3d_vis_on:
+                output_traj_plot_path_2d = os.path.join(run_path, "traj_plot_2d.png")
+                output_traj_plot_path_3d = os.path.join(run_path, "traj_plot_3d.png")
+                # trajectory not aligned yet
+                if self.config.pgo_on:
+                    plot_trajectories(output_traj_plot_path_2d, self.pgo_poses, self.gt_poses, self.odom_poses, plot_3d=False) 
+                    plot_trajectories(output_traj_plot_path_3d, self.pgo_poses, self.gt_poses, self.odom_poses, plot_3d=True)   
+                else:
+                    plot_trajectories(output_traj_plot_path_2d, self.odom_poses, self.gt_poses, plot_3d=False)
+                    plot_trajectories(output_traj_plot_path_3d, self.odom_poses, self.gt_poses, plot_3d=True)
 
-            output_traj_plot_path_2d = os.path.join(run_path, "traj_plot_2d.png")
-            output_traj_plot_path_3d = os.path.join(run_path, "traj_plot_3d.png")
-            # trajectory not aligned yet
-            if self.config.pgo_on:
-                plot_trajectories(output_traj_plot_path_2d, self.pgo_poses, self.gt_poses, self.odom_poses, plot_3d=False) 
-                plot_trajectories(output_traj_plot_path_3d, self.pgo_poses, self.gt_poses, self.odom_poses, plot_3d=True)   
-            else:
-                plot_trajectories(output_traj_plot_path_2d, self.odom_poses, self.gt_poses, plot_3d=False)
-                plot_trajectories(output_traj_plot_path_3d, self.odom_poses, self.gt_poses, plot_3d=True)
+        return pose_eval
     
     def write_merged_point_cloud(self, run_path: str):
         
@@ -839,6 +844,7 @@ def intrinsic_correct(points: torch.tensor, correct_deg=0.):
     # # This function only applies for the KITTI dataset, and should NOT be used by any other dataset,
     # # the original idea and part of the implementation is taking from CT-ICP(Although IMLS-SLAM
     # # Originally introduced the calibration factor)
+    # We set the correct_deg = 0.195 deg for KITTI odom dataset, inline with MULLS #issue 11
     if correct_deg == 0.:
         return points
 

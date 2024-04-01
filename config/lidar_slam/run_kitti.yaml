@@ -21,10 +21,10 @@ neuralpoints:
   voxel_size_m: 0.4
   feature_dim: 8 
   query_nn_k: 6
-  search_alpha: 0.5 # increase when you want to be more robust to agressive motions
+  search_alpha: 0.2
   weighted_first: False
 decoder:
-  freeze_after_frame: 30
+  freeze_after_frame: 40
 loss:
   main_loss_type: bce
   sigma_sigmoid_m: 0.08
@@ -33,19 +33,17 @@ loss:
   ekional_loss_on: True
   weight_e: 0.5
 continual:
-  batch_size_new_sample: 2000
+  batch_size_new_sample: 1000
   pool_capacity: 2e7
 tracker:
-  source_vox_down_m: 0.8
+  source_vox_down_m: 0.6
   iter_n: 100
-  GM_grad: 0.1
-  GM_dist: 0.2
+  GM_grad: 0.1 
+  GM_dist: 0.2 
 pgo:
-  map_context: True
   pgo_freq_frame: 20
-  virtual_side_count: 6
-  context_cosdist: 0.25
-  min_loop_travel_ratio: 4.0
+  context_cosdist: 0.2
+  pgo_max_iter: 50
 optimizer: # mapper
   iters: 15  # iterations per frame
   batch_size: 16384
@@ -55,5 +53,5 @@ eval:
   silence_log: True # output the logs or not
   sensor_cad_path: ./cad/kitti_car.ply
   mesh_freq_frame: 50 # reconstruct the mesh every x frames
-  mesh_min_nn: 15
+  mesh_min_nn: 9
   save_map: True

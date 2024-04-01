@@ -4,6 +4,7 @@
 # Copyright (c) 2024 Yue Pan, all rights reserved
 
 import numpy as np
+from numpy.linalg import inv
 import gtsam
 import matplotlib.pyplot as plt
 from rich import print
@@ -26,10 +27,10 @@ class PoseGraphManager:
         self.odom_cov = gtsam.noiseModel.Diagonal.Sigmas(self.const_cov)
         self.loop_cov = gtsam.noiseModel.Diagonal.Sigmas(self.const_cov)
         
-        # not used
-        # mEst = gtsam.noiseModel.mEstimator.GemanMcClure(1.0)
-        # self.robust_loop_cov = gtsam.noiseModel.Robust(mEst, self.loop_cov)
-        # self.robust_odom_cov = gtsam.noiseModel.Robust(mEst, self.odom_cov)
+        # not used (figure it out)
+        mEst = gtsam.noiseModel.mEstimator.GemanMcClure(1.0)
+        self.robust_loop_cov = gtsam.noiseModel.Robust(mEst, self.loop_cov)
+        self.robust_odom_cov = gtsam.noiseModel.Robust(mEst, self.odom_cov)
 
         self.graph_factors = gtsam.NonlinearFactorGraph() # edges # with pose and pose covariance
         self.graph_initials = gtsam.Values() # initial guess # as pose
@@ -40,12 +41,15 @@ class PoseGraphManager:
 
         self.init_poses = []
         self.pgo_poses = []
+        self.loop_edges_vis = []
         self.loop_edges = []
+        self.loop_trans = []
 
         self.min_loop_idx = config.end_frame+1
         self.last_loop_idx = 0
         self.drift_radius = 0.0 # m
         self.pgo_count = 0
+        self.valid_error_thre = 1e7
 
     def add_frame_node(self, frame_id, init_pose):
         """create frame pose node and set pose initial guess  
@@ -97,7 +101,6 @@ class PoseGraphManager:
                                                 gtsam.symbol('x', cur_id),  #t
                                                 gtsam.Pose3(odom_transform),  # T_prev<-cur
                                                 cov_model))  # NOTE: add robust kernel
-        
 
     def add_loop_factor(self, cur_id: int, loop_id: int, loop_transform: np.ndarray, cov = None):
         """add a loop closure factor between two pose nodes
@@ -118,6 +121,14 @@ class PoseGraphManager:
                                                 gtsam.symbol('x', cur_id),  #t 
                                                 gtsam.Pose3(loop_transform),  # T_loop<-cur
                                                 cov_model))  # NOTE: add robust kernel
+        
+        cur_error = self.graph_factors.error(self.graph_initials)
+        if cur_error > self.valid_error_thre:
+            if not self.silence:
+                print("[bold yellow]A loop edge rejected due to too large error[/bold yellow]")
+            self.graph_factors.remove(self.graph_factors.size()-1)
+            return False
+        return True
 
     def optimize_pose_graph(self):
         
@@ -128,8 +139,10 @@ class PoseGraphManager:
         else: # pgo with dogleg
             opt_param = gtsam.DoglegParams()
             opt_param.setMaxIterations(self.config.pgo_max_iter)
-            opt = gtsam.DoglegOptimizer(self.graph_factors, self.graph_initials, opt_param)    
-        
+            opt = gtsam.DoglegOptimizer(self.graph_factors, self.graph_initials, opt_param)  
+          
+        error_before = self.graph_factors.error(self.graph_initials)
+
         self.graph_optimized = opt.optimizeSafely()
 
         # Calculate marginal covariances for all variables
@@ -138,7 +151,6 @@ class PoseGraphManager:
         # cov = get_node_cov(marginals, 50)
         # print(cov)
 
-        error_before = self.graph_factors.error(self.graph_initials)
         error_after = self.graph_factors.error(self.graph_optimized)
         if not self.silence:
             print("[bold red]PGO done[/bold red]")
@@ -156,11 +168,67 @@ class PoseGraphManager:
 
         self.pgo_count += 1
 
+    # write the pose graph as the g2o format
     def write_g2o(self, out_file):
         gtsam.writeG2o(self.graph_factors, self.graph_initials, out_file)
 
-    def get_pose_diff(self):
+    # write loop data into txt file
+    def write_loops(self, out_file):
+        with open(out_file, 'w') as file:
+            for indices, array_data in zip(self.loop_edges, self.loop_trans):
+                # Write the indices to the file
+                file.write(f"{indices[0]} {indices[1]}\n")
 
+                # Write the array data to the file with 4 numbers per row
+                reshaped_array = array_data.reshape(-1, 4)
+                np.savetxt(file, reshaped_array, delimiter=' ', fmt='%f')
+
+    # read loop data from txt file
+    def read_loops(self, in_file):
+        self.loop_edges = []
+        self.loop_trans = []
+        with open(in_file, 'r') as file:
+            lines = file.readlines()  # Read all lines from the file
+
+            # Process each line in the file
+            for i in range(0, len(lines), 5):  # Assuming each array data is followed by 5 lines (indices + array data)
+                # Extract indices from the current line
+                indices = np.array([int(num) for num in lines[i].strip().split(' ')])
+                self.loop_edges.append(indices)
+
+                # Extract array data from the next 4 lines
+                array_data_lines = [line.strip().split() for line in lines[i+1:i+4]]
+                tran_array = np.array([[float(num) for num in row] for row in array_data_lines])
+                self.loop_trans.append(tran_array)
+
+    # do pgo with known odom and loop data offline (for debugging)
+    def offline_pgo(self, odom_poses):
+        # initialize 
+        self.graph_factors = gtsam.NonlinearFactorGraph() # edges # with pose and pose covariance
+        self.graph_initials = gtsam.Values() # initial guess # as pose
+
+        # create nodes
+        for i in range(len(odom_poses)):
+            self.add_frame_node(i, odom_poses[i]) 
+
+        # pose prior
+        self.add_pose_prior(0, odom_poses[0], fixed=True)
+
+        # create odom edges
+        for i in range(len(odom_poses)-1):
+            odom_tran = inv(odom_poses[i]) @ odom_poses[i+1]
+            self.add_odometry_factor(i+1, i, odom_tran)
+
+        # create loop edges
+        for i in range(len(self.loop_edges)):
+            self.add_loop_factor(self.loop_edges[i][1], self.loop_edges[i][0], self.loop_trans[i])
+        
+        # optimize 
+        self.optimize_pose_graph()
+        # poses after optimization: pgo_poses
+
+    # get the difference of poses before and after pgo        
+    def get_pose_diff(self):
         assert len(self.pgo_poses) == len(self.init_poses), "Lists of poses must have the same size."
         pose_diff = np.array([(pgo_pose @ np.linalg.inv(init_pose)) for pgo_pose, init_pose in zip(self.pgo_poses, self.init_poses)])
         return pose_diff
@@ -192,8 +260,6 @@ class PoseGraphManager:
             node_0 = loop[0]
             node_1 = loop[1]
             ax.plot([traj_est[node_0, 0], traj_est[node_1, 0]], [traj_est[node_0, 1], traj_est[node_1, 1]], [ts[node_0], ts[node_1]], color='green')
-
-        # TODO: Set labels and title
 
         ax.grid(False)
         ax.set_axis_off()

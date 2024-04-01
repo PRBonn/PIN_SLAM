@@ -22,9 +22,11 @@ GREEN = np.array([0, 128, 0]) / 255.0
 BLUE = np.array([0, 0, 128]) / 255.0
 LIGHTBLUE = np.array([0.00, 0.65, 0.93]) 
 
+
 class MapVisualizer():
     # Public Interaface ----------------------------------------------------------------------------
     def __init__(self, config: Config = None):
+        
         # Initialize GUI controls
         self.block_vis = True
         self.play_crun = True
@@ -604,62 +606,4 @@ class MapVisualizer():
         if self.camera_params and not self.global_viewpoint:
             self.view_control.convert_from_pinhole_camera_parameters(self.camera_params)
         self.camera_params = current_camera
-
-    
-    # show traj as point cloud (faster)
-    # def _update_traj(self, odom_poses=None, gt_poses = None, pgo_poses = None, loop_edges = None):
-        
-    #     self.vis.remove_geometry(self.pgo_edges, self.reset_bounding_box)
-        
-    #     if self.render_trajectory and odom_poses is not None and len(odom_poses) > 0:
-    #         odom_poses_np = np.array(odom_poses, dtype=np.float64)
-    #         odom_position_np = odom_poses_np[:,:3,3]
-    #         self.odom_traj_pcd.points = o3d.utility.Vector3dVector(odom_position_np)
-    #         if pgo_poses is None:
-    #             one_array = np.ones((len(odom_poses), 3, 1))
-    #             one_array[:, 1:] = 0.
-    #             odom_forward_np = np.squeeze(np.matmul(odom_poses_np[:,:3,:3], one_array),axis=-1)
-    #             self.odom_traj_pcd.normals = o3d.utility.Vector3dVector(odom_forward_np)
-    #             self.odom_traj_pcd.paint_uniform_color(RED) # odom red
-    #         else:
-    #             self.odom_traj_pcd.paint_uniform_color(BLUE) # odom blue, slam as red
-
-    #         if pgo_poses is not None and (not self.render_odom_trajectory):
-    #             self.odom_traj_pcd.points = o3d.utility.Vector3dVector()
-    #     else:
-    #         self.odom_traj_pcd.points = o3d.utility.Vector3dVector()
-        
-    #     if self.render_trajectory and pgo_poses is not None and len(pgo_poses) > 0:
-    #         pgo_poses_np = np.array(pgo_poses, dtype=np.float64)
-    #         pgo_position_np = pgo_poses_np[:,:3,3]
-    #         one_array = np.ones((len(pgo_poses), 3, 1))
-    #         one_array[:, 1:] = 0.
-    #         pgo_forward_np = np.squeeze(np.matmul(pgo_poses_np[:,:3,:3], one_array),axis=-1)
-    #         self.pgo_traj_pcd.points = o3d.utility.Vector3dVector(pgo_position_np)
-    #         self.pgo_traj_pcd.normals = o3d.utility.Vector3dVector(pgo_forward_np)
-    #         self.pgo_traj_pcd.paint_uniform_color(RED) # pgo (slam) red
-            
-    #         if self.render_pgo and loop_edges is not None and len(loop_edges)>0:
-    #             edges = np.array(loop_edges)
-    #             self.pgo_edges.points = o3d.utility.Vector3dVector(pgo_position_np)
-    #             self.pgo_edges.lines = o3d.utility.Vector2iVector(edges)
-    #             self.pgo_edges.paint_uniform_color(GREEN)
-    #         else:
-    #             self.pgo_edges = o3d.geometry.LineSet()
-    #     else:
-    #         self.pgo_traj_pcd.points = o3d.utility.Vector3dVector()
-    #         self.pgo_edges = o3d.geometry.LineSet()
-
-    #     if self.render_trajectory and self.render_gt_trajectory and gt_poses is not None and len(gt_poses) > 0:
-    #         gt_poses_np = np.array(gt_poses, dtype=np.float64)
-    #         gt_position_np = gt_poses_np[:,:3,3]
-    #         self.gt_traj_pcd.points = o3d.utility.Vector3dVector(gt_position_np)
-    #         self.gt_traj_pcd.paint_uniform_color(BLACK) # gt black
-    #     else:
-    #         self.gt_traj_pcd.points = o3d.utility.Vector3dVector()
-
-    #     self.vis.update_geometry(self.odom_traj_pcd)
-    #     self.vis.update_geometry(self.gt_traj_pcd)
-    #     self.vis.update_geometry(self.pgo_traj_pcd)
-    #     self.vis.add_geometry(self.pgo_edges, self.reset_bounding_box)
 

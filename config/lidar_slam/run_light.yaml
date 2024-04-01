@@ -1,0 +1,45 @@
+# light-weight PIN-SLAM
+setting: 
+  name: "test_light"
+  output_root: "./experiments"
+  pc_path: "./data/your_dataset/pointcloud"
+  pose_path: "./data/your_dataset/poses.txt"
+process:
+  min_range_m: 3.0
+  max_range_m: 60.0
+  vox_down_m: 0.12
+sampler:
+  surface_sample_range_m: 0.25 
+  surface_sample_n: 2
+  free_sample_begin_ratio: 0.5
+  free_sample_end_dist_m: 1.0
+  free_front_sample_n: 1
+neuralpoints:
+  voxel_size_m: 0.4
+loss:
+  sigma_sigmoid_m: 0.08
+  loss_weight_on: True
+  dist_weight_scale: 0.8
+continual:
+  batch_size_new_sample: 1000
+  pool_capacity: 1e7
+  pool_filter_freq: 10
+tracker:
+  source_vox_down_m: 1.0
+  iter_n: 30
+  term_deg: 0.1
+pgo:
+  map_context: True
+  pgo_freq_frame: 50
+  context_cosdist: 0.25
+optimizer: # mappers
+  iters: 10 
+  batch_size: 8192
+  adaptive_iters: True
+eval:
+  wandb_vis_on: True # log to wandb or not
+  o3d_vis_on: False # visualize the mapping or not
+  silence_log: True # output the logs or not
+  mesh_freq_frame: 50 # reconstruct the mesh every x frames
+  mesh_min_nn: 9
+  save_map: False

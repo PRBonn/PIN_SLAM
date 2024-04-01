@@ -66,7 +66,7 @@ class Tracker():
         max_valid_final_sdf_residual_cm = self.config.surface_sample_range_m * 0.5 * 100.0
         min_valid_ratio = 0.2
         if loop_reg: # also can try to further decrease the source point cloud resolution
-            max_valid_final_sdf_residual_cm = self.config.surface_sample_range_m * 0.6 * 100.0
+            max_valid_final_sdf_residual_cm = self.config.surface_sample_range_m * 0.5 * 100.0 #0.6
             min_valid_ratio = 0.15
 
         max_increment_sdf_residual_ratio = 1.1
@@ -104,7 +104,7 @@ class Tracker():
                 max_grad_norm -= 0.001
 
             reg_result = self.registration_step(cur_points, source_normals, source_sdf, source_colors, \
-                                                cur_ts, min_grad_norm, max_grad_norm, \
+                                                min_grad_norm, max_grad_norm, \
                                                 cur_GM_dist_m, cur_GM_grad, \
                                                 lm_lambda, (vis_result and converged))
             
@@ -148,7 +148,8 @@ class Tracker():
                 print("Photometric residual:", photo_residual)
 
         if sdf_residual_cm > max_valid_final_sdf_residual_cm:
-            print("[bold yellow](Warning) registration failed: too large final residual[/bold yellow]") 
+            if not self.silence:
+                print("[bold yellow](Warning) registration failed: too large final residual[/bold yellow]") 
             valid_flag = False
 
         if eigenvalues is not None:
@@ -157,12 +158,6 @@ class Tracker():
             if self.config.eigenvalue_check and min_eigenvalue < valid_point_count * eigenvalue_ratio_thre:
                 print("[bold yellow](Warning) registration failed: eigenvalue check failed[/bold yellow]") 
                 valid_flag = False
-
-        # this seems to have some problem
-        # rot_angle_deg = rotation_matrix_to_axis_angle(T[:3,:3]) * 180. / np.pi
-        # if rot_angle_deg > max_rot_deg:
-        #     print("\033[33m" + "[Warning] registration failed: too large rotation in one frame" + "\033[0m") 
-        #     valid_flag = False
         
         if cov_mat is not None:
             cov_mat = cov_mat.detach().cpu().numpy()
@@ -173,7 +168,7 @@ class Tracker():
             
         return T, cov_mat, weight_point_cloud, valid_flag
     
-    def query_source_points(self, coord, ts, bs, query_sdf = True, query_sdf_grad = True, 
+    def query_source_points(self, coord, bs, query_sdf = True, query_sdf_grad = True, 
                             query_color = False, query_color_grad = False,
                             query_sem = False, query_mask = True, query_certainty = True,
                             query_locally = True,
@@ -276,14 +271,14 @@ class Tracker():
 
     def registration_step(self, points: torch.Tensor, normals: torch.Tensor, 
                           sdf_labels: torch.Tensor, colors: torch.Tensor,
-                          cur_ts, min_grad_norm, max_grad_norm,
+                          min_grad_norm, max_grad_norm,
                           GM_dist=None, GM_grad=None, lm_lambda = 0., vis_weight_pc = False): # if lm_lambda = 0, then it's Gaussian Newton Optimization
 
         T0 = get_time()
 
         colors_on = (colors is not None)
         photo_loss_on = self.config.photometric_loss_on and colors_on
-        sdf_pred, sdf_grad, color_pred, color_grad, _, mask, certainty, sdf_std = self.query_source_points(points, cur_ts, self.config.infer_bs, 
+        sdf_pred, sdf_grad, color_pred, color_grad, _, mask, certainty, sdf_std = self.query_source_points(points, self.config.infer_bs, 
                                                                                                             True, True, colors_on, 
                                                                                                             photo_loss_on, query_locally=True, 
                                                                                                             mask_min_nn_count=self.config.query_nn_k)
@@ -293,8 +288,6 @@ class Tracker():
         grad_norm = sdf_grad.norm(dim=-1, keepdim=True).squeeze() # unit: m
 
         grad_unit = sdf_grad/grad_norm.unsqueeze(-1)  
-
-        # normal_consistency = torch.abs((normals * grad_unit).sum(dim=1))
         
         min_certainty = 5.
         sdf_pred_abs = torch.abs(sdf_pred)
@@ -320,7 +313,6 @@ class Tracker():
         
         # certainty not used here
         # certainty = certainty[valid_idx]
-
         # std also not used
         # sdf_std = sdf_std[valid_idx]
         # std_mean = sdf_std.mean()
@@ -347,19 +339,13 @@ class Tracker():
         # calculate the weights
         # we use the Geman-McClure robust weight here (https://arxiv.org/pdf/1810.01474.pdf)
         # note that there's a mistake that in this paper, the author multipy an additional k at the numerator
-        # w_grad = 1.0 if GM_grad is None else ((GM_grad/(GM_grad+grad_anomaly**2))**2).unsqueeze(1)
-        # w_res = 1.0 if GM_dist is None else ((GM_dist/(GM_dist+sdf_residual**2))**2).unsqueeze(1)
+        w_grad = 1.0 if GM_grad is None else ((GM_grad/(GM_grad+grad_anomaly**2))**2).unsqueeze(1)
+        w_res = 1.0 if GM_dist is None else ((GM_dist/(GM_dist+sdf_residual**2))**2).unsqueeze(1)
 
-        w_grad = 1.0 if GM_grad is None else ((GM_grad/(GM_grad**2+grad_anomaly**2))**2).unsqueeze(1)
-        w_res = 1.0 if GM_dist is None else ((GM_dist/(GM_dist**2+sdf_residual**2))**2).unsqueeze(1)
-
-        # print(w_grad)
-        # print(w_res)
 
         w_normal = 1.0 if normals is None else (0.5 + torch.abs((valid_normals * valid_grad_unit).sum(dim=1))).unsqueeze(1)
 
         w_certainty = 1.0 
-
         # if certainty is not None: # not used
         #     certainty_thre = 50.0
         #     w_certainty = torch.clamp(certainty / certainty_thre, max=1.).unsqueeze(1)
@@ -391,7 +377,7 @@ class Tracker():
         # print(w_color)
         w = w_res * w_grad * w_normal * w_color * w_certainty * w_std
 
-        w /= (2.0*torch.mean(w)) # normalize weight
+        w /= (2.0*torch.mean(w)) # normalize weight for visualization
 
         T2 = get_time()
 
@@ -450,74 +436,73 @@ class Tracker():
         # print("time for vis             :", (T4-T3) * 1e3) # negligible
                   
         return T, cov_mat, eigenvalues, weight_point_cloud, valid_points, sdf_residual_mean_cm, color_residual_mean
-    
-# continous time registration (motion undistortion deskew is not needed then)
-# point-wise timestamp required
-# we regard the robot motion as uniform velocity in intervals (control poses)
-# then each points transformation can be interpolated using the control poses
-# we estimate poses of the control points
-# we also need to enforce the conherent smoothness of the control poses
-# and solve the non-linear optimization problem (TODO, not implementation)
-def ct_registration_step(self, points: torch.Tensor, ts: torch.Tensor, normals: torch.Tensor, 
-                        sdf_labels: torch.Tensor, colors: torch.Tensor,
-                        cur_ts, min_grad_norm, max_grad_norm,
-                        GM_dist=None, GM_grad=None, lm_lambda = 0., vis_weight_pc = False):
-    return 
 
 # function adapted from LocNDF by Louis Wiesmann
-def implicit_reg(points, sdf_grad, sdf_residual, weight, lm_lambda = 0., require_cov=False, require_eigen=False):
+def implicit_reg(points, sdf_grad, sdf_residual, weight, lm_lambda = 0.0, require_cov=False, require_eigen=False):
+    """
+    One step point-to-implicit model registration using LM optimization.
+
+    Args:
+        points (`torch.tensor'):
+            Current transformed source points in the coordinate system of the implicit distance field
+            with the shape of [N, 3]
+        sdf_grad (`torch.tensor'):
+            The gradient of predicted SDF
+            with the shape of [N, 3]
+        sdf_residual (`torch.tensor'):
+            SDF predictions at the positions of the points
+            with the shape of [N, 1]
+        weight (`torch.tensor'):
+            Point-wise weight for the optimization
+            with the shape of [N, 1]
+        lm_lambda: (`float`):
+            Lambda damping factor for LM optimization 
+    
+    Returns:
+        T_mat (`torch.tensor'):
+            4 by 4 transformation matrix of this iteration of the registration
+        cov_mat (`torch.tensor'):
+            6 by 6 covariance matrix for the registration
+        eigenvalues (`torch.tensor'):
+            3 dim translation part of the eigenvalues for the registration degerancy check
+    """
 
     cross = torch.cross(points, sdf_grad) # N,3 x N,3
-    J = torch.cat([cross, sdf_grad], -1) # first rotation, then translation # N, 6
+    J_mat = torch.cat([cross, sdf_grad], -1) # The Jacobian matrix # first rotation, then translation # N, 6
+    N_mat = J_mat.T @ (weight*J_mat) # approximate Hessian matrix # first rot, then tran # 6, 6
 
-    N = J.T @ (weight*J) # approximate Hessian matrix # first rot, then tran # 6, 6
-
-    # you may try to do the SVD of N to analyzie its eigen value (contribution on each degree of freedom)
     if require_cov or require_eigen:
-        N_old = N.clone()
+        N_mat_raw = N_mat.clone()
     
     # use LM optimization 
+    N_mat += lm_lambda * torch.diag(torch.diag(N_mat))
     # N += lm_lambda * 1e3 * torch.eye(6, device=points.device) 
-
-    # print(torch.diag(torch.diag(N)))
-    N += lm_lambda * torch.diag(torch.diag(N))
-
+    
     # about lambda
     # If the lambda parameter is large, it implies that the algorithm is relying more on the gradient descent component of the optimization. This can lead to slower convergence as the steps are smaller, but it may improve stability and robustness, especially in the presence of noisy or ill-conditioned data.
     # If the lambda parameter is small, it implies that the algorithm is relying more on the Gauss-Newton component, which can make convergence faster. However, if the problem is ill-conditioned, setting lambda too small might result in numerical instability or divergence.
 
-    g = -(J*weight).T @ sdf_residual
+    g_vec = -(J_mat*weight).T @ sdf_residual
     
-    t = torch.linalg.inv(N.to(dtype=torch.float64)) @ g.to(dtype=torch.float64) # 6dof
+    t_vec = torch.linalg.inv(N_mat.to(dtype=torch.float64)) @ g_vec.to(dtype=torch.float64) # 6dof tran parameters
 
-    T = torch.eye(4, device=points.device, dtype=torch.float64)
-    T[:3, :3] = expmap(t[:3])  # rotation part
-
-    T[:3, 3] = t[3:] # translation part
+    T_mat = torch.eye(4, device=points.device, dtype=torch.float64)
+    T_mat[:3, :3] = expmap(t_vec[:3])  # rotation part
+    T_mat[:3, 3] = t_vec[3:] # translation part
     
     eigenvalues = None # the weight are also included, we need to normalize the weight part
     if require_eigen:
-        N_old_tran_part = N_old[3:,3:]
-        eigenvalues = torch.linalg.eigvals(N_old_tran_part).real
-        # # we need to set a threshold for the minimum eigenvalue for degerancy determination
-        # smallest_value = min(eigenvalues)
-        # print(smallest_value)
+        N_mat_raw_tran_part = N_mat_raw[3:,3:]
+        eigenvalues = torch.linalg.eigvals(N_mat_raw_tran_part).real
+        # we need to set a threshold for the minimum eigenvalue for degerancy determination
 
     cov_mat = None
     if require_cov:
         # Compute the covariance matrix (using a scaling factor)
         mse = torch.mean(weight.squeeze(1)*sdf_residual**2) 
-        cov_mat = torch.linalg.inv(N_old) * mse # rotation , translation
+        cov_mat = torch.linalg.inv(N_mat_raw) * mse # rotation , translation
 
-        # Extract standard errors (square root of diagonal elements)
-        # std = torch.sqrt(torch.diag(cov_mat)) # rotation , translation
-
-        # print("Covariance Matrix:")
-        # print(cov_mat)
-        # print("Standard Errors:")
-        # print(std)
-
-    return T, cov_mat, eigenvalues
+    return T_mat, cov_mat, eigenvalues
 
 # functions
 def implicit_color_reg(points, sdf_grad, sdf_residual, colors, color_grad, color_residual, weight, w_photo_loss = 0.1, lm_lambda = 0.):
@@ -553,9 +538,22 @@ def implicit_color_reg(points, sdf_grad, sdf_residual, colors, color_grad, color
 
     return T
 
+# continous time registration (motion undistortion deskew is not needed then)
+# point-wise timestamp required
+# we regard the robot motion as uniform velocity in intervals (control poses)
+# then each points transformation can be interpolated using the control poses
+# we estimate poses of the control points
+# we also need to enforce the conherent smoothness of the control poses
+# and solve the non-linear optimization problem (TODO, not implementation)
+def ct_registration_step(self, points: torch.Tensor, ts: torch.Tensor, normals: torch.Tensor, 
+                        sdf_labels: torch.Tensor, colors: torch.Tensor,
+                        cur_ts, min_grad_norm, max_grad_norm,
+                        GM_dist=None, GM_grad=None, lm_lambda = 0., vis_weight_pc = False):
+    return 
+
 
 # math tools
-def huber_norm_weights(x, b):
+def huber_norm_weights(x, b): # not used, GM kernel is used
     """
     :param x: norm of residuals, torch.Tensor (N,)
     :param b: threshold

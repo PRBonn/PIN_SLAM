@@ -7,6 +7,7 @@ from typing import List, Tuple, Dict
 
 import numpy as np
 import matplotlib.pyplot as plt
+from collections import defaultdict
 # from kiss_icp.pybind import kiss_icp_pybind
 
 # our implmentation
@@ -348,6 +349,25 @@ def apply_kitti_format_calib(poses: List[np.ndarray], calib_T_cl) -> List[np.nda
     for pose in poses:
         poses_calib.append(calib_T_cl @ pose @ np.linalg.inv(calib_T_cl))
     return poses_calib 
+
+def get_metrics(seq_result: List[Dict]):
+    odom_ate = (seq_result[0])['Average Translation Error [%]']
+    odom_are = (seq_result[0])['Average Rotational Error [deg/m]'] * 100.0
+    slam_rmse = (seq_result[1])['Absoulte Trajectory Error [m]']
+    metrics_dict = {'Odometry ATE [%]': odom_ate, 'Odometry ARE [deg/100m]': odom_are, 'SLAM RMSE [m]': slam_rmse}
+    return metrics_dict
+
+def mean_metrics(seq_metrics: List[Dict]):
+    sums = defaultdict(float)
+    counts = defaultdict(int)
+
+    for seq_metric in seq_metrics:
+        for key, value in seq_metric.items():
+            sums[key] += value
+            counts[key] += 1
+
+    mean_metrics = {key: sums[key] / counts[key] for key in sums}
+    return mean_metrics
     
 # metrics used by kiss-icp
 # def sequence_error(

@@ -11,7 +11,7 @@ from geometry_msgs.msg import PoseStamped, TransformStamped
 import nav_msgs.msg
 from nav_msgs.msg import Odometry
 import std_msgs.msg
-from std_srvs.srv import Empty, EmptyResponse, SetBool
+from std_srvs.srv import Empty, EmptyResponse
 import tf
 import tf2_ros
 import sys
@@ -31,9 +31,6 @@ from utils.mapper import Mapper
 from model.neural_points import NeuralPoints
 from model.decoder import Decoder
 from dataset.slam_dataset import SLAMDataset
-
-# TODO:
-# add ros service to save the map without stop the slam process
 
 
 '''
@@ -110,7 +107,7 @@ class PINSLAMer:
         self.tf_broadcaster = tf2_ros.TransformBroadcaster()
 
         # self.pose_pub = rospy.Publisher("~pose", PoseStamped, queue_size=100)
-        self.neural_points_pub = rospy.Publisher("~neural_points", PointCloud2, queue_size=10)
+        # self.neural_points_pub = rospy.Publisher("~neural_points", PointCloud2, queue_size=10)
 
         self.last_message_time = time.time()
         self.begin = False
@@ -197,7 +194,7 @@ class PINSLAMer:
 
         # for the first frame, we need more iterations to do the initialization (warm-up)
         cur_iter_num = self.config.iters * self.config.init_iter_ratio if self.dataset.processed_frame == 0 else self.config.iters
-        if self.config.adaptive_mode and self.dataset.stop_status:
+        if self.config.adaptive_iters and self.dataset.stop_status:
             cur_iter_num = max(1, cur_iter_num-10)
         if self.dataset.processed_frame == self.config.freeze_after_frame: # freeze the decoder after certain frame 
             freeze_decoders(self.geo_mlp, self.sem_mlp, self.color_mlp, self.config)
@@ -435,18 +432,17 @@ class PINSLAMer:
                     pose_init_torch = torch.tensor(pose_init_np, device=self.config.device, dtype=torch.float64)
                     self.neural_points.recreate_hash(pose_init_torch[:3,3], None, True, True, loop_id) # recreate hash and local map for registration, this is the reason why we'd better to keep the duplicated neural points until the end
                     pose_refine_torch, _, _, reg_valid_flag = self.tracker.tracking(self.dataset.cur_source_points, pose_init_torch, loop_reg=True)
-
+                    pose_refine_np = pose_refine_torch.detach().cpu().numpy()
+                    loop_transform = np.linalg.inv(self.dataset.pgo_poses[loop_id]) @ pose_refine_np # T_l<-c = T_l<-w @ T_w<-c
+                    if not self.config.silence:
+                        print("[bold green]Refine loop transformation succeed [/bold green]")
+                    # only conduct pgo when the loop and loop constraint is correct
                     if reg_valid_flag: # refine succeed
-                        pose_refine_np = pose_refine_torch.detach().cpu().numpy()
-                        loop_transform = np.linalg.inv(self.dataset.pgo_poses[loop_id]) @ pose_refine_np # T_l<-c = T_l<-w @ T_w<-c
-                        if not self.config.silence:
-                            print("[bold green]Refine loop transformation succeed [/bold green]")
-                        # only conduct pgo when the loop and loop constraint is correct
-                        self.pgm.add_loop_factor(cur_frame_id, loop_id, loop_transform)
+                        reg_valid_flag = self.pgm.add_loop_factor(cur_frame_id, loop_id, loop_transform)
+                    if reg_valid_flag:   
                         self.pgm.optimize_pose_graph() # conduct pgo
                         cur_loop_vis_id = cur_frame_id-self.config.local_map_context_latency if local_map_context_loop else cur_frame_id
                         self.pgm.loop_edges.append(np.array([loop_id, cur_loop_vis_id],dtype=np.uint32)) # only for vis
-
                         # update the neural points and poses
                         pose_diff_torch = torch.tensor(self.pgm.get_pose_diff(), device=self.config.device, dtype=self.config.dtype)
                         self.dataset.cur_pose_torch = torch.tensor(self.pgm.cur_pose, device=self.config.device, dtype=self.config.dtype)

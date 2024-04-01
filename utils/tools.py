@@ -47,7 +47,8 @@ def setup_experiment(config: Config, argv = None, debug_mode: bool = False):
         access = 0o755
         os.makedirs(run_path, access, exist_ok=True)
         assert os.access(run_path, os.W_OK)
-        print(f"Start {run_path}")
+        if not config.silence:
+            print(f"Start {run_path}")
 
         config.run_path = run_path
 
@@ -91,21 +92,21 @@ def setup_optimizer(config: Config, neural_point_feat, mlp_geo_param = None,
     lr_cur = config.lr * lr_ratio
     lr_pose = config.lr_pose
     weight_decay = config.weight_decay
+    weight_decay_mlp = 0.0
     opt_setting = []
-    # weight_decay is for L2 regularization, only applied to MLP
+    # weight_decay is for L2 regularization
     if mlp_geo_param is not None: 
-        mlp_geo_param_opt_dict = {'params': mlp_geo_param, 'lr': lr_cur, 'weight_decay': weight_decay} 
+        mlp_geo_param_opt_dict = {'params': mlp_geo_param, 'lr': lr_cur, 'weight_decay': weight_decay_mlp} 
         opt_setting.append(mlp_geo_param_opt_dict)
     if config.semantic_on and mlp_sem_param is not None:
-        mlp_sem_param_opt_dict = {'params': mlp_sem_param, 'lr': lr_cur, 'weight_decay': weight_decay} 
+        mlp_sem_param_opt_dict = {'params': mlp_sem_param, 'lr': lr_cur, 'weight_decay': weight_decay_mlp} 
         opt_setting.append(mlp_sem_param_opt_dict)
     if config.color_on and mlp_color_param is not None:
-        mlp_color_param_opt_dict = {'params': mlp_color_param, 'lr': lr_cur, 'weight_decay': weight_decay} 
+        mlp_color_param_opt_dict = {'params': mlp_color_param, 'lr': lr_cur, 'weight_decay': weight_decay_mlp} 
         opt_setting.append(mlp_color_param_opt_dict)
     if poses is not None:
         poses_opt_dict = {'params': poses, 'lr': lr_pose, 'weight_decay': weight_decay}
         opt_setting.append(poses_opt_dict)
-    # feature octree
     feat_opt_dict = {'params': neural_point_feat, 'lr': lr_cur, 'weight_decay': weight_decay} 
     opt_setting.append(feat_opt_dict)
     if config.opt_adam:
@@ -237,23 +238,6 @@ def save_implicit_map(run_path, neural_points, geo_decoder, color_decoder=None, 
     np.save(os.path.join(run_path, "memory_footprint.npy"), 
             np.array(neural_points.memory_footprint)) # save detailed memory table
 
-
-def save_decoder(geo_decoder, sem_decoder, run_path, checkpoint_name):
-    torch.save({"geo_decoder": geo_decoder.state_dict(), 
-                "sem_decoder": sem_decoder.state_dict()},
-        os.path.join(run_path, f"{checkpoint_name}_decoders.pth"),
-    )
-
-def save_geo_decoder(geo_decoder, run_path, checkpoint_name):
-    torch.save({"geo_decoder": geo_decoder.state_dict()},
-        os.path.join(run_path, f"{checkpoint_name}_geo_decoder.pth"),
-    )
-
-def save_sem_decoder(sem_decoder, run_path, checkpoint_name):
-    torch.save({"sem_decoder": sem_decoder.state_dict()},
-        os.path.join(run_path, f"{checkpoint_name}_sem_decoder.pth"),
-    )
-
 def load_decoder(config, geo_mlp, sem_mlp, color_mlp):
     loaded_model = torch.load(config.model_path)
     geo_mlp.load_state_dict(loaded_model["geo_decoder"])
@@ -270,7 +254,9 @@ def get_time():
     """
     :return: get timing statistics
     """
-    torch.cuda.synchronize()
+    cuda_available = torch.cuda.is_available()
+    if cuda_available: # issue #10
+        torch.cuda.synchronize()
     return time.time()
 
 def load_from_json(filename: Path):
@@ -378,11 +364,6 @@ def torch2o3d(points_torch):
 def o3d2torch(o3d, device='cpu', dtype=torch.float32 ):
     return torch.tensor(np.asarray(o3d.points), dtype=dtype, device=device)
 
-# deprecated
-def o3c2torch(o3c, device='cpu', dtype=torch.float32 ):
-    return torch.utils.dlpack.from_dlpack(o3c.to_dlpack(), dtype=dtype, device=device)
-
-
 def transform_torch(points: torch.tensor, transformation: torch.tensor):
     # points [N, 3]
     # transformation [4, 4]
@@ -476,7 +457,7 @@ def voxel_down_sample_min_value_torch(points: torch.tensor, voxel_size: float, v
     idx = idx % offset
     return idx
 
-
+# split a large point cloud into bounding box chunks
 def split_chunks(pc: o3d.geometry.PointCloud(), aabb: o3d.geometry.AxisAlignedBoundingBox(), chunk_m: float = 100.0):
 
     if not pc.has_points():
@@ -536,7 +517,7 @@ def split_chunks(pc: o3d.geometry.PointCloud(), aabb: o3d.geometry.AxisAlignedBo
     
     return chunk_aabb
 
-# torch version
+# torch version of lidar undistortion (deskewing)
 def deskewing(points: torch.tensor, ts: torch.tensor, pose: torch.tensor, ts_mid_pose = 0.5):
 
     if ts is None:

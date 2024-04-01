@@ -10,19 +10,19 @@
   </p>
   
   <p align="center">
-    <a href="https://www.ipb.uni-bonn.de/people/yue-pan/index.html"><strong>Yue Pan</strong></a>
+    <a href="https://www.ipb.uni-bonn.de/people/yue-pan/"><strong>Yue Pan</strong></a>
     ·
-    <a href="https://www.ipb.uni-bonn.de/index.php/people/xingguang-zhong/index.html"><strong>Xingguang Zhong</strong></a>
+    <a href="https://www.ipb.uni-bonn.de/people/xingguang-zhong/"><strong>Xingguang Zhong</strong></a>
     ·
-    <a href="https://www.ipb.uni-bonn.de/index.php/people/louis-wiesmann/index.html"><strong>Louis Wiesmann</strong></a>
+    <a href="https://www.ipb.uni-bonn.de/people/louis-wiesmann/"><strong>Louis Wiesmann</strong></a>
     .
     <a href=""><strong>Thorbjörn Posewsky</strong></a>
     .
-    <a href="https://www.ipb.uni-bonn.de/index.php/people/jens-behley/index.html"><strong>Jens Behley</strong></a>
+    <a href="https://www.ipb.uni-bonn.de/people/jens-behley/"><strong>Jens Behley</strong></a>
     ·
-    <a href="https://www.ipb.uni-bonn.de/people/cyrill-stachniss/index.html"><strong>Cyrill Stachniss</strong></a>
+    <a href="https://www.ipb.uni-bonn.de/people/cyrill-stachniss/"><strong>Cyrill Stachniss</strong></a>
   </p>
-  <p align="center"><a href="https://www.ipb.uni-bonn.de/index.html"><strong>University of Bonn</strong></a>
+  <p align="center"><a href="https://www.ipb.uni-bonn.de"><strong>University of Bonn</strong></a>
   <h3 align="center"><a href="https://arxiv.org/pdf/2401.09101v1.pdf">Preprint</a> | Video</a></h3>
   <div align="center"></div>
 </p>
