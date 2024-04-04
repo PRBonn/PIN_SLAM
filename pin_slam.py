@@ -34,8 +34,10 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
     if config_path is not None:
         config.load(config_path)
         set_dataset_path(config, dataset_name, sequence_name)
-        config.seed = seed
-        run_path = setup_experiment(config)
+        if seed is not None:
+            config.seed = seed
+        argv = ['pin_slam.py', config_path, dataset_name, sequence_name, str(seed)]
+        run_path = setup_experiment(config, argv)
     else:
         if len(sys.argv) > 1:
             config.load(sys.argv[1])
@@ -360,9 +362,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
         print("# Loop corrected: ", pgm.pgo_count)
         pgm.write_g2o(os.path.join(run_path, "final_pose_graph.g2o"))
         pgm.write_loops(os.path.join(run_path, "loop_log.txt"))
-        pgm.plot_loops(os.path.join(run_path, "loop_plot.png"), vis_now=False) 
-    else:
-        print('No loop found')     
+        pgm.plot_loops(os.path.join(run_path, "loop_plot.png"), vis_now=False)  
 
     neural_points.recreate_hash(None, None, False, False) # merge the final neural point map
     neural_points.prune_map(config.max_prune_certainty) # prune uncertain points for the final output 

@@ -112,6 +112,8 @@ PIN-SLAM can run at the sensor frame rate on a moderate GPU.
 
 * GPU memory requirement (> 6 GB recommended)
 
+* Windows/MacOS with CPU-only mode
+
 ### 1. Set up conda environment
 
 ```
@@ -130,7 +132,7 @@ The commands depend on your CUDA version. You may check the instructions [here](
 ### 3. Install other dependency
 
 ```
-pip install open3d==0.17 scikit-image gtsam wandb tqdm rich roma natsort pyquaternion pypose evo laspy rospkg 
+pip3 install open3d==0.17 scikit-image gtsam wandb tqdm rich roma natsort pyquaternion pypose evo laspy rospkg 
 ```
 
 Note that `rospkg` is optional. You can install it if you would like to use PIN-SLAM with ROS.
@@ -156,7 +158,7 @@ sh ./scripts/download_kitti_example.sh
 And then run:
 
 ```
-python pin_slam.py ./config/lidar_slam/run_demo.yaml
+python3 pin_slam.py ./config/lidar_slam/run_demo.yaml
 ```
 
 Use `run_demo_cpu.yaml` if you don't have GPU on your computer. Use `run_demo_no_vis.yaml` if you are running on a server without a X service. 
@@ -167,7 +169,7 @@ You can visualize the SLAM process in PIN-SLAM visualizer and check the results 
 
 For an arbitrary data sequence, you can run:
 ```
-python pin_slam.py path_to_your_config_file.yaml
+python3 pin_slam.py path_to_your_config_file.yaml
 ```
 
 Generally speaking, you only need to edit in the config file the 
@@ -186,13 +188,13 @@ The training logs can be monitored via [Weights & Bias](wandb.ai) online if you 
 If you are not using PIN-SLAM as a part of a ROS package, you can avoid the catkin stuff and simply run:
 
 ```
-python pin_slam_ros.py [path_to_your_config_file] [point_cloud_topic_name] [(optional)point_timestamp_field_name]
+python3 pin_slam_ros.py [path_to_your_config_file] [point_cloud_topic_name] [(optional)point_timestamp_field_name]
 ```
 
 For example:
 
 ```
-python pin_slam_ros.py ./config/lidar_slam/run_ros_general.yaml /os_cloud_node/points time
+python3 pin_slam_ros.py ./config/lidar_slam/run_ros_general.yaml /os_cloud_node/points time
 ```
 
 After playing the ROS bag or launching the sensor you can then visualize the results in Rviz by:
@@ -217,7 +219,7 @@ You can also put `pin_slam_ros.py` into a ROS package for `rosrun` or `roslaunch
 After the SLAM process, you can reconstruct mesh from the PIN map within an arbitrary bounding box with an arbitrary resolution by running:
 
 ```
-python vis_pin_map.py [path/to/your/result/folder] [marching_cubes_resolution_m] [(cropped)_map_file.ply]  [output_mesh_file.ply] [mc_nn_threshold]
+python3 vis_pin_map.py [path/to/your/result/folder] [marching_cubes_resolution_m] [(cropped)_map_file.ply]  [output_mesh_file.ply] [mc_nn_threshold]
 ```
 
 The bounding box of `(cropped)_map_file.ply` will be used for the bounding box for mesh reconstruction. `mc_nn_threshold` controls the trade-off between completeness and accuracy. The smaller number (for example `8`) will lead to a more complete mesh with more guessed artifacts. The larger number (for example `15`) will lead to a less complete but more accurate mesh.
@@ -225,7 +227,7 @@ The bounding box of `(cropped)_map_file.ply` will be used for the bounding box f
 For example, for the case of the sanity test, run:
 
 ```
-python vis_pin_map.py ./experiments/sanity_test_* 0.2 neural_points.ply  mesh_20cm.ply
+python3 vis_pin_map.py ./experiments/sanity_test_* 0.2 neural_points.ply  mesh_20cm.ply
 ```
 
 ## Visualizer Instructions

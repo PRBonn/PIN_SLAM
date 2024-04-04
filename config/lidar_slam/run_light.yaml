@@ -21,23 +21,22 @@ loss:
   loss_weight_on: True
   dist_weight_scale: 0.8
 continual:
-  batch_size_new_sample: 1000
-  pool_capacity: 1e7
+  pool_capacity: 2e6
   pool_filter_freq: 10
 tracker:
   source_vox_down_m: 1.0
-  iter_n: 30
+  iter_n: 20
   term_deg: 0.1
 pgo:
-  map_context: True
   pgo_freq_frame: 50
   context_cosdist: 0.25
+  virtual_side_count: 0
 optimizer: # mappers
   iters: 10 
   batch_size: 8192
   adaptive_iters: True
 eval:
-  wandb_vis_on: True # log to wandb or not
+  wandb_vis_on: False # log to wandb or not
   o3d_vis_on: False # visualize the mapping or not
   silence_log: True # output the logs or not
   mesh_freq_frame: 50 # reconstruct the mesh every x frames

@@ -74,7 +74,7 @@ def setup_experiment(config: Config, argv = None, debug_mode: bool = False):
             git_commit_id = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode().strip() # current git commit
             with open(os.path.join(run_path,'run.sh'), 'w') as reproduce_shell:
                 reproduce_shell.write(' '.join(["git checkout ", git_commit_id, "\n"]))
-                run_str = "python "+ ' '.join(argv)
+                run_str = "python3 "+ ' '.join(argv)
                 reproduce_shell.write(run_str)
     
     # set the random seed

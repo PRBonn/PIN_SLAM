@@ -20,7 +20,6 @@ neuralpoints:
   voxel_size_m: 0.05
   feature_dim: 8
   query_nn_k: 6
-  search_alpha: 0.2
 loss:
   main_loss_type: bce
   sigma_sigmoid_m: 0.01
@@ -29,12 +28,13 @@ loss:
 continual:
   batch_size_new_sample: 4000
   pool_capacity: 2e7
+  pool_filter_freq: 10
 tracker:
   photo_loss: True
   photo_weight: 0.01
   eigenvalue_check: False
   source_vox_down_m: 0.06
-  iter_n: 100
+  iter_n: 50
   min_grad_norm: 0.4
   max_grad_norm: 2.5
   GM_grad: 0.3
@@ -42,12 +42,13 @@ tracker:
   term_deg: 1e-3
   term_m: 1e-4
 optimizer:
-  iters: 20  # iterations per frame
+  iters: 20 # iterations per frame
   batch_size: 16384
   ba_freq_frame: 20
 eval:
   wandb_vis_on: False # log to wandb or not
   o3d_vis_on: True # visualize the mapping or not
+  silence_log: True
   mesh_freq_frame: 100 # reconstruct the mesh every x frames
   mesh_min_nn: 9
   sensor_cad_path: ./cad/camera.ply

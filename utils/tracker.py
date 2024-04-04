@@ -65,8 +65,7 @@ class Tracker():
         
         max_valid_final_sdf_residual_cm = self.config.surface_sample_range_m * 0.5 * 100.0
         min_valid_ratio = 0.2
-        if loop_reg: # also can try to further decrease the source point cloud resolution
-            max_valid_final_sdf_residual_cm = self.config.surface_sample_range_m * 0.5 * 100.0 #0.6
+        if loop_reg:
             min_valid_ratio = 0.15
 
         max_increment_sdf_residual_ratio = 1.1
@@ -116,14 +115,16 @@ class Tracker():
 
             # the sdf residual should not increase too much during the optimization
             if (sdf_residual_cm - last_sdf_residual_cm)/last_sdf_residual_cm > max_increment_sdf_residual_ratio:
-                print("[bold yellow](Warning) registration failed: wrong optimization[/bold yellow]") 
+                if not self.silence:
+                    print("[bold yellow](Warning) registration failed: wrong optimization[/bold yellow]") 
                 valid_flag = False
             else:
                 last_sdf_residual_cm = sdf_residual_cm
             
             valid_point_count = valid_points_torch.shape[0]
             if (valid_point_count < min_valid_points) or (1.0 * valid_point_count/source_point_count < min_valid_ratio):
-                print("[bold yellow](Warning) registration failed: not enough valid points[/bold yellow]") 
+                if not self.silence:
+                    print("[bold yellow](Warning) registration failed: not enough valid points[/bold yellow]") 
                 valid_flag = False
             
             if not valid_flag or converged:
@@ -156,7 +157,8 @@ class Tracker():
             min_eigenvalue = torch.min(eigenvalues).item()
             # print("Smallest eigenvalue:", min_eigenvalue)
             if self.config.eigenvalue_check and min_eigenvalue < valid_point_count * eigenvalue_ratio_thre:
-                print("[bold yellow](Warning) registration failed: eigenvalue check failed[/bold yellow]") 
+                if not self.silence:
+                    print("[bold yellow](Warning) registration failed: eigenvalue check failed[/bold yellow]") 
                 valid_flag = False
         
         if cov_mat is not None:
@@ -467,7 +469,7 @@ def implicit_reg(points, sdf_grad, sdf_residual, weight, lm_lambda = 0.0, requir
             3 dim translation part of the eigenvalues for the registration degerancy check
     """
 
-    cross = torch.cross(points, sdf_grad) # N,3 x N,3
+    cross = torch.cross(points, sdf_grad, dim=-1) # N,3 x N,3
     J_mat = torch.cat([cross, sdf_grad], -1) # The Jacobian matrix # first rotation, then translation # N, 6
     N_mat = J_mat.T @ (weight*J_mat) # approximate Hessian matrix # first rot, then tran # 6, 6
 

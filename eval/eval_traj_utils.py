@@ -350,6 +350,7 @@ def apply_kitti_format_calib(poses: List[np.ndarray], calib_T_cl) -> List[np.nda
         poses_calib.append(calib_T_cl @ pose @ np.linalg.inv(calib_T_cl))
     return poses_calib 
 
+# for LiDAR dataset
 def get_metrics(seq_result: List[Dict]):
     odom_ate = (seq_result[0])['Average Translation Error [%]']
     odom_are = (seq_result[0])['Average Rotational Error [deg/m]'] * 100.0
