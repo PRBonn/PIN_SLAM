@@ -110,7 +110,10 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
 
         T1 = get_time()
         
-        dataset.preprocess_frame(frame_id) 
+        valid_frame = dataset.preprocess_frame(frame_id)
+        if not valid_frame:
+            dataset.processed_frame += 1
+            continue 
 
         T2 = get_time()
         
@@ -154,7 +157,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
                 else: # first frame not yet have local map, use scan context
                     lcd_npmc.add_node(used_frame_id, dataset.cur_point_cloud_torch)
             
-            pgm.add_frame_node(used_frame_id, dataset.pgo_poses[used_frame_id]) # add new node and pose initial guess
+            pgm.add_frame_node(used_frame_id, dataset.pgo_poses[-1]) # add new node and pose initial guess
             pgm.init_poses = dataset.pgo_poses
 
             if used_frame_id > 0:
@@ -162,7 +165,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
                 pgm.add_odometry_factor(used_frame_id, used_frame_id-1, dataset.last_odom_tran, cov = cur_edge_cov) # T_p<-c
                 pgm.estimate_drift(dataset.travel_dist, used_frame_id) # estimate the current drift
                 if config.pgo_with_pose_prior: # add pose prior
-                    pgm.add_pose_prior(used_frame_id, dataset.pgo_poses[used_frame_id])
+                    pgm.add_pose_prior(used_frame_id, dataset.pgo_poses[-1])
             
             local_map_context_loop = False
             if used_frame_id - pgm.last_loop_idx > config.pgo_freq and not dataset.stop_status:
@@ -172,14 +175,14 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
                         print("[bold red]GT loop event added: [/bold red]", lcd_gt.curr_node_idx, "---", loop_id, "(" , loop_dist, ")")
                 else:  # detect candidate local loop, find the nearest history pose and activate certain local map
                     cur_pgo_poses = np.stack(dataset.pgo_poses)
-                    dist_to_past = np.linalg.norm(cur_pgo_poses[:,:3,3] - cur_pgo_poses[-1,:3,3], axis=1)
+                    dist_to_past = np.linalg.norm(cur_pgo_poses[:,:3,3] - cur_pgo_poses[-1,:3,3], axis=1) 
                     loop_candidate_mask = (dataset.travel_dist[-1] - dataset.travel_dist > config.min_loop_travel_dist_ratio*config.local_map_radius)
                     loop_id = None
                     if loop_candidate_mask.any(): # have at least one candidate
                         # firstly try to detect the local loop
                         loop_id, loop_dist, loop_transform = detect_local_loop(dist_to_past, loop_candidate_mask, dataset.pgo_poses, pgm.drift_radius, used_frame_id, loop_reg_failed_count, config.voxel_size_m*5.0, config.silence)
                         if loop_id is None and config.global_loop_on: # global loop detection (large drift)
-                            loop_id, loop_cos_dist, loop_transform, local_map_context_loop = lcd_npmc.detect_global_loop(cur_pgo_poses, dataset.pgo_poses, pgm.drift_radius*2.0, loop_candidate_mask, neural_points)     
+                            loop_id, loop_cos_dist, loop_transform, local_map_context_loop = lcd_npmc.detect_global_loop(cur_pgo_poses, dataset.pgo_poses, pgm.drift_radius*config.loop_dist_drift_ratio_thre, loop_candidate_mask, neural_points)     
                 if loop_id is not None:
                     if config.loop_z_check_on and abs(loop_transform[2,3]) > config.voxel_size_m*4.0: # for multi-floor buildings, z may cause ambiguilties
                         loop_id = None
@@ -212,7 +215,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
                         pgm.loop_edges_vis.append(np.array([loop_id, cur_loop_vis_id],dtype=np.uint32)) # only for vis
                         pgm.loop_edges.append(np.array([loop_id, used_frame_id],dtype=np.uint32))
                         pgm.loop_trans.append(loop_transform)
-                        # update the neural points and poses
+                        # update the neural points and posesƒ
                         pose_diff_torch = torch.tensor(pgm.get_pose_diff(), device=config.device, dtype=config.dtype)
                         dataset.cur_pose_torch = torch.tensor(pgm.cur_pose, device=config.device, dtype=config.dtype)
                         neural_points.adjust_map(pose_diff_torch)
@@ -242,6 +245,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
             mapper.process_frame(dataset.cur_point_cloud_torch, dataset.cur_sem_labels_torch,
                                  dataset.cur_pose_torch, used_frame_id, (config.dynamic_filter_on and used_frame_id > 0))
         else: # lose track, still need to set back the local map
+            mapper.determine_used_pose()
             neural_points.reset_local_map(dataset.cur_pose_torch[:3,3], None, used_frame_id)
             mapper.static_mask = None
                                 
@@ -256,13 +260,17 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
 
         # conduct local bundle adjustment (with lower frequency)
         if config.track_on and config.ba_freq_frame > 0 and (used_frame_id+1) % config.ba_freq_frame == 0:
-            mapper.bundle_adjustment(config.iters*4, config.ba_frame)
+            mapper.bundle_adjustment(config.ba_iters, config.ba_frame)
         
         # mapping with fixed poses (every frame)
         if used_frame_id % config.mapping_freq_frame == 0:
             mapper.mapping(cur_iter_num)
         
         T6 = get_time()
+
+        # regular saving logs
+        if config.log_freq_frame > 0 and (used_frame_id+1) % config.log_freq_frame == 0:
+            dataset.write_results_log(used_frame_id, run_path)
 
         if not config.silence:
             print("time for frame reading          (ms):", (T1-T0)*1e3)
@@ -362,7 +370,8 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
         print("# Loop corrected: ", pgm.pgo_count)
         pgm.write_g2o(os.path.join(run_path, "final_pose_graph.g2o"))
         pgm.write_loops(os.path.join(run_path, "loop_log.txt"))
-        pgm.plot_loops(os.path.join(run_path, "loop_plot.png"), vis_now=False)  
+        if config.o3d_vis_on:
+            pgm.plot_loops(os.path.join(run_path, "loop_plot.png"), vis_now=False)  
 
     neural_points.recreate_hash(None, None, False, False) # merge the final neural point map
     neural_points.prune_map(config.max_prune_certainty) # prune uncertain points for the final output 

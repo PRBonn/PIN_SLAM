@@ -77,7 +77,7 @@ class SLAMDataset(Dataset):
             # TODO: this should be updated, select the pose with correct format, tum format may not endwith csv
             if config.pose_path.endswith('txt'):
                 poses_uncalib = read_kitti_format_poses(config.pose_path)
-                if config.closed_pose_path is not None:
+                if config.closed_pose_path is not None and config.use_gt_loop:
                     poses_closed_uncalib = read_kitti_format_poses(config.closed_pose_path)
             elif config.pose_path.endswith('csv'):
                 poses_uncalib = read_tum_format_poses_csv(config.pose_path)
@@ -87,7 +87,7 @@ class SLAMDataset(Dataset):
             # apply calibration
             # actually from camera frame to LiDAR frame, lidar pose in world frame 
             self.poses_w = apply_kitti_format_calib(poses_uncalib, inv(self.calib['Tr'])) 
-            if config.closed_pose_path is not None:
+            if config.closed_pose_path is not None and config.use_gt_loop:
                 self.poses_w_closed = apply_kitti_format_calib(poses_closed_uncalib, inv(self.calib['Tr'])) 
 
             # pose in the reference frame (might be the first frame used)
@@ -261,6 +261,31 @@ class SLAMDataset(Dataset):
     def preprocess_frame(self, frame_id=0):
 
         # T1 = get_time()
+        # poses related
+        cur_pose_init_guess = self.cur_pose_ref
+        if self.processed_frame == 0: # initialize the first frame, no tracking yet
+            if self.config.track_on:
+                self.odom_poses.append(self.cur_pose_ref)
+            if self.config.pgo_on:
+                self.pgo_poses.append(self.cur_pose_ref)
+            if self.gt_pose_provided and frame_id > 0: # not start with the first frame
+                self.last_odom_tran = inv(self.poses_ref[frame_id-1]) @ self.cur_pose_ref # T_last<-cur
+            self.travel_dist.append(0.)
+            self.last_pose_ref = self.cur_pose_ref
+        elif self.processed_frame > 0: 
+            # pose initial guess
+            last_translation = np.linalg.norm(self.last_odom_tran[:3,3])
+            # if self.config.uniform_motion_on and not self.lose_track and last_translation > 0.2 * self.config.voxel_size_m: # apply uniform motion model here
+            if self.config.uniform_motion_on and not self.lose_track: # apply uniform motion model here
+                cur_pose_init_guess = self.last_pose_ref @ self.last_odom_tran # T_world<-cur = T_world<-last @ T_last<-cur
+            else: # static initial guess
+                cur_pose_init_guess = self.last_pose_ref
+
+            if not self.config.track_on and self.gt_pose_provided:
+                cur_pose_init_guess = self.poses_ref[frame_id]
+            
+            # pose initial guess tensor
+            self.cur_pose_guess_torch = torch.tensor(cur_pose_init_guess, dtype=torch.float64, device=self.device)   
 
         if self.config.adaptive_range_on:
             pc_max_bound, _ = torch.max(self.cur_point_cloud_torch[:, :3], dim=0)
@@ -280,6 +305,14 @@ class SLAMDataset(Dataset):
 
         # down sampling (together with the color and semantic entities)
         original_count = self.cur_point_cloud_torch.shape[0]
+        if original_count < 10: # deal with missing data (invalid frame)
+            print("[bold red]Not enough input point cloud, skip this frame[/bold red]") 
+            if self.config.track_on:
+                self.odom_poses.append(cur_pose_init_guess)
+            if self.config.pgo_on:
+                self.pgo_poses.append(cur_pose_init_guess)
+            return False
+
         if self.config.rand_downsample:
             kept_count = int(original_count*self.config.rand_down_r)
             idx = torch.randint(0, original_count, (kept_count,), device=self.device)
@@ -309,29 +342,8 @@ class SLAMDataset(Dataset):
         # T3 = get_time()
 
         # prepare for the registration
-        if self.processed_frame == 0: # initialize the first frame, no tracking yet
-            if self.config.track_on:
-                self.odom_poses.append(self.cur_pose_ref)
-            if self.config.pgo_on:
-                self.pgo_poses.append(self.cur_pose_ref)
-            if self.gt_pose_provided and frame_id > 0: # not start with the first frame
-                self.last_odom_tran = inv(self.poses_ref[frame_id-1]) @ self.cur_pose_ref # T_last<-cur
-            self.travel_dist.append(0.)
-            self.last_pose_ref = self.cur_pose_ref
-        elif self.processed_frame > 0: 
-            # pose initial guess
-            last_tran = np.linalg.norm(self.last_odom_tran[:3,3])
-            # if self.config.uniform_motion_on and not self.lose_track and last_tran > 0.2 * self.config.voxel_size_m: # apply uniform motion model here
-            if self.config.uniform_motion_on and not self.lose_track: # apply uniform motion model here
-                cur_pose_init_guess = self.last_pose_ref @ self.last_odom_tran # T_world<-cur = T_world<-last @ T_last<-cur
-            else: # static initial guess
-                cur_pose_init_guess = self.last_pose_ref
+        if self.processed_frame > 0: 
 
-            if not self.config.track_on and self.gt_pose_provided:
-                cur_pose_init_guess = self.poses_ref[frame_id]
-            
-            # pose initial guess tensor
-            self.cur_pose_guess_torch = torch.tensor(cur_pose_init_guess, dtype=torch.float64, device=self.device)   
             cur_source_torch = self.cur_point_cloud_torch.clone() # used for registration
             
             # source point voxel downsampling (for registration)
@@ -347,24 +359,6 @@ class SLAMDataset(Dataset):
             else:
                 cur_source_ts = None
 
-            # deprecated # key points extraction for registration
-            # if self.config.estimate_normal:
-            #     source_points = self.cur_source_points.clone()
-            #     cur_hasher = VoxelHasherIndex(source_points, source_voxel_m, buffer_size=int(1e6))
-            #     neighb_idx = cur_hasher.radius_neighborhood_search(source_points, source_voxel_m)
-            #     valid_mask = neighb_idx > 0
-            #     neighbors = source_points[neighb_idx] # fix the point corresponding to -1 idx
-            #     neighbors[~valid_mask] = torch.ones(3).to(source_points) * 9999.
-            #     extractor = GeometricFeatureExtractor()
-            #     _, self.cur_source_normals, valid_normal_mask = extractor(source_points, neighbors, source_voxel_m)   
-            #     self.cur_source_points = self.cur_source_points[valid_normal_mask]
-            #     if self.config.color_on:
-            #         self.cur_source_colors = self.cur_source_colors[valid_normal_mask]
-            #     if self.cur_point_ts_torch is not None:
-            #         cur_source_ts = cur_source_ts[valid_normal_mask]
-            # else:
-            #     self.cur_source_normals = None
-
             # deskewing (motion undistortion) for source point cloud
             if self.config.deskew and not self.lose_track:
                 self.cur_source_points = deskewing(self.cur_source_points, cur_source_ts, 
@@ -373,6 +367,7 @@ class SLAMDataset(Dataset):
             # print("# Source point for registeration : ", cur_source_torch.shape[0])
     
         # T4 = get_time()
+        return True
     
     def update_odom_pose(self, cur_pose_torch: torch.tensor):
         # needed to be at least the second frame
@@ -406,7 +401,7 @@ class SLAMDataset(Dataset):
             cur_frame_travel_dist = np.linalg.norm(self.last_odom_tran[:3,3])
             if cur_frame_travel_dist > self.config.surface_sample_range_m * 40.0: # too large translation in one frame --> lose track
                 self.lose_track = True 
-                # sys.exit("Too large translation in one frame, system failed") # FIXME
+                sys.exit("Too large translation in one frame, system failed") # FIXME
                
             accu_travel_dist = self.travel_dist[-1] + cur_frame_travel_dist
             self.travel_dist.append(accu_travel_dist)
@@ -427,7 +422,7 @@ class SLAMDataset(Dataset):
         else:
             self.consecutive_lose_track_frame = 0
         
-        if self.consecutive_lose_track_frame > 20:
+        if self.consecutive_lose_track_frame > 10:
             sys.exit("Lose track for a long time, system failed") # FIXME
 
     def update_poses_after_pgo(self, pgo_cur_pose, pgo_poses):
@@ -481,6 +476,16 @@ class SLAMDataset(Dataset):
         self.cur_bbx = o3d.geometry.AxisAlignedBoundingBox(bbx_min, bbx_max)
 
         # use the downsampled neural points here (done outside the class)
+
+    def write_results_log(self, cur_frame: int, run_path: str):
+        log_folder = 'log'
+        frame_str = str(cur_frame)
+        if self.config.track_on:
+            write_traj_as_o3d(self.odom_poses, os.path.join(run_path, log_folder, frame_str+"_odom_poses.ply"))
+        if self.config.pgo_on:
+            write_traj_as_o3d(self.pgo_poses, os.path.join(run_path, log_folder, frame_str+"_slam_poses.ply"))
+        if self.gt_pose_provided:
+            write_traj_as_o3d(self.gt_poses, os.path.join(run_path, log_folder, frame_str+"_gt_poses.ply"))
                                    
     def write_results(self, run_path: str):
         odom_poses_out = apply_kitti_format_calib(self.odom_poses, self.calib['Tr'])
@@ -503,18 +508,22 @@ class SLAMDataset(Dataset):
             print("Consuming time per frame        (s):", f"{mean_time_s:.3f}")
             print("Calculated over %d frames" % self.processed_frame)
         np.save(os.path.join(run_path, "time_table.npy"), time_table) # save detailed time table
-        plot_timing_detail(time_table, os.path.join(run_path, "time_details.png"), self.config.pgo_on)
+        if self.config.o3d_vis_on:
+            plot_timing_detail(time_table, os.path.join(run_path, "time_details.png"), self.config.pgo_on)
 
         pose_eval = None
         
         # evaluation report
         if self.gt_pose_provided and len(self.gt_poses) == len(self.odom_poses):
             print("Odometry evaluation:")
-            avg_tra, avg_rot = relative_error(self.gt_poses, self.odom_poses) # fix the rotation error issues (done)
+            avg_tra, avg_rot = relative_error(self.gt_poses, self.odom_poses)
             ate_rot, ate_trans, align_mat = absolute_error(self.gt_poses, self.odom_poses, self.config.eval_traj_align)
-            print("Average Translation Error       (%):", f"{avg_tra:.3f}")
-            print("Average Rotational Error (deg/100m):", f"{avg_rot*100.0:.3f}")
-            print("Absoulte Trajectory Error       (m):", f"{ate_trans:.3f}")
+            if avg_tra == 0: # for rgbd dataset (shorter sequence)
+                print("Absoulte Trajectory Error      (cm):", f"{ate_trans*100.0:.3f}")
+            else:
+                print("Average Translation Error       (%):", f"{avg_tra:.3f}")
+                print("Average Rotational Error (deg/100m):", f"{avg_rot*100.0:.3f}")
+                print("Absoulte Trajectory Error       (m):", f"{ate_trans:.3f}")
 
             if self.config.wandb_vis_on:
                 wandb_log_content = {'Average Translation Error [%]': avg_tra, 'Average Rotational Error [deg/m]': avg_rot,
@@ -549,10 +558,10 @@ class SLAMDataset(Dataset):
             except IOError:
                 print("I/O error")
             
-            if self.config.o3d_vis_on:
+            if self.config.o3d_vis_on: # x service issue for remote server
                 output_traj_plot_path_2d = os.path.join(run_path, "traj_plot_2d.png")
                 output_traj_plot_path_3d = os.path.join(run_path, "traj_plot_3d.png")
-                # trajectory not aligned yet
+                # trajectory not aligned yet in the plot
                 if self.config.pgo_on:
                     plot_trajectories(output_traj_plot_path_2d, self.pgo_poses, self.gt_poses, self.odom_poses, plot_3d=False) 
                     plot_trajectories(output_traj_plot_path_3d, self.pgo_poses, self.gt_poses, self.odom_poses, plot_3d=True)   

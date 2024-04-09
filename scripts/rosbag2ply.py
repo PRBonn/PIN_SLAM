@@ -5,7 +5,7 @@ import os
 import argparse
 import numpy as np
 
-import ply
+from module import ply
 
 def rosbag2ply(args):
 

@@ -21,7 +21,6 @@ def set_dataset_path(config: Config, dataset_name: str, seq: str):
         base_path = config.pc_path.rsplit('/', 2)[0]
         config.pc_path = os.path.join(base_path, seq, "Ouster")  # input point cloud folder
         config.pose_path = os.path.join(base_path, seq, "poses.txt")   # input pose file
-        config.calib_path = os.path.join(base_path, seq, "calib.txt")  # input calib file (to sensor frame)
     elif dataset_name == "kitti_carla":
         config.name = config.name + "_kitti_carla_" + seq
         base_path = config.pc_path.rsplit('/', 3)[0]

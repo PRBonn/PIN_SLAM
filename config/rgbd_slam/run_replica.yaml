@@ -18,10 +18,7 @@ sampler:
   free_front_sample_n: 1
 neuralpoints:
   voxel_size_m: 0.05
-  feature_dim: 8
-  query_nn_k: 6
 loss:
-  main_loss_type: bce
   sigma_sigmoid_m: 0.01
   ekional_loss_on: True
   weight_e: 0.2
@@ -42,9 +39,10 @@ tracker:
   term_deg: 1e-3
   term_m: 1e-4
 optimizer:
-  iters: 20 # iterations per frame
+  iters: 20
   batch_size: 16384
   ba_freq_frame: 20
+  lr_pose_ba: 1e-3
 eval:
   wandb_vis_on: False # log to wandb or not
   o3d_vis_on: True # visualize the mapping or not

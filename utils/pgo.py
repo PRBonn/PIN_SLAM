@@ -49,7 +49,7 @@ class PoseGraphManager:
         self.last_loop_idx = 0
         self.drift_radius = 0.0 # m
         self.pgo_count = 0
-        self.valid_error_thre = 1e7
+        self.valid_error_thre = config.pgo_error_thre
 
     def add_frame_node(self, frame_id, init_pose):
         """create frame pose node and set pose initial guess  
@@ -76,7 +76,7 @@ class PoseGraphManager:
             tran_sigma = self.drift_radius+1e-4 # avoid divide by 0
             rot_sigma = self.drift_radius * np.radians(10.0)
             cov_model = gtsam.noiseModel.Diagonal.Sigmas(np.array([rot_sigma, rot_sigma, rot_sigma, tran_sigma, tran_sigma, tran_sigma]))
-      
+        
         self.graph_factors.add(gtsam.PriorFactorPose3(
                                             gtsam.symbol('x', frame_id), 
                                             gtsam.Pose3(prior_pose), 
@@ -184,22 +184,31 @@ class PoseGraphManager:
                 np.savetxt(file, reshaped_array, delimiter=' ', fmt='%f')
 
     # read loop data from txt file
-    def read_loops(self, in_file):
+    def read_loops(self, in_file, subsample_rate=1):
         self.loop_edges = []
         self.loop_trans = []
-        with open(in_file, 'r') as file:
-            lines = file.readlines()  # Read all lines from the file
+        try:
+            with open(in_file, 'r') as file:
+                lines = file.readlines()  # Read all lines from the file
 
-            # Process each line in the file
-            for i in range(0, len(lines), 5):  # Assuming each array data is followed by 5 lines (indices + array data)
-                # Extract indices from the current line
-                indices = np.array([int(num) for num in lines[i].strip().split(' ')])
-                self.loop_edges.append(indices)
+                # Process each line in the file
+                # Assuming each array data is followed by 5 lines (indices + array data)
+                for i in range(0, len(lines), 5*subsample_rate):  
+                    # Extract indices from the current line
+                    indices = np.array([int(num) for num in lines[i].strip().split(' ')])
+                    self.loop_edges.append(indices)
 
-                # Extract array data from the next 4 lines
-                array_data_lines = [line.strip().split() for line in lines[i+1:i+4]]
-                tran_array = np.array([[float(num) for num in row] for row in array_data_lines])
-                self.loop_trans.append(tran_array)
+                    # Extract array data from the next 4 lines
+                    array_data_lines = [line.strip().split() for line in lines[i+1:i+4]]
+                    tran_array = np.array([[float(num) for num in row] for row in array_data_lines])
+
+                    # add noise for robsutness check (only for debug)
+                    # tran_array[:3,3]+= ((np.random.rand(3)-0.5)*0.5)
+
+                    self.loop_trans.append(tran_array)
+                return True
+        except IOError:
+            return False
 
     # do pgo with known odom and loop data offline (for debugging)
     def offline_pgo(self, odom_poses):

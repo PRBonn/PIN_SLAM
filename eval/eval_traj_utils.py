@@ -342,13 +342,20 @@ def read_kitti_format_poses(filename: str) -> List[np.ndarray]:
     pose_file.close()
     return poses   
 
-
+# copyright: Nacho et al. KISS-ICP
 def apply_kitti_format_calib(poses: List[np.ndarray], calib_T_cl) -> List[np.ndarray]:
     """Converts from Velodyne to Camera Frame (# T_camera<-lidar)""" 
     poses_calib = []
     for pose in poses:
         poses_calib.append(calib_T_cl @ pose @ np.linalg.inv(calib_T_cl))
     return poses_calib 
+
+# copyright: Nacho et al. KISS-ICP
+def write_kitti_format_poses(filename: str, poses: List[np.ndarray]):
+    def _to_kitti_format(poses: np.ndarray) -> np.ndarray:
+        return np.array([np.concatenate((pose[0], pose[1], pose[2])) for pose in poses])
+
+    np.savetxt(fname=f"{filename}_kitti.txt", X=_to_kitti_format(poses))
 
 # for LiDAR dataset
 def get_metrics(seq_result: List[Dict]):

@@ -104,6 +104,15 @@ class Mapper():
             static_mask = static_mask & static_mask_2
 
         return static_mask
+
+    def determine_used_pose(self):
+        if self.config.pgo_on:
+            self.used_poses = torch.tensor(np.array(self.dataset.pgo_poses), device=self.device, dtype=torch.float64)
+        elif self.config.track_on:
+            self.used_poses = torch.tensor(np.array(self.dataset.odom_poses), device=self.device, dtype=torch.float64)
+        elif self.dataset.gt_pose_provided: # for pure reconstruction with known pose
+            self.used_poses = torch.tensor(np.array(self.dataset.gt_poses), device=self.device, dtype=torch.float64)
+
     
     def process_frame(self, point_cloud_torch: torch.tensor,
                       frame_label_torch: torch.tensor, cur_pose_torch: torch.tensor, 
@@ -204,12 +213,7 @@ class Mapper():
         T3_0 = get_time()
 
         # determine used poses
-        if self.config.pgo_on:
-            self.used_poses = torch.tensor(np.array(self.dataset.pgo_poses), device=self.device, dtype=torch.float64)
-        elif self.config.track_on:
-            self.used_poses = torch.tensor(np.array(self.dataset.odom_poses), device=self.device, dtype=torch.float64)
-        elif self.dataset.gt_pose_provided: # for pure reconstruction with known pose
-            self.used_poses = torch.tensor(np.array(self.dataset.gt_poses), device=self.device, dtype=torch.float64)
+        self.determine_used_pose()
         
         if self.ba_done_flag: # bundle adjustment is not done
             # this may also cause some memory issue when the data pool is too large (5e7) # FIXME
@@ -591,7 +595,8 @@ class Mapper():
         # update the global map
         self.neural_points.assign_local_to_global() 
 
-    # joint optimization of PIN map and the poses in the sliding window
+    # joint optimization of PIN map and the poses in the sliding window 
+    # neural points are static in this case, we only fine-tune the neural point features for the map updating
     def bundle_adjustment(self, iter_count, window_size: int = 50, use_lie_group: bool = False):
         
         import pypose as pp
@@ -614,7 +619,7 @@ class Mapper():
 
         for iter in tqdm(range(iter_count), disable = self.silence):
 
-            coord_ba, weight, ts = self.get_ba_samples(self.config.bs)
+            coord_ba, weight, ts = self.get_ba_samples(self.config.ba_bs)
             weight = weight.detach()
 
             current_poses_se3 = torch.cat([poses_se3_fix, current_poses_se3_opt], dim=0)
@@ -646,23 +651,29 @@ class Mapper():
         # update the global map
         self.neural_points.assign_local_to_global() 
 
-        # update the poses 
+        # update the poses after ba
         current_poses_se3 = torch.cat([poses_se3_fix, current_poses_se3_opt], dim=0)
         
         updated_poses_mat = current_poses_se3.detach().matrix() 
 
         self.used_poses = updated_poses_mat
         
-        diff_pose = torch.matmul(torch.inverse(current_poses_mat), updated_poses_mat) 
-        # print(diff_pose)
+        # diff_pose = torch.matmul(torch.inverse(current_poses_mat), updated_poses_mat) 
         # print(diff_pose[-opt_window_size:])
 
         updated_poses_np = updated_poses_mat.cpu().numpy()
+        pose_count = np.shape(updated_poses_np)[0]
 
         if self.config.pgo_on:
-            self.dataset.pgo_poses = [updated_poses_np[i] for i in range(np.shape(updated_poses_np)[0])] 
+            self.dataset.pgo_poses = [updated_poses_np[i] for i in range(pose_count)] 
+            # odom pose would not be changed in this case (odom pose is without ba)
+            # update pgo odom edge
         elif self.config.track_on:
-            self.dataset.odom_poses = [updated_poses_np[i] for i in range(np.shape(updated_poses_np)[0])] 
+            self.dataset.odom_poses = [updated_poses_np[i] for i in range(pose_count)] 
+
+        # FIXME
+        self.dataset.cur_pose_ref = updated_poses_np[-1]
+        self.dataset.last_pose_ref = updated_poses_np[-1]
 
         self.ba_done_flag = True
     

@@ -1,41 +1,43 @@
 setting:
-  name: "test_mulran"
+  name: "test_ncd"
   output_root: "./experiments"
-  pc_path: "./data/MulRan/kaist01/Ouster"
-  pose_path: "./data/MulRan/kaist01/poses.txt" 
-  deskew: True
+  pc_path: "./data/ncd/01/bin"
+  pose_path: "./data/ncd/01/poses.txt" 
 process:
-  min_range_m: 3.0
+  min_range_m: 1.5
   max_range_m: 80.0
+  min_z_m: -10.0
+  vox_down_m: 0.1
+  adaptive_range_on: True
 sampler:
-  surface_sample_range_m: 0.3
-  surface_sample_n: 4
-  free_sample_begin_ratio: 0.5
-  free_sample_end_dist_m: 1.0
-  free_front_sample_n: 2
+  surface_sample_range_m: 0.35
+  surface_sample_n: 3
+  free_sample_begin_ratio: 0.3
+  free_sample_end_dist_m: 1.2
+  free_front_sample_n: 2 
 neuralpoints:
   voxel_size_m: 0.4
   search_alpha: 0.8
+  use_mid_ts: True
 loss:
+  sigma_sigmoid_m: 0.1
   loss_weight_on: True
-  dist_weight_scale: 0.8
+  dist_weight_scale: 1.0
   ekional_loss_on: True
   weight_e: 0.5
 continual:
-  batch_size_new_sample: 3000
-  pool_capacity: 1e7
+  batch_size_new_sample: 1000
+  pool_capacity: 2e7
 tracker:
-  source_vox_down_m: 0.6
+  source_vox_down_m: 0.8
   iter_n: 100
-  eigenvalue_check: False
-  GM_dist: 0.2
   valid_nn_k: 5
 pgo:
   map_context: True
-  pgo_freq_frame: 30
   context_cosdist: 0.25
+  pgo_freq_frame: 30
 optimizer: # mapper
-  iters: 15 # iterations per frame
+  iters: 15
   batch_size: 16384
 eval:
   wandb_vis_on: False # log to wandb or not

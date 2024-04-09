@@ -59,7 +59,7 @@ class Config:
         self.adaptive_range_on: bool = False # use an adpative range (used for NCD)
 
         # block with such radius, but actually a square (unit: m)
-        self.min_z: float = -4.0  # filter for z coordinates (unit: m)
+        self.min_z: float = -5.0  # filter for z coordinates (unit: m)
         self.max_z: float = 60.0
 
         self.rand_downsample: bool = True  # apply random or voxel downsampling to input original point clcoud
@@ -160,6 +160,7 @@ class Config:
         self.uniform_motion_on: bool = True # use uniform motion (constant velocity) model for the transformation inital guess
         self.reg_min_grad_norm: float = 0.5
         self.reg_max_grad_norm: float = 2.0
+        self.track_mask_query_nn_k: int = self.query_nn_k # during tracking, a point without nn_k neighbors would be regarded as invalid
         self.max_sdf_ratio: float = 5.0 # ratio * surface_sample sigma
         self.max_sdf_std_ratio: float = 1.0 # ratio * surface_sample sigma # 1.0
         self.reg_dist_div_grad_norm: bool = False # divide the sdf by the sdf gradient's norm for fixing overshoting or not
@@ -232,9 +233,6 @@ class Config:
 
         # optimizer
         self.mapping_freq_frame: int = 1
-        self.ba_freq_frame: int = 0 # 10
-        self.ba_frame: int = 50 # window size for ba
-
         # to have a better reconstruction results, you need to set a larger iters, a smaller lr
         self.adaptive_iters: bool = False # adptive map optimization iterations on
         self.iters: int = 15
@@ -242,10 +240,16 @@ class Config:
         self.opt_adam: bool = True  # use adam or sgd
         self.bs: int = 16384
         self.lr: float = 0.01
-        self.lr_pose: float = 1e-3
+        self.lr_pose: float = 1e-4 # 1e-3 # todo
         # weight_decay is only applied to the latent codes for the l2 regularization (try to added it for each neural point explicitly)
         self.weight_decay: float = 0.0 # 1e-7 
         self.adam_eps: float = 1e-15
+        
+        # bundel adjustment 
+        self.ba_freq_frame: int = 0 # 10
+        self.ba_frame: int = 50 # window size for ba
+        self.ba_iters: int = 80
+        self.ba_bs: int = 16384
 
         # loop closure detection
         self.global_loop_on: bool = True # global loop detection using context
@@ -260,20 +264,20 @@ class Config:
         self.context_cosdist_threshold: float = 0.2
         self.context_virtual_side_count: int = 5
         self.loop_z_check_on: bool = False # check the z axix difference of the found loop frames to deal with the potential abitary issue in a multi-floor building
-
+        self.loop_dist_drift_ratio_thre: float = 2.0 # find the loop candidate only within the distance of (loop_dist_drift_ratio_thre * drift)
         self.use_gt_loop: bool = False # use the gt loop closure derived from the gt pose or not (only used for debugging)
         self.max_loop_dist: float = 8.0
     
         # pose graph optimization
         self.pgo_on: bool = False
         self.pgo_freq: int = 30 # frequency for detecting loop closure
-        self.pgo_with_lm: bool = True # use lm or dogleg # lm seems to be better (why)
+        self.pgo_with_lm: bool = True # use lm or dogleg # actually not much diff
         self.pgo_max_iter: int = 50 # 
         self.pgo_with_pose_prior: bool = False # use the pose prior or not during the pgo
         self.pgo_tran_std: float = 0.04 # m
         self.pgo_rot_std: float = 0.01 # deg
         self.use_reg_cov_mat: bool = False # use the covariance matrix directly calculated by the registration for pgo edges or not
-
+        self.pgo_error_thre: float = 1e7 # the maximum error for rejecting a wrong edge
         self.pgo_merge_map: bool = False # merge the map (neural points) or not after the pgo (or we keep all the history neural points) don't merge them till the end, always keep those neural points in the memory until the end
         self.rehash_with_time: bool = True # Do the rehashing based on time difference or higher certainty
 
@@ -284,9 +288,7 @@ class Config:
         self.o3d_vis_raw: bool = False # visualize the raw point cloud or the weight source point cloud
         self.eval_on: bool = False
         self.eval_outlier_thre = 0.5  # unit:m
-        self.eval_freq_iters: int = 100
-        self.vis_freq_iters: int = 100
-        self.save_freq_iters: int = 100
+        self.log_freq_frame: int = 0 # save the result log per x frames
         self.mesh_freq_frame: int = 10  # do the reconstruction per x frames
         self.sdfslice_freq_frame: int = 1 # do the sdf slice visulization per x frames
         self.vis_sdf_slice_v: bool = False
@@ -488,6 +490,7 @@ class Config:
             self.uniform_motion_on = config_args["tracker"].get("uniform_motion_on", self.uniform_motion_on)
             self.source_vox_down_m = config_args["tracker"].get("source_vox_down_m", self.vox_down_m*10)
             self.reg_iter_n = config_args["tracker"].get("iter_n", self.reg_iter_n)
+            self.track_mask_query_nn_k = config_args["tracker"].get("valid_nn_k", self.track_mask_query_nn_k)
             self.reg_min_grad_norm = config_args["tracker"].get("min_grad_norm", self.reg_min_grad_norm)
             self.reg_max_grad_norm = config_args["tracker"].get("max_grad_norm", self.reg_max_grad_norm)
             self.reg_GM_grad = config_args["tracker"].get("GM_grad", self.reg_GM_grad)
@@ -515,12 +518,13 @@ class Config:
             self.pgo_rot_std = config_args["pgo"].get("rot_std", self.pgo_rot_std)
             # use default or estimated cov
             self.use_reg_cov_mat = config_args["pgo"].get("use_reg_cov", False)
-            # merge the neural point map or not after the loop
-            # merge the map may lead to some holes
+            # merge the neural point map or not after the loop, merge the map may lead to some holes
+            self.pgo_error_thre = config_args["pgo"].get("pgo_error_thre", self.pgo_error_thre) 
             self.pgo_max_iter = config_args["pgo"].get("pgo_max_iter", self.pgo_max_iter) 
             self.pgo_merge_map = config_args["pgo"].get("merge_map", False) 
             self.context_cosdist_threshold = config_args["pgo"].get("context_cosdist", self.context_cosdist_threshold) 
             self.min_loop_travel_dist_ratio = config_args["pgo"].get("min_loop_travel_ratio", self.min_loop_travel_dist_ratio) 
+            self.loop_dist_drift_ratio_thre = config_args["pgo"].get("max_loop_dist_ratio", self.loop_dist_drift_ratio_thre)
             self.closed_pose_path = self.pose_path
 
         # mapping optimizer
@@ -534,7 +538,10 @@ class Config:
 
             # bundle adjustment
             self.ba_freq_frame = config_args["optimizer"].get("ba_freq_frame", 0) # default off
-            self.ba_frame = config_args["optimizer"].get("ba_local_frame", 50)
+            self.ba_frame = config_args["optimizer"].get("ba_local_frame", self.ba_frame)
+            self.lr_pose = float(config_args["optimizer"].get("lr_pose_ba", self.lr_pose))
+            self.ba_iters = int(config_args["optimizer"].get("ba_iters", self.ba_iters))
+            self.ba_bs = int(config_args["optimizer"].get("ba_bs", self.ba_bs))
 
             if self.ba_freq_frame > 0: # dirty fix to resolve the conflict
                 self.stop_frame_thre = self.end_frame
@@ -551,6 +558,8 @@ class Config:
             # path to the sensor cad file
             self.sensor_cad_path = config_args["eval"].get('sensor_cad_path', None)
             
+            self.log_freq_frame = config_args["eval"].get('log_freq_frame', 0)
+
             # frequency for mesh reconstruction for incremental mode (per x frame)
             self.mesh_freq_frame = config_args["eval"].get('mesh_freq_frame', self.mesh_freq_frame)
             # keep the previous reconstructed mesh in the visualizer or not

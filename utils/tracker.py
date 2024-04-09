@@ -277,13 +277,13 @@ class Tracker():
                           GM_dist=None, GM_grad=None, lm_lambda = 0., vis_weight_pc = False): # if lm_lambda = 0, then it's Gaussian Newton Optimization
 
         T0 = get_time()
-
+        
         colors_on = (colors is not None)
         photo_loss_on = self.config.photometric_loss_on and colors_on
         sdf_pred, sdf_grad, color_pred, color_grad, _, mask, certainty, sdf_std = self.query_source_points(points, self.config.infer_bs, 
                                                                                                             True, True, colors_on, 
                                                                                                             photo_loss_on, query_locally=True, 
-                                                                                                            mask_min_nn_count=self.config.query_nn_k)
+                                                                                                            mask_min_nn_count=self.config.track_mask_query_nn_k) #fixme
 
         T1 = get_time()
 
