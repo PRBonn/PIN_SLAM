@@ -9,6 +9,7 @@ This file is inspired by [KISS-ICP](https://github.com/PRBonn/kiss-icp/tree/main
 **NOTE:** In this folder, we add the empty notebooks to use for running experiments on your
 local machine. If you want to see the results of these experiments you can click on any link below:
 
-- [KITTI Odometry on A4000 GPU](./backup/eval_kitti_a4000.ipynb)
-- [KITTI Odometry on 2080Ti GPU](./backup/eval_kitti_2080ti.ipynb)
-- [Replica RGB-D on A4000 GPU](./backup/eval_replica_a4000.ipynb)
+- [KITTI Odometry Dataset](https://nbviewer.org/github/YuePanEdward/PIN_evaluation/blob/main/eval_kitti.ipynb)
+- [MulRan Dataset](https://nbviewer.org/github/YuePanEdward/PIN_evaluation/blob/main/eval_mulran.ipynb)
+- [Newer College Dataset](https://nbviewer.org/github/YuePanEdward/PIN_evaluation/blob/main/eval_ncd.ipynb)
+- [Replica RGB-D Dataset](https://nbviewer.org/github/YuePanEdward/PIN_evaluation/blob/main/eval_replica.ipynb)

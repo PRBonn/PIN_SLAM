@@ -178,7 +178,9 @@ For ROS bag, you can use `./scripts/rosbag2ply.py` to extract the point cloud in
 
 For pose estimation evaluation, you may also provide the path `pose_path` to the reference pose file and optionally the path `calib_path` to the extrinsic calibration file. Note the pose file and calibration file should be in the [KITTI odometry data format](https://www.cvlibs.net/datasets/kitti/eval_odometry.php).
 
-The SLAM results and logs will be output in the `output_root` folder specified in the config file.
+The SLAM results and logs will be output in the `output_root` folder specified in the config file. 
+
+You may check [here](https://github.com/PRBonn/PIN_SLAM/blob/main/eval/README.md) for the results that can be obtained with the repository at a certain [checkpoint](https://github.com/PRBonn/PIN_SLAM/tree/1123b252457828f2f1873be8db4834b7aeb8e683) on a couple of popular datasets. 
 
 The training logs can be monitored via [Weights & Bias](wandb.ai) online if you turn on the `wandb_vis_on` option in the config file. If it's your first time using Weights & Bias, you will be requested to register and log in to your wandb account.
 
