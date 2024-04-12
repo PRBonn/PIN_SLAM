@@ -42,10 +42,8 @@ tracker:
   GM_dist: 0.2 
 pgo:
   pgo_freq_frame: 20
-  context_cosdist: 0.25
-  pgo_max_iter: 50
+  context_cosdist: 0.3
 optimizer: # mapper
-  iters: 15  # iterations per frame
   batch_size: 16384
 eval:
   wandb_vis_on: False # log to wandb or not

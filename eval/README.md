@@ -9,7 +9,8 @@ This file is inspired by [KISS-ICP](https://github.com/PRBonn/kiss-icp/tree/main
 **NOTE:** In this folder, we add the empty notebooks to use for running experiments on your
 local machine. If you want to see the results of these experiments you can click on any link below:
 
-- [KITTI Odometry Dataset](https://nbviewer.org/github/YuePanEdward/PIN_evaluation/blob/main/eval_kitti.ipynb)
-- [MulRan Dataset](https://nbviewer.org/github/YuePanEdward/PIN_evaluation/blob/main/eval_mulran.ipynb)
-- [Newer College Dataset](https://nbviewer.org/github/YuePanEdward/PIN_evaluation/blob/main/eval_ncd.ipynb)
-- [Replica RGB-D Dataset](https://nbviewer.org/github/YuePanEdward/PIN_evaluation/blob/main/eval_replica.ipynb)
+- [KITTI Odometry Dataset (random seed 42)](https://nbviewer.org/github/YuePanEdward/PIN_evaluation/blob/main/eval_kitti.ipynb)
+- [KITTI Odometry Dataset (random seed 2024)](https://nbviewer.org/github/YuePanEdward/PIN_evaluation/blob/main/eval_kitti_2024.ipynb)
+- [MulRan Dataset (random seed 42)](https://nbviewer.org/github/YuePanEdward/PIN_evaluation/blob/main/eval_mulran.ipynb)
+- [Newer College Dataset (random seed 42)](https://nbviewer.org/github/YuePanEdward/PIN_evaluation/blob/main/eval_ncd.ipynb)
+- [Replica RGB-D Dataset (random seed 42)](https://nbviewer.org/github/YuePanEdward/PIN_evaluation/blob/main/eval_replica.ipynb)

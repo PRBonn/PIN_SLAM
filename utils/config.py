@@ -235,7 +235,7 @@ class Config:
         self.mapping_freq_frame: int = 1
         # to have a better reconstruction results, you need to set a larger iters, a smaller lr
         self.adaptive_iters: bool = False # adptive map optimization iterations on
-        self.iters: int = 15
+        self.iters: int = 12
         self.init_iter_ratio: int = 40
         self.opt_adam: bool = True  # use adam or sgd
         self.bs: int = 16384
@@ -514,12 +514,12 @@ class Config:
             self.pgo_freq = config_args["pgo"].get("pgo_freq_frame", self.pgo_freq)
             self.pgo_with_pose_prior = config_args["pgo"].get("with_pose_prior", self.pgo_with_pose_prior)
             # default cov (constant for all the edges)
-            self.pgo_tran_std = config_args["pgo"].get("tran_std", self.pgo_tran_std)
-            self.pgo_rot_std = config_args["pgo"].get("rot_std", self.pgo_rot_std)
+            self.pgo_tran_std = float(config_args["pgo"].get("tran_std", self.pgo_tran_std))
+            self.pgo_rot_std = float(config_args["pgo"].get("rot_std", self.pgo_rot_std))
             # use default or estimated cov
             self.use_reg_cov_mat = config_args["pgo"].get("use_reg_cov", False)
             # merge the neural point map or not after the loop, merge the map may lead to some holes
-            self.pgo_error_thre = config_args["pgo"].get("pgo_error_thre", self.pgo_error_thre) 
+            self.pgo_error_thre = float(config_args["pgo"].get("pgo_error_thre", self.pgo_error_thre))
             self.pgo_max_iter = config_args["pgo"].get("pgo_max_iter", self.pgo_max_iter) 
             self.pgo_merge_map = config_args["pgo"].get("merge_map", False) 
             self.context_cosdist_threshold = config_args["pgo"].get("context_cosdist", self.context_cosdist_threshold) 

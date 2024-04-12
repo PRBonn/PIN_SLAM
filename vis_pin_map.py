@@ -63,7 +63,8 @@ def vis_pin_map():
         color_mlp.load_state_dict(loaded_model["color_decoder"])
     print("PIN Map loaded")
 
-    vis = MapVisualizer(config)
+    if config.o3d_vis_on:
+        vis = MapVisualizer(config)
 
     # neural_points.recreate_hash(neural_points.neural_points[0], torch.eye(3).cuda(), True, True) # FIXME
 
