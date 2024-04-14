@@ -49,7 +49,7 @@ class PoseGraphManager:
         self.last_loop_idx = 0
         self.drift_radius = 0.0 # m
         self.pgo_count = 0
-        self.valid_error_thre = config.pgo_error_thre
+        self.last_error = 0.0
 
     def add_frame_node(self, frame_id, init_pose):
         """create frame pose node and set pose initial guess  
@@ -102,7 +102,7 @@ class PoseGraphManager:
                                                 gtsam.Pose3(odom_transform),  # T_prev<-cur
                                                 cov_model))  # NOTE: add robust kernel
 
-    def add_loop_factor(self, cur_id: int, loop_id: int, loop_transform: np.ndarray, cov = None):
+    def add_loop_factor(self, cur_id: int, loop_id: int, loop_transform: np.ndarray, cov = None, reject_outlier = True):
         """add a loop closure factor between two pose nodes
         Args:
             cur_id: int
@@ -123,7 +123,8 @@ class PoseGraphManager:
                                                 cov_model))  # NOTE: add robust kernel
         
         cur_error = self.graph_factors.error(self.graph_initials)
-        if cur_error > self.valid_error_thre:
+        valid_error_thre = self.last_error + (cur_id - self.last_loop_idx) * self.config.pgo_error_thre_frame
+        if reject_outlier and cur_error > valid_error_thre:
             if not self.silence:
                 print("[bold yellow]A loop edge rejected due to too large error[/bold yellow]")
             self.graph_factors.remove(self.graph_factors.size()-1)
@@ -167,6 +168,7 @@ class PoseGraphManager:
         self.cur_pose = self.pgo_poses[self.curr_node_idx] 
 
         self.pgo_count += 1
+        self.last_error = error_after
 
     # write the pose graph as the g2o format
     def write_g2o(self, out_file):
@@ -203,7 +205,7 @@ class PoseGraphManager:
                     tran_array = np.array([[float(num) for num in row] for row in array_data_lines])
 
                     # add noise for robsutness check (only for debug)
-                    # tran_array[:3,3]+= ((np.random.rand(3)-0.5)*0.5)
+                    # tran_array[:3,3]+= ((np.random.rand(3)-0.5)*1.0)
 
                     self.loop_trans.append(tran_array)
                 return True
@@ -230,7 +232,7 @@ class PoseGraphManager:
 
         # create loop edges
         for i in range(len(self.loop_edges)):
-            self.add_loop_factor(self.loop_edges[i][1], self.loop_edges[i][0], self.loop_trans[i])
+            self.add_loop_factor(self.loop_edges[i][1], self.loop_edges[i][0], self.loop_trans[i], reject_outlier=False)
         
         # optimize 
         self.optimize_pose_graph()
@@ -303,5 +305,5 @@ def get_node_cov(marginals, idx):
     # pose_se3 = np.eye(4)
     # pose_se3[:3, 3] = np.array([pose.x(), pose.y(), pose.z()])
     # pose_se3[:3, :3] = pose.rotation().matrix()
-
+    
     return cov

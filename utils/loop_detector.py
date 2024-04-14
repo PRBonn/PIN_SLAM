@@ -150,7 +150,8 @@ class NeuralPointMapContextManager:
                 local_map_context_loop = True
             if not self.silence:
                 print("[bold red]Candidate global loop event detected: [/bold red]", self.curr_node_idx, "---", loop_id, "(" , loop_cos_dist, ")")
-
+            # print("[bold red]Candidate global loop event detected: [/bold red]", self.curr_node_idx, "---", loop_id, "(" , loop_cos_dist, ")")
+            
         return loop_id, loop_cos_dist, loop_transform, local_map_context_loop
 
 
@@ -358,6 +359,8 @@ def ptcloud2sc_torch(ptcloud, pt_feature, sc_shape, max_length):
     grid_indices = idx_ring * num_sector + idx_sector
 
     sc = sc.scatter_reduce_(dim=0, index=grid_indices, src=points[:, 2], reduce="amax", include_self=False) # record the max value of z value
+    # scatter_reduce_, This operation may behave nondeterministically when given tensors on a CUDA device
+    # be careful
     sc = sc.view(num_ring, num_sector) # R, S
     
     if pt_feature is not None:
@@ -371,7 +374,7 @@ def ptcloud2sc_torch(ptcloud, pt_feature, sc_shape, max_length):
 def sc2rk(sc):
     return torch.mean(sc, dim=1)
 
-# the distance between two sc (input as torch tensors)
+# the (consine) distance between two sc (input as torch tensors)
 def distance_sc_torch(sc1, sc2): # RxS
     num_sectors = sc1.shape[1]
 

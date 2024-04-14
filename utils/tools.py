@@ -6,6 +6,7 @@
 from typing import List
 import sys
 import os
+import random
 import multiprocessing
 import getpass
 import time
@@ -77,10 +78,12 @@ def setup_experiment(config: Config, argv = None, debug_mode: bool = False):
                 run_str = "python3 "+ ' '.join(argv)
                 reproduce_shell.write(run_str)
     
-    # set the random seed
-    o3d.utility.random.seed(config.seed)
+    # set the random seed for all
+    os.environ['PYTHONHASHSEED']=str(config.seed)
     torch.manual_seed(config.seed)
-    np.random.seed(config.seed) 
+    np.random.seed(config.seed)
+    random.seed(config.seed) 
+    o3d.utility.random.seed(config.seed)
 
     torch.set_default_dtype(config.dtype)
 
@@ -399,13 +402,13 @@ def voxel_down_sample_torch(points: torch.tensor, voxel_size: float):
 
     Reference: Louis Wiesmann
     """
-    _quantization = 1000 # if change to 1, then it would be random sample
+    _quantization = 1000 # if change to 1, then it would take the first (smallest) index lie in the voxel
 
     offset = torch.floor(points.min(dim=0)[0]/voxel_size).long()
     grid = torch.floor(points / voxel_size)
     center = (grid + 0.5) * voxel_size
     dist = ((points - center) ** 2).sum(dim=1)**0.5
-    dist = dist / dist.max() * (_quantization - 1) # for speed up
+    dist = (dist / dist.max() * (_quantization - 1)).long() # for speed up # [0-_quantization]
 
     grid = grid.long() - offset
     v_size = grid.max().ceil()
@@ -417,8 +420,13 @@ def voxel_down_sample_torch(points: torch.tensor, voxel_size: float):
     offset = 10**len(str(idx_d.max().item()))
 
     idx_d = idx_d + dist.long() * offset
+
     idx = torch.empty(unique.shape, dtype=inverse.dtype,
                       device=inverse.device).scatter_reduce_(dim=0, index=inverse, src=idx_d, reduce="amin", include_self=False)
+    # https://pytorch.org/docs/stable/generated/torch.Tensor.scatter_reduce_.html
+    # This operation may behave nondeterministically when given tensors on 
+    # a CUDA device. consider to change a more stable implementation
+
     idx = idx % offset
     return idx
 
@@ -436,11 +444,6 @@ def voxel_down_sample_min_value_torch(points: torch.tensor, voxel_size: float, v
 
     offset = torch.floor(points.min(dim=0)[0]/voxel_size).long()
     grid = torch.floor(points / voxel_size)
-
-    value = value / value.max() * (_quantization - 1)
-
-    # print(value)
-
     grid = grid.long() - offset
     v_size = grid.max().ceil()
     grid_idx = grid[:, 0] + grid[:, 1] * v_size + grid[:, 2] * v_size * v_size
@@ -449,11 +452,17 @@ def voxel_down_sample_min_value_torch(points: torch.tensor, voxel_size: float, v
     idx_d = torch.arange(inverse.size(0), dtype=inverse.dtype, device=inverse.device)
        
     offset = 10**len(str(idx_d.max().item()))
-
-    idx_d = idx_d + value.long() * offset
+    
+    # not same value, taker the smaller value, same value, consider the smaller index
+    value = (value / value.max() * (_quantization - 1)).long() # [0-_quantization]
+    idx_d = idx_d + value * offset 
 
     idx = torch.empty(unique.shape, dtype=inverse.dtype,
                       device=inverse.device).scatter_reduce_(dim=0, index=inverse, src=idx_d, reduce="amin", include_self=False)
+    # https://pytorch.org/docs/stable/generated/torch.Tensor.scatter_reduce_.html
+    # This operation may behave nondeterministically when given tensors on 
+    # a CUDA device. consider to change a more stable implementation
+
     idx = idx % offset
     return idx
 

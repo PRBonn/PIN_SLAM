@@ -103,7 +103,6 @@ class PINSLAMer:
         self.frame_map_pub = rospy.Publisher("~frame/mapping", PointCloud2, queue_size=queue_size_)
         self.frame_reg_pub = rospy.Publisher("~frame/registration", PointCloud2, queue_size=queue_size_)
         self.map_pub = rospy.Publisher("~map/neural_points", PointCloud2, queue_size=queue_size_)
-        
         self.tf_broadcaster = tf2_ros.TransformBroadcaster()
 
         # self.pose_pub = rospy.Publisher("~pose", PoseStamped, queue_size=100)

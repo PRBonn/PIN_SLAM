@@ -277,7 +277,7 @@ class Config:
         self.pgo_tran_std: float = 0.04 # m
         self.pgo_rot_std: float = 0.01 # deg
         self.use_reg_cov_mat: bool = False # use the covariance matrix directly calculated by the registration for pgo edges or not
-        self.pgo_error_thre: float = 1e7 # the maximum error for rejecting a wrong edge
+        self.pgo_error_thre_frame: float = 500.0 # the maximum error for rejecting a wrong edge (per frame)
         self.pgo_merge_map: bool = False # merge the map (neural points) or not after the pgo (or we keep all the history neural points) don't merge them till the end, always keep those neural points in the memory until the end
         self.rehash_with_time: bool = True # Do the rehashing based on time difference or higher certainty
 
@@ -519,7 +519,7 @@ class Config:
             # use default or estimated cov
             self.use_reg_cov_mat = config_args["pgo"].get("use_reg_cov", False)
             # merge the neural point map or not after the loop, merge the map may lead to some holes
-            self.pgo_error_thre = float(config_args["pgo"].get("pgo_error_thre", self.pgo_error_thre))
+            self.pgo_error_thre = float(config_args["pgo"].get("pgo_error_thre_frame", self.pgo_error_thre_frame))
             self.pgo_max_iter = config_args["pgo"].get("pgo_max_iter", self.pgo_max_iter) 
             self.pgo_merge_map = config_args["pgo"].get("merge_map", False) 
             self.context_cosdist_threshold = config_args["pgo"].get("context_cosdist", self.context_cosdist_threshold) 

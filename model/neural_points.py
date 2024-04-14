@@ -488,7 +488,7 @@ class NeuralPoints(nn.Module):
         self.after_pgo = True
 
         if self.config.use_mid_ts:
-            used_ts = ((self.point_ts_create + self.point_ts_update) / 2).long() # still as dtype long
+            used_ts = (self.point_ts_create + self.point_ts_update) / 2 # still as dtype long
         else:
             used_ts = self.point_ts_create 
         
@@ -509,14 +509,14 @@ class NeuralPoints(nn.Module):
         # also update the timestep of neural points during merging
         if with_ts:
             if self.config.use_mid_ts:
-                ts_used = ((self.point_ts_create + self.point_ts_update) / 2).long() # still as dtype long
+                ts_used = (self.point_ts_create + self.point_ts_update) / 2 # still as dtype long
             else:
                 ts_used = self.point_ts_create
             ts_diff = torch.abs(ts_used - cur_ts).float()
             sample_idx = voxel_down_sample_min_value_torch(self.neural_points, cur_resolution, ts_diff) 
         else:
         # take the point that has a larger certainity
-            sample_idx = voxel_down_sample_min_value_torch(self.neural_points, cur_resolution, -self.point_certainties) 
+            sample_idx = voxel_down_sample_min_value_torch(self.neural_points, cur_resolution, self.point_certainties.max()-self.point_certainties) 
 
         original_point_count = self.neural_points.shape[0]
         kept_point_count = sample_idx.shape[0]

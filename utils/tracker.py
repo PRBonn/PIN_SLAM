@@ -71,12 +71,7 @@ class Tracker():
         max_increment_sdf_residual_ratio = 1.1
         eigenvalue_ratio_thre = 0.01
         min_valid_points = 30
-        max_rot_deg = 100.0
-
-        progressive_stricter = False
-
         converged = False
-
         valid_flag = True
         last_sdf_residual_cm = 1e5
 
@@ -95,12 +90,6 @@ class Tracker():
             cur_points = transform_torch(source_points, T) # apply transformation
             
             T02 = get_time()
-                    
-            # progressive strict
-            if progressive_stricter:
-                cur_GM_grad -= 0.001
-                min_grad_norm += 0.001
-                max_grad_norm -= 0.001
 
             reg_result = self.registration_step(cur_points, source_normals, source_sdf, source_colors, \
                                                 min_grad_norm, max_grad_norm, \

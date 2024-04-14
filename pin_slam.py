@@ -100,13 +100,13 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
     for frame_id in tqdm(range(dataset.total_pc_count)): # frame id as the idx of the frame in the data folder without skipping
         if (frame_id < config.begin_frame or frame_id > config.end_frame or frame_id % config.every_frame != 0):
             continue
-        
-        used_frame_id = dataset.processed_frame # the actual frame id for the current run (may have some frame skip, may not start from the first in the data folder)
+        # the actual frame id for the current run (may have some frame skip, may not start from the first in the data folder)
+        used_frame_id = dataset.processed_frame 
 
         # I. Load data and preprocessing
         T0 = get_time()
 
-        dataset.read_frame(frame_id) # change here for ros node
+        dataset.read_frame(frame_id)
 
         T1 = get_time()
         
@@ -192,10 +192,11 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
                     pose_init_np = dataset.pgo_poses[loop_id] @ loop_transform # T_w<-c = T_w<-l @ T_l<-c 
                     pose_init_torch = torch.tensor(pose_init_np, device=config.device, dtype=torch.float64)
                     neural_points.recreate_hash(pose_init_torch[:3,3], None, True, True, loop_id) # recreate hash and local map for registration, this is the reason why we'd better to keep the duplicated neural points until the end
-                    pose_refine_torch, loop_cov_mat, weight_pcd, reg_valid_flag = tracker.tracking(dataset.cur_source_points, pose_init_torch, loop_reg=True, vis_result=config.o3d_vis_on)
+                    loop_reg_source_point = dataset.cur_source_points.clone()
+                    pose_refine_torch, loop_cov_mat, weight_pcd, reg_valid_flag = tracker.tracking(loop_reg_source_point, pose_init_torch, loop_reg=True, vis_result=config.o3d_vis_on)
                     # visualize the loop closure and loop registration
                     if config.o3d_vis_on and o3d_vis.debug_mode > 1:
-                        points_torch_init = transform_torch(dataset.cur_source_points, pose_init_torch) # apply transformation
+                        points_torch_init = transform_torch(loop_reg_source_point, pose_init_torch) # apply transformation
                         points_o3d_init = o3d.geometry.PointCloud()
                         points_o3d_init.points = o3d.utility.Vector3dVector(points_torch_init.detach().cpu().numpy().astype(np.float64))
                         loop_neural_pcd = neural_points.get_neural_points_o3d(query_global=False, color_mode=o3d_vis.neural_points_vis_mode, random_down_ratio=1)
@@ -215,10 +216,10 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
                         pgm.loop_edges_vis.append(np.array([loop_id, cur_loop_vis_id],dtype=np.uint32)) # only for vis
                         pgm.loop_edges.append(np.array([loop_id, used_frame_id],dtype=np.uint32))
                         pgm.loop_trans.append(loop_transform)
-                        # update the neural points and posesƒ
+                        # update the neural points and poses
                         pose_diff_torch = torch.tensor(pgm.get_pose_diff(), device=config.device, dtype=config.dtype)
                         dataset.cur_pose_torch = torch.tensor(pgm.cur_pose, device=config.device, dtype=config.dtype)
-                        neural_points.adjust_map(pose_diff_torch)
+                        neural_points.adjust_map(pose_diff_torch) # transform neural points (position and orientation) along with associated frame poses
                         neural_points.recreate_hash(dataset.cur_pose_torch[:3,3], None, (not config.pgo_merge_map), config.rehash_with_time, used_frame_id) # recreate hash from current time
                         mapper.transform_data_pool(pose_diff_torch) # transform global pool
                         dataset.update_poses_after_pgo(pgm.cur_pose, pgm.pgo_poses)
@@ -238,7 +239,6 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
         T4 = get_time()
         
         # IV: Mapping and bundle adjustment
-
         # if lose track, we will not update the map and data pool (don't let the wrong pose to corrupt the map)
         # if the robot stop, also don't process this frame, since there's no new oberservations
         if not mapper.lose_track and not dataset.stop_status:
@@ -325,18 +325,18 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
                         cur_mesh = mesher.recon_aabb_collections_mesh(chunks_aabb, o3d_vis.mc_res_m, mesh_path, True, config.semantic_on, config.color_on, filter_isolated_mesh=True, mesh_min_nn=o3d_vis.mesh_min_nn)    
                     else:
                         aabb = global_neural_pcd_down.get_axis_aligned_bounding_box()
-                        chunks_aabb = split_chunks(global_neural_pcd_down, aabb, o3d_vis.mc_res_m*300) # reconstruct in chunks
+                        chunks_aabb = split_chunks(global_neural_pcd_down, aabb, o3d_vis.mc_res_m * 300) # reconstruct in chunks
                         cur_mesh = mesher.recon_aabb_collections_mesh(chunks_aabb, o3d_vis.mc_res_m, mesh_path, False, config.semantic_on, config.color_on, filter_isolated_mesh=True, mesh_min_nn=o3d_vis.mesh_min_nn)    
             cur_sdf_slice = None
             if config.sdfslice_freq_frame > 0:
-                if o3d_vis.render_sdf and (used_frame_id == 0 or frame_id == last_frame or (used_frame_id+1) % config.sdfslice_freq_frame == 0):
+                if o3d_vis.render_sdf and (used_frame_id == 0 or frame_id == last_frame or (used_frame_id + 1) % config.sdfslice_freq_frame == 0):
                     slice_res_m = config.voxel_size_m * 0.2
-                    sdf_bound = config.surface_sample_range_m * 4.
+                    sdf_bound = config.surface_sample_range_m * 4.0
                     query_sdf_locally = True
                     if o3d_vis.vis_global:
-                        cur_sdf_slice_h = mesher.generate_bbx_sdf_hor_slice(dataset.map_bbx, dataset.cur_pose_ref[2,3]+o3d_vis.sdf_slice_height, slice_res_m, False, -sdf_bound, sdf_bound) # horizontal slice
+                        cur_sdf_slice_h = mesher.generate_bbx_sdf_hor_slice(dataset.map_bbx, dataset.cur_pose_ref[2,3] + o3d_vis.sdf_slice_height, slice_res_m, False, -sdf_bound, sdf_bound) # horizontal slice
                     else:
-                        cur_sdf_slice_h = mesher.generate_bbx_sdf_hor_slice(dataset.cur_bbx, dataset.cur_pose_ref[2,3]+o3d_vis.sdf_slice_height, slice_res_m, query_sdf_locally, -sdf_bound, sdf_bound) # horizontal slice (local)
+                        cur_sdf_slice_h = mesher.generate_bbx_sdf_hor_slice(dataset.cur_bbx, dataset.cur_pose_ref[2,3] + o3d_vis.sdf_slice_height, slice_res_m, query_sdf_locally, -sdf_bound, sdf_bound) # horizontal slice (local)
                     if config.vis_sdf_slice_v:
                         cur_sdf_slice_v = mesher.generate_bbx_sdf_ver_slice(dataset.cur_bbx, dataset.cur_pose_ref[0,3], slice_res_m, query_sdf_locally, -sdf_bound, sdf_bound) # vertical slice (local)
                         cur_sdf_slice = cur_sdf_slice_h + cur_sdf_slice_v

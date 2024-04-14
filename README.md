@@ -6,7 +6,7 @@
     <a href="https://github.com/PRBonn/PIN_SLAM#run-pin-slam"><img src="https://img.shields.io/badge/python-3670A0?style=flat-square&logo=python&logoColor=ffdd54" /></a>
     <a href="https://github.com/PRBonn/PIN_SLAM#installation"><img src="https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black" /></a>
     <a href="https://arxiv.org/pdf/2401.09101v1.pdf"><img src="https://img.shields.io/badge/Paper-pdf-<COLOR>.svg?style=flat-square" /></a>
-    <a href="https://lbesson.mit-license.org/"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" /></a>
+    <a href="https://github.com/PRBonn/PIN_SLAM/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" /></a>
   </p>
   
   <p align="center">
@@ -180,7 +180,7 @@ For pose estimation evaluation, you may also provide the path `pose_path` to the
 
 The SLAM results and logs will be output in the `output_root` folder specified in the config file. 
 
-You may check [here](https://github.com/PRBonn/PIN_SLAM/blob/main/eval/README.md) for the results that can be obtained with the repository at a certain [checkpoint](https://github.com/PRBonn/PIN_SLAM/tree/1123b252457828f2f1873be8db4834b7aeb8e683) on a couple of popular datasets. 
+You may check [here](https://github.com/PRBonn/PIN_SLAM/blob/main/eval/README.md) for the results that can be obtained with this repository on a couple of popular datasets. 
 
 The training logs can be monitored via [Weights & Bias](wandb.ai) online if you turn on the `wandb_vis_on` option in the config file. If it's your first time using Weights & Bias, you will be requested to register and log in to your wandb account.
 
