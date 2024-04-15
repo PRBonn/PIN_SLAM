@@ -319,7 +319,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
                         mesh_path = os.path.join(run_path, "mesh", 'mesh_frame_' + str(frame_id) + "_" + mc_cm_str + "cm.ply")
                     
                     # figure out how to do it efficiently
-                    if config.mc_local or (not o3d_vis.vis_global): # only build the local mesh
+                    if not o3d_vis.vis_global: # only build the local mesh
                         # cur_mesh = mesher.recon_aabb_mesh(dataset.cur_bbx, o3d_vis.mc_res_m, mesh_path, True, config.semantic_on, config.color_on, filter_isolated_mesh=True, mesh_min_nn=o3d_vis.mesh_min_nn)
                         chunks_aabb = split_chunks(global_neural_pcd_down, dataset.cur_bbx, o3d_vis.mc_res_m*100) # reconstruct in chunks
                         cur_mesh = mesher.recon_aabb_collections_mesh(chunks_aabb, o3d_vis.mc_res_m, mesh_path, True, config.semantic_on, config.color_on, filter_isolated_mesh=True, mesh_min_nn=o3d_vis.mesh_min_nn)    

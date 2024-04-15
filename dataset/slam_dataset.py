@@ -634,8 +634,8 @@ class SLAMDataset(Dataset):
         elif self.config.color_channel == 3:
             map_out_o3d.point["colors"] =  o3d.core.Tensor(map_color_np, o3d_dtype, o3d_device)
         
-        print("Estimate normal")
-        map_out_o3d.estimate_normals(max_nn=20)
+        # print("Estimate normal")
+        # map_out_o3d.estimate_normals(max_nn=20)
 
         if run_path is not None:
             print("Output merged point cloud map")

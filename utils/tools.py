@@ -44,6 +44,11 @@ def setup_experiment(config: Config, argv = None, debug_mode: bool = False):
         
     run_path = os.path.join(config.output_root, run_name)
 
+    cuda_available = torch.cuda.is_available()
+    if not cuda_available: 
+        print('No CUDA device available, use CPU instead')
+        config.device = 'cpu'
+
     if not debug_mode:
         access = 0o755
         os.makedirs(run_path, access, exist_ok=True)
@@ -88,7 +93,6 @@ def setup_experiment(config: Config, argv = None, debug_mode: bool = False):
     torch.set_default_dtype(config.dtype)
 
     return run_path
-
 
 def setup_optimizer(config: Config, neural_point_feat, mlp_geo_param = None, 
                     mlp_sem_param = None, mlp_color_param = None, poses = None, lr_ratio = 1.0) -> Optimizer:
@@ -763,4 +767,3 @@ class VoxelHasherIndex(nn.Module):
         neighbord_cells = grid_coords[..., None, :] + dx
         hash = (neighbord_cells * self.primes).sum(-1) % self.buffer_size
         return self.buffer_pt_index[hash]
-

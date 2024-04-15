@@ -419,7 +419,6 @@ def distance_sc_feature_torch(sc1, sc2): # RxSxD
     # rotate (shift sector) to find the best match yaw_shift and the similarity
     yaw_diff = torch.argmax(sim_for_each_cols) + 1 # starts with 0 
     sim = torch.max(sim_for_each_cols)
-    
     dist = 1 - sim
 
     return dist.item(), yaw_diff.item()

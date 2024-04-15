@@ -26,17 +26,13 @@ class DataSampler():
         # T0 = get_time()
 
         dev = self.dev
-
         surface_sample_range = self.config.surface_sample_range_m 
         surface_sample_n = self.config.surface_sample_n
         freespace_behind_sample_n = self.config.free_behind_n
         freespace_front_sample_n = self.config.free_front_n
-
         all_sample_n = surface_sample_n+freespace_behind_sample_n+freespace_front_sample_n+1 # 1 as the exact measurement
         free_front_min_ratio = self.config.free_sample_begin_ratio
-        free_sample_end_dist = self.config.free_sample_end_dist_m
-        # clearance_dist_scaled = self.config.clearance_dist_m * self.config.scale
-        
+        free_sample_end_dist = self.config.free_sample_end_dist_m        
         sigma_base = self.config.sigma_sigmoid_m
 
         # get sample points
@@ -58,35 +54,23 @@ class DataSampler():
         if color_torch is not None:
             color_channel = color_torch.shape[1]
             surface_color_tensor = color_torch.repeat(surface_sample_n,1)
-        
-        # deprecated
-        # # near surface uniform sampling (for clearance) [from the close surface lower bound closer to the sensor for a clearance distance]
-        # clearance_sample_displacement = -torch.rand(point_num*clearance_sample_n, 1, device=dev)*clearance_dist_scaled - surface_sample_range_scaled
 
-        # repeated_dist = distances.repeat(clearance_sample_n,1)
-        # clearance_sample_dist_ratio = clearance_sample_displacement/repeated_dist + 1.0 # 1.0 means on the surface
-        # if sem_label_torch is not None:
-        #     clearance_sem_label_tensor = torch.zeros_like(repeated_dist)
-
-        # Part 2. free space (front) uniform sampling
+        # Part 2. free space (in front of surface) uniform sampling
         # if you want to reconstruct the thin objects (like poles, tree branches) well, you need more freespace samples to have 
         # a space carving effect
 
         sigma_ratio = 2.0
-
         repeated_dist = distances.repeat(freespace_front_sample_n,1)
         free_max_ratio = 1.0 - sigma_ratio * surface_sample_range / repeated_dist
         free_diff_ratio = free_max_ratio - free_front_min_ratio
-
         free_sample_front_dist_ratio = torch.rand(point_num*freespace_front_sample_n, 1, device=dev)*free_diff_ratio + free_front_min_ratio
-        
         free_sample_front_displacement = (free_sample_front_dist_ratio - 1.0) * repeated_dist
         if sem_label_torch is not None:
             free_sem_label_front = torch.zeros_like(repeated_dist)
         if color_torch is not None:
             free_color_front = torch.zeros(point_num*freespace_front_sample_n, color_channel, device=dev)
 
-        # Part 3. free space (behind) uniform sampling
+        # Part 3. free space (behind surface) uniform sampling
         repeated_dist = distances.repeat(freespace_behind_sample_n,1)
         free_max_ratio = free_sample_end_dist / repeated_dist + 1.0
         free_behind_min_ratio = 1.0 + sigma_ratio * surface_sample_range / repeated_dist
@@ -109,15 +93,9 @@ class DataSampler():
         repeated_points = points_torch.repeat(all_sample_n,1)
         repeated_dist = distances.repeat(all_sample_n,1)
         all_sample_points = repeated_points*all_sample_dist_ratio
-        # all_sample_points = repeated_points*all_sample_dist_ratio + sensor_origin_torch
 
         # depth tensor of all the samples
         depths_tensor = repeated_dist * all_sample_dist_ratio
-
-        # linear error model: sigma(d) = sigma_base + d * sigma_scale_constant
-        # ray_sigma = sigma_base + distances * sigma_scale_constant  
-        # different sigma value for different ray with different distance (deprecated)
-        # sigma_tensor = ray_sigma.repeat(all_sample_n,1).squeeze(1)
 
         # get the weight vector as the inverse of sigma
         weight_tensor = torch.ones_like(depths_tensor)
@@ -159,13 +137,13 @@ class DataSampler():
         if sem_label_torch is not None:
             sem_label_tensor = torch.cat((sem_label_torch.unsqueeze(-1), surface_sem_label_tensor, free_sem_label_front, free_sem_label_behind),0).int()
 
+        # assign the color label to the close-to-surface samples
         color_tensor = None
         if color_torch is not None:
             color_tensor = torch.cat((color_torch, surface_color_tensor, free_color_front, free_color_behind),0)
 
         # T2 = get_time()
-        # Convert from the all ray surface + all ray free order to the 
-        # ray-wise (surface + free) order
+        # Convert from the all ray surface + all ray free order to the ray-wise (surface + free) order
         all_sample_points = all_sample_points.reshape(all_sample_n, -1, 3).transpose(0, 1).reshape(-1, 3)
         sdf_label_tensor = sdf_label_tensor.reshape(all_sample_n, -1).transpose(0, 1).reshape(-1) 
         sdf_label_tensor *= (-1) # convert to the same sign as 
@@ -195,7 +173,6 @@ class DataSampler():
     def sample_source_pc(self, points):
 
         dev = self.dev
-
         sample_count_per_point = 0 
         sampel_max_range = 0.2
 
@@ -203,7 +180,6 @@ class DataSampler():
             return points, torch.zeros(points.shape[0], device=dev)
         
         unground_points = points[points[:,2]> -1.5]
-
         point_num = unground_points.shape[0]
 
         repeated_points = unground_points.repeat(sample_count_per_point,1)

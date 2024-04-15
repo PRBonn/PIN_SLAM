@@ -161,7 +161,7 @@ And then run:
 python3 pin_slam.py ./config/lidar_slam/run_demo.yaml
 ```
 
-Use `run_demo_cpu.yaml` if you don't have GPU on your computer. Use `run_demo_no_vis.yaml` if you are running on a server without a X service. 
+Use `run_demo_no_vis.yaml` if you are running on a server without an X service. 
 
 You can visualize the SLAM process in PIN-SLAM visualizer and check the results in the `./experiments` folder.
 
@@ -171,6 +171,9 @@ For an arbitrary data sequence, you can run:
 ```
 python3 pin_slam.py path_to_your_config_file.yaml
 ```
+
+<details>
+  <summary>[Details (click to expand)]</summary>
 
 Generally speaking, you only need to edit in the config file the 
 `pc_path`, which is the path to the folder containing the point cloud (`.bin`, `.ply`, `.pcd` or `.las` format) for each frame. 
@@ -184,6 +187,7 @@ You may check [here](https://github.com/PRBonn/PIN_SLAM/blob/main/eval/README.md
 
 The training logs can be monitored via [Weights & Bias](wandb.ai) online if you turn on the `wandb_vis_on` option in the config file. If it's your first time using Weights & Bias, you will be requested to register and log in to your wandb account.
 
+</details>
 
 ### ROS 1 Support
 
@@ -192,6 +196,9 @@ If you are not using PIN-SLAM as a part of a ROS package, you can avoid the catk
 ```
 python3 pin_slam_ros.py [path_to_your_config_file] [point_cloud_topic_name] [(optional)point_timestamp_field_name]
 ```
+
+<details>
+  <summary>[Details (click to expand)]</summary>
 
 For example:
 
@@ -213,7 +220,7 @@ If you are running without a powerful GPU, PIN-SLAM may not run at the sensor fr
 
 You can also put `pin_slam_ros.py` into a ROS package for `rosrun` or `roslaunch`.
 
-
+</details>
 
 
 ### Inspect the results after SLAM
@@ -221,16 +228,21 @@ You can also put `pin_slam_ros.py` into a ROS package for `rosrun` or `roslaunch
 After the SLAM process, you can reconstruct mesh from the PIN map within an arbitrary bounding box with an arbitrary resolution by running:
 
 ```
-python3 vis_pin_map.py [path/to/your/result/folder] [marching_cubes_resolution_m] [(cropped)_map_file.ply]  [output_mesh_file.ply] [mc_nn_threshold]
+python3 vis_pin_map.py [path/to/your/result/folder] [marching_cubes_resolution_m] [(cropped)_map_file.ply] [output_mesh_file.ply] [mesh_min_nn]
 ```
 
-The bounding box of `(cropped)_map_file.ply` will be used for the bounding box for mesh reconstruction. `mc_nn_threshold` controls the trade-off between completeness and accuracy. The smaller number (for example `8`) will lead to a more complete mesh with more guessed artifacts. The larger number (for example `15`) will lead to a less complete but more accurate mesh.
+<details>
+  <summary>[Details (click to expand)]</summary>
+
+The bounding box of `(cropped)_map_file.ply` will be used for the bounding box for mesh reconstruction. `mesh_min_nn` controls the trade-off between completeness and accuracy. The smaller number (for example `6`) will lead to a more complete mesh with more guessed artifacts. The larger number (for example `15`) will lead to a less complete but more accurate mesh.
 
 For example, for the case of the sanity test, run:
 
 ```
-python3 vis_pin_map.py ./experiments/sanity_test_* 0.2 neural_points.ply  mesh_20cm.ply
+python3 vis_pin_map.py ./experiments/sanity_test_* 0.2 neural_points.ply mesh_20cm.ply 8
 ```
+</details>
+
 
 ## Visualizer Instructions
 
