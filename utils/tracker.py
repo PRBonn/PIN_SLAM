@@ -333,7 +333,6 @@ class Tracker():
         w_grad = 1.0 if GM_grad is None else ((GM_grad/(GM_grad+grad_anomaly**2))**2).unsqueeze(1)
         w_res = 1.0 if GM_dist is None else ((GM_dist/(GM_dist+sdf_residual**2))**2).unsqueeze(1)
 
-
         w_normal = 1.0 if normals is None else (0.5 + torch.abs((valid_normals * valid_grad_unit).sum(dim=1))).unsqueeze(1)
 
         w_certainty = 1.0 
@@ -367,8 +366,8 @@ class Tracker():
         
         # print(w_color)
         w = w_res * w_grad * w_normal * w_color * w_certainty * w_std
-
-        w /= (2.0*torch.mean(w)) # normalize weight for visualization
+        if not isinstance(w, (float)):
+            w /= (2.0*torch.mean(w)) # normalize weight for visualization
 
         T2 = get_time()
 
@@ -544,21 +543,6 @@ def ct_registration_step(self, points: torch.Tensor, ts: torch.Tensor, normals: 
 
 
 # math tools
-def huber_norm_weights(x, b): # not used, GM kernel is used
-    """
-    :param x: norm of residuals, torch.Tensor (N,)
-    :param b: threshold
-    :return: weight vector torch.Tensor (N, )
-    """
-    # x is residual norm
-    res_norm = torch.zeros_like(x)
-    res_norm[x <= b] = x[x <= b] ** 2
-    res_norm[x > b] = 2 * b * x[x > b] - b ** 2
-    x[x == 0] = 1.
-    weight = torch.sqrt(res_norm) / x # = 1 in the window and < 1 out of the window
-
-    return weight
-
 def skew(v):
     S = torch.zeros(3, 3, device=v.device,dtype=v.dtype)
     S[0, 1] = -v[2]

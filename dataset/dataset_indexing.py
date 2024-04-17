@@ -16,6 +16,8 @@ def set_dataset_path(config: Config, dataset_name: str, seq: str):
         config.pose_path = os.path.join(base_path, 'poses', pose_file_name)   # input pose file
         config.calib_path = os.path.join(base_path, 'sequences', seq, "calib.txt")  # input calib file (to sensor frame)
         config.label_path = os.path.join(base_path, 'sequences', seq, "labels") # input point-wise label path, for semantic mapping (optional)
+        config.kitti_correction_on = True
+        config.correction_deg = 0.195
     elif dataset_name == "mulran":
         config.name = config.name + "_mulran_" + seq
         base_path = config.pc_path.rsplit('/', 2)[0]

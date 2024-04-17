@@ -63,7 +63,6 @@ class SLAMDataset(Dataset):
         self.poses_w_closed = None
 
         self.travel_dist = []
-
         self.time_table = []
 
         self.poses_ref = [np.eye(4)] # only used when gt_pose_provided
@@ -111,26 +110,22 @@ class SLAMDataset(Dataset):
  
         self.processed_frame: int = 0
         self.shift_ts: float = 0.0
-
         self.lose_track: bool = False # the odometry lose track or not (for robustness)
         self.consecutive_lose_track_frame: int = 0
-
         self.color_available: bool = False
-
         self.intensity_available: bool = False
-        
         self.color_scale: float = 255.
-        
         self.last_pose_ref = np.eye(4)
         self.last_odom_tran = np.eye(4)
         self.cur_pose_ref = np.eye(4)
-        if self.config.kitti_correction_on:
-            self.last_odom_tran[0,3] = self.config.max_range*1e-2 # inital guess for booting on x aixs
-            self.color_scale = 1.
-
         # count the consecutive stop frame of the robot
         self.stop_count: int = 0
         self.stop_status = False
+
+        if self.config.kitti_correction_on:
+            self.last_odom_tran[0,3] = self.config.max_range*1e-2 # inital guess for booting on x aixs
+            self.color_scale = 1.
+        
 
         # current frame point cloud (for visualization)
         self.cur_frame_o3d = o3d.geometry.PointCloud()
@@ -235,14 +230,18 @@ class SLAMDataset(Dataset):
     def get_point_ts(self, point_ts = None):
         if self.config.deskew:
             if point_ts is not None and self.config.valid_ts_in_points: 
+                if not self.silence:
+                    print('Pointwise timestamp available')
                 self.cur_point_ts_torch = torch.tensor(point_ts, device=self.device, dtype=self.dtype)
             else:
-                H = 64
-                W = 1024
-                if self.cur_point_cloud_torch.shape[0] == H*W:  # for Ouster 64-beam LiDAR
+                if self.cur_point_cloud_torch.shape[0] == 64 * 1024:  # for Ouster 64-beam LiDAR
                     if not self.silence:
                         print("Ouster-64 point cloud deskewed")
-                    self.cur_point_ts_torch = (torch.floor(torch.arange(H * W) / H) / W).reshape(-1, 1).to(self.cur_point_cloud_torch)
+                    self.cur_point_ts_torch = (torch.floor(torch.arange(64 * 1024) / 64) / 1024).reshape(-1, 1).to(self.cur_point_cloud_torch)
+                elif self.cur_point_cloud_torch.shape[0] == 128 * 1024:  # for Ouster 128-beam LiDAR
+                    if not self.silence:
+                        print("Ouster-128 point cloud deskewed")
+                    self.cur_point_ts_torch = (torch.floor(torch.arange(128 * 1024) / 128) / 1024).reshape(-1, 1).to(self.cur_point_cloud_torch)
                 else:
                     yaw = -torch.atan2(self.cur_point_cloud_torch[:,1], self.cur_point_cloud_torch[:,0])  # y, x -> rad (clockwise)
                     if self.config.lidar_type_guess == "velodyne":
@@ -535,9 +534,12 @@ class SLAMDataset(Dataset):
                 print("SLAM evaluation:")
                 avg_tra_slam, avg_rot_slam = relative_error(self.gt_poses, self.pgo_poses)
                 ate_rot_slam, ate_trans_slam, align_mat_slam = absolute_error(self.gt_poses, self.pgo_poses, self.config.eval_traj_align)
-                print("Average Translation Error       (%):", f"{avg_tra_slam:.3f}")
-                print("Average Rotational Error (deg/100m):", f"{avg_rot_slam*100.0:.3f}")
-                print("Absoulte Trajectory Error       (m):", f"{ate_trans_slam:.3f}")
+                if avg_tra_slam == 0: # for rgbd dataset (shorter sequence)
+                    print("Absoulte Trajectory Error      (cm):", f"{ate_trans_slam*100.0:.3f}")
+                else:
+                    print("Average Translation Error       (%):", f"{avg_tra_slam:.3f}")
+                    print("Average Rotational Error (deg/100m):", f"{avg_rot_slam*100.0:.3f}")
+                    print("Absoulte Trajectory Error       (m):", f"{ate_trans_slam:.3f}")
 
                 if self.config.wandb_vis_on:
                     wandb_log_content = {'SLAM Average Translation Error [%]': avg_tra_slam, 'SLAM Average Rotational Error [deg/m]': avg_rot_slam, 'SLAM Absoulte Trajectory Error [m]': ate_trans_slam, 'SLAM Absoulte Rotational Error [deg]': ate_rot_slam} 

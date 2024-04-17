@@ -32,7 +32,6 @@ from matplotlib.cm import viridis
                   
 from utils.config import Config
 
-
 # setup this run
 def setup_experiment(config: Config, argv = None, debug_mode: bool = False): 
 
@@ -161,24 +160,7 @@ def step_lr_decay(
 
     return learning_rate
 
-
-def num_model_weights(model: nn.Module) -> int:
-    num_weights = int(
-        sum(
-            [
-                np.prod(p.size())
-                for p in filter(lambda p: p.requires_grad, model.parameters())
-            ]
-        )
-    )
-    return num_weights
-
-
-def print_model_summary(model: nn.Module):
-    for child in model.children():
-        print(child)
-
-
+# calculate the analytical gradient by pytorch auto diff
 def get_gradient(inputs, outputs):
     d_points = torch.ones_like(outputs, requires_grad=False, device=outputs.device)
     points_grad = grad(
@@ -191,12 +173,10 @@ def get_gradient(inputs, outputs):
     )[0]
     return points_grad
 
-
 def freeze_model(model: nn.Module):
     for child in model.children():
         for param in child.parameters():
             param.requires_grad = False
-
 
 def unfreeze_model(model: nn.Module):
     for child in model.children():
@@ -361,7 +341,6 @@ def quat_multiply(q1: torch.tensor, q2: torch.tensor):
 
     return torch.stack((w, x, y, z), dim=1)
 
-
 def torch2o3d(points_torch):
     pc_o3d = o3d.geometry.PointCloud()
     points_np = points_torch.cpu().detach().numpy().astype(np.float64)
@@ -374,7 +353,6 @@ def o3d2torch(o3d, device='cpu', dtype=torch.float32 ):
 def transform_torch(points: torch.tensor, transformation: torch.tensor):
     # points [N, 3]
     # transformation [4, 4]
-
     # Add a homogeneous coordinate to each point in the point cloud
     points_homo = torch.cat([points, torch.ones(points.shape[0], 1).to(points)], dim=1)
 
@@ -477,7 +455,6 @@ def split_chunks(pc: o3d.geometry.PointCloud(), aabb: o3d.geometry.AxisAlignedBo
         return None
     
     # aabb = pc.get_axis_aligned_bounding_box()
-
     chunk_aabb = []
     
     min_bound = aabb.get_min_bound()
@@ -527,7 +504,6 @@ def split_chunks(pc: o3d.geometry.PointCloud(), aabb: o3d.geometry.AxisAlignedBo
             chunk_aabb.append(cur_pc_aabb)
 
     # print("# Chunk for meshing: ", chunk_count)
-    
     return chunk_aabb
 
 # torch version of lidar undistortion (deskewing)
@@ -549,8 +525,6 @@ def deskewing(points: torch.tensor, ts: torch.tensor, pose: torch.tensor, ts_mid
 
     ts -= ts_mid_pose
 
-    # print(ts)
-
     rotmat_slerp = roma.rotmat_slerp(torch.eye(3).to(points), pose[:3,:3].to(points), ts)
 
     tran_lerp = ts[:, None] * pose[:3, 3].to(points) 
@@ -559,54 +533,6 @@ def deskewing(points: torch.tensor, ts: torch.tensor, pose: torch.tensor, ts_mid
     points_deskewd[:,:3] = (rotmat_slerp @ points[:,:3].unsqueeze(-1)).squeeze(-1) + tran_lerp
 
     return points_deskewd
-
-# this is not generally the case
-# get point-wise ts (from 0 to 1), for Ouster laser scanner
-def get_timestamps(H=64, W=1024):
-    return (np.floor(np.arange(H * W) / H) / W).reshape(-1, 1)
-
-def slerp_batch(quat, t):
-    """
-    Perform batched spherical linear interpolation (SLERP) between two sets of quaternions.
-
-    Args:
-        end_quats (torch.Tensor): ending quaternions with shape (1, 4).
-        t (torch.Tensor): Batch of interpolation parameters with shape (batch_size, 1).
-
-    Returns:
-        torch.Tensor: Batch of interpolated quaternions with shape (batch_size, 4).
-    """
-    # Ensure quaternions are unit quaternions
-    start_quat = torch.tensor([1.0, 0.0, 0.0, 0.0]).to(quat) # 4
-    end_quat = F.normalize(quat, dim=-1) # 4
-
-    # Compute the dot product between the two sets of quaternions
-    dot_product = torch.sum(start_quat * end_quat)
-    # print(dot_product)
-
-    # If the dot product is negative, negate one of the quaternions
-    # to ensure the shortest path interpolation
-    # neg_end_quat = torch.where(dot_product < 0, -end_quat, end_quat)
-
-    # if dot_product 
-
-    # Interpolate
-    theta_0 = torch.acos(dot_product)
-
-    if theta_0 == 0:
-        return start_quat.repeat(t.shape[0], 1)
-
-    theta = theta_0 * t # N
-    sin_theta = torch.sin(theta) # N
-    sin_theta_0 = torch.sin(theta_0) # 1
-
-    s0 = (torch.cos(theta) - dot_product / sin_theta_0 * sin_theta).unsqueeze(-1) # N, 1
-    # print(s0.shape)
-    s1 = (sin_theta / sin_theta_0).unsqueeze(-1) # N, 1
-
-    interpolated_quats = s0 * start_quat.unsqueeze(0) + s1 * end_quat.unsqueeze(0) # N, 4
-
-    return F.normalize(interpolated_quats, dim=-1) # N, 4
 
 def tranmat_close_to_identity(mats: np.ndarray, rot_thre: float, tran_thre: float):
 
@@ -678,92 +604,3 @@ def plot_timing_detail(time_table: np.ndarray, saving_path:str, with_loop=False)
 
     plt.savefig(saving_path, dpi=500)
     # plt.show()
-
-
-# voxel hashing implementation with pytorch (by Louis Wiesmann)
-class VoxelHasherIndex(nn.Module):
-    def __init__(self, points: torch.Tensor, grid_resolution: float=1.0, buffer_size: int=100000000, random: bool=False) -> None:
-        """Voxel Hasher for downsampling and finding neighbors in the grid. Stores in each cell the index of a point from the original point cloud
-        
-        Args:
-            points (torch.Tensor): [N,3] point coordinates
-            grid_resolution (float): resolution of the grid
-            buffer_size (int, optional): Size of the grid buffer. The higher, the less likely voxel collisions. Defaults to 100000000.
-            random (bool, optional): If True: stores random point in the cell. If False: stores the point which is closest to the voxel center.
-        """
-        super().__init__()
-        self.primes = torch.tensor(
-            [73856093, 19349669, 83492791], dtype=torch.int64, device=points.device)
-        self.buffer_pt_index = torch.full(
-            [buffer_size], -1, dtype=torch.int64, device=points.device)
-        self.buffer_valids = torch.zeros(
-            [buffer_size], dtype=torch.bool, device=points.device)
-        self.grid_resolution = grid_resolution
-        self.buffer_size = buffer_size
-
-        # Fill grid
-        if random:
-            indices = torch.arange(
-                points.shape[-2], dtype=self.buffer_pt_index.dtype, device=self.buffer_pt_index.device)
-            grid_coords = (
-                points / self.grid_resolution).floor().to(self.primes)
-        else:
-            indices = voxel_down_sample_torch(points, resolution=self.grid_resolution)
-            grid_coords = (
-                points[indices] / self.grid_resolution).floor().to(self.primes)
-
-        hash = (grid_coords * self.primes).sum(-1) % self.buffer_size
-        self.buffer_pt_index[hash] = indices
-        self.buffer_valids[hash] = True
-
-    def xyz_to_hash(self, points: torch.Tensor):
-        """xyz coordinates to hash index
-
-        Args:
-            points (Tensor): [...,3] xyz coordinates
-        """
-        grid_coords = (points / self.grid_resolution).floor().to(self.primes)
-        hash = (grid_coords * self.primes).sum(-1) % self.buffer_size
-        return hash
-
-    def xyz_to_ijk(self, points: torch.Tensor):
-        grid_coords = (points / self.grid_resolution).floor().to(self.primes)
-        return grid_coords
-
-    def ijk_to_hash(self, grid_coords):
-        hash = (grid_coords * self.primes).sum(-1) % self.buffer_size
-        return hash
-
-    def at_ijk(self, grid_coods):
-        return self.buffer_pt_index[self.ijk_to_hash(grid_coods)]
-
-    def get_indices(self):
-        """returns the indices of the points that are stored in the grid. Indices are from the original point cloud
-
-        Returns:
-            indices: torch.Tensor [K]
-        """
-        return self.buffer_pt_index[self.buffer_valids]
-
-    def radius_neighborhood_search(self, points: torch.Tensor, radius: float):
-        """returns the indices of the potential neighbors for each point. Be aware that those might be invalid (value: -1) or just wrong due to hash collision.
-
-        Args:
-            points [N,3] (torch.Tensor): point coordinates from which to find neighbors
-            radius (float): radius in which to find neighbors, be aware that the actual search radius might be higher due to rounding up to full voxel resolution
-
-        Returns:
-            indices [N,m] (torch.Tensor): for each point the m potential neighbors. m depens of radius. For 0 < m <= voxel_resolution: 3^3 = 27 neighbors, 2*voxel_resolution: 5^3 = 125...  
-        """
-        grid_coords = (points / self.grid_resolution).floor().to(self.primes)
-
-        num_cells = math.ceil(radius/self.grid_resolution)
-        dx = torch.arange(-num_cells, num_cells+1,
-                          device=grid_coords.device, dtype=grid_coords.dtype)
-
-        coords = torch.meshgrid(dx, dx, dx, indexing="ij")
-        dx = torch.stack(coords, dim=-1).reshape(-1, 3)
-
-        neighbord_cells = grid_coords[..., None, :] + dx
-        hash = (neighbord_cells * self.primes).sum(-1) % self.buffer_size
-        return self.buffer_pt_index[hash]

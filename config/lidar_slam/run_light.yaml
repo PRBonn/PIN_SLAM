@@ -1,4 +1,4 @@
-# light-weight PIN-SLAM
+# PIN-SLAM light
 setting: 
   name: "test_light"
   output_root: "./experiments"
@@ -6,10 +6,10 @@ setting:
   pose_path: "./data/your_dataset/poses.txt"
 process:
   min_range_m: 3.0
-  max_range_m: 60.0
+  max_range_m: 80.0
   vox_down_m: 0.12
 sampler:
-  surface_sample_range_m: 0.25 
+  surface_sample_range_m: 0.35 
   surface_sample_n: 2
   free_sample_begin_ratio: 0.5
   free_sample_end_dist_m: 1.0
@@ -21,24 +21,24 @@ loss:
   loss_weight_on: True
   dist_weight_scale: 0.8
 continual:
-  pool_capacity: 2e6
+  pool_capacity: 1e7
   pool_filter_freq: 10
 tracker:
   source_vox_down_m: 1.0
   iter_n: 20
   term_deg: 0.1
+  valid_nn_k: 5
 pgo:
   pgo_freq_frame: 50
   context_cosdist: 0.25
   virtual_side_count: 0
-optimizer: # mappers
-  iters: 10 
+optimizer: # mappers 
   batch_size: 8192
   adaptive_iters: True
 eval:
   wandb_vis_on: False # log to wandb or not
-  o3d_vis_on: False # visualize the mapping or not
+  o3d_vis_on: True # visualize the mapping or not
   silence_log: True # output the logs or not
   mesh_freq_frame: 50 # reconstruct the mesh every x frames
   mesh_min_nn: 9
-  save_map: False
+  save_map: True

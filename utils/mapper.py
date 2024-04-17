@@ -12,7 +12,6 @@ import open3d as o3d
 import matplotlib.cm as cm
 import wandb
 from rich import print
-from typing import List
 import sys
 
 from utils.config import Config
@@ -30,31 +29,22 @@ class Mapper():
                  geo_mlp: Decoder, sem_mlp: Decoder, color_mlp: Decoder):
         
         self.config = config
-
         self.silence = config.silence
-
         self.dataset = dataset
-
         self.neural_points = neural_points
         self.geo_mlp = geo_mlp
         self.sem_mlp = sem_mlp
         self.color_mlp = color_mlp
-
         self.device = config.device
         self.dtype = config.dtype
-
         self.used_poses = None
-
         self.lose_track: bool = False
-
         self.require_gradient = False
         if config.ekional_loss_on or config.proj_correction_on or config.consistency_loss_on:
             self.require_gradient = True
         if config.numerical_grad and not config.proj_correction_on and not config.consistency_loss_on:
             self.require_gradient = False
-
         self.total_iter: int = 0
-
         self.sdf_scale = config.logistic_gaussian_ratio*config.sigma_sigmoid_m
 
         # initialize the data sampler
@@ -62,7 +52,6 @@ class Mapper():
         self.ray_sample_count = 1 + config.surface_sample_n + config.free_behind_n + config.free_front_n
 
         self.new_idx = None
-
         self.ba_done_flag = False
         self.train_less = False
 

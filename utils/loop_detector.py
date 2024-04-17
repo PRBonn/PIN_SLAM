@@ -45,7 +45,6 @@ class NeuralPointMapContextManager:
 
         self.query_contexts = []
         self.tran_from_frame = []
-
         self.curr_node_idx = 0 
 
         # needs to cover 10 m
@@ -88,8 +87,6 @@ class NeuralPointMapContextManager:
         dx = torch.arange(-self.virtual_side_count, self.virtual_side_count+1, device = self.device)*self.virtual_step_m
 
         lat_tran = dx.view(-1, 1) @ lat_direction_unit.view(1, 3) # N, 3
-
-        # print(lat_tran)
 
         virtual_positions = frame_pose[:3,3].float() + lat_tran # N, 3
 
