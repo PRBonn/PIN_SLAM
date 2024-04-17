@@ -161,9 +161,15 @@ And then run:
 python3 pin_slam.py ./config/lidar_slam/run_demo.yaml
 ```
 
+<details>
+  <summary>[Details (click to expand)]</summary>
+  
 Use `run_demo_no_vis.yaml` if you are running on a server without an X service. 
+Use `run_demo_sem.yaml` if you want to conduct metric-semantic SLAM using semantic segmentation labels.
 
 You can visualize the SLAM process in PIN-SLAM visualizer and check the results in the `./experiments` folder.
+</details>
+
 
 ### Run on your datasets
 

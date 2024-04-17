@@ -34,8 +34,6 @@ class Mesher():
         self.cur_device = self.device
         self.dtype = config.dtype
 
-        self.ts = 0 # query timestamp when conditioned on time
-
         self.global_transform = np.eye(4)
     
     def query_points(self, coord, bs, query_sdf = True, query_sem = False, query_color = False, query_mask = True, 
@@ -337,9 +335,12 @@ class Mesher():
         return verts, faces
 
     def estimate_vertices_sem(self, mesh, verts, filter_free_space_vertices = True):
+        if len(verts) == 0:
+            return mesh
+
         # print("predict semantic labels of the vertices")
-        verts_scaled = torch.tensor(verts, dtype=self.dtype, device=self.device)
-        _, verts_sem, _, _ = self.query_points(verts_scaled, self.config.infer_bs, False, True, False, False)
+        verts_torch = torch.tensor(verts, dtype=self.dtype, device=self.device)
+        _, verts_sem, _, _ = self.query_points(verts_torch, self.config.infer_bs, False, True, False, False)
         verts_sem_list = list(verts_sem)
         verts_sem_rgb = [sem_kitti_color_map[sem_label] for sem_label in verts_sem_list]
         verts_sem_rgb = np.asarray(verts_sem_rgb, dtype=np.float64)/255.0
@@ -353,9 +354,12 @@ class Mesher():
         return mesh
     
     def estimate_vertices_color(self, mesh, verts):
+        if len(verts) == 0:
+            return mesh
+
         # print("predict color labels of the vertices")
-        verts_scaled = torch.tensor(verts, dtype=self.dtype, device=self.device)
-        _, _, verts_color, _ = self.query_points(verts_scaled, self.config.infer_bs, False, False, True, False)
+        verts_torch = torch.tensor(verts, dtype=self.dtype, device=self.device)
+        _, _, verts_color, _ = self.query_points(verts_torch, self.config.infer_bs, False, False, True, False)
 
         if self.config.color_channel == 1:
             verts_color = np.repeat(verts_color * 2.0, 3, axis=1)
@@ -369,12 +373,10 @@ class Mesher():
         triangle_clusters, cluster_n_triangles, _ = (mesh.cluster_connected_triangles())
         triangle_clusters = np.asarray(triangle_clusters)
         cluster_n_triangles = np.asarray(cluster_n_triangles)
-        # cluster_area = np.asarray(cluster_area)
         # print("Remove the small clusters")
-        # mesh_0 = copy.deepcopy(mesh)
         triangles_to_remove = cluster_n_triangles[triangle_clusters] < filter_cluster_min_tri
         mesh.remove_triangles_by_mask(triangles_to_remove)
-        # mesh = mesh_0
+
         return mesh
     
     def generate_bbx_sdf_hor_slice(self, bbx, slice_z, voxel_size, query_locally = False, min_sdf = -1.0, max_sdf = 1.0):
@@ -428,12 +430,6 @@ class Mesher():
         coord, voxel_num_xyz, voxel_origin = self.get_query_from_bbx(bbx, voxel_size, self.config.pad_voxel, self.config.skip_top_voxel)
         if coord is None: # use chunks in this case
             return None
-        
-        # max_neighbor_k = self.neural_points.neighbor_K # 33 for 0.2
-        # mesh_min_nn = max(int(max_neighbor_k/5.), self.config.query_nn_k-1) # too small would cause some artifacts, too large would lead to lots of holes
-        # if not self.config.from_sample_points:
-        #     mesh_min_nn -= 1 
-        # print(mesh_min_nn)
 
         sdf_pred, _, _, mc_mask = self.query_points(coord, self.config.infer_bs, True, False, False, 
                                                     self.config.mc_mask_on, query_locally, mesh_min_nn, out_torch=use_torch_mc)
