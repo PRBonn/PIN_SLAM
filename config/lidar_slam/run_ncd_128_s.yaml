@@ -1,0 +1,49 @@
+setting: # used for small scenes such as stairs
+  name: "test_ncd_128_small"
+  output_root: "./experiments"
+  pc_path: "./data/ncd_128/stairs/ply"
+  pose_path: "./data/ncd_128/stairs/poses.txt" 
+  deskew: True
+process:
+  min_range_m: 0.5
+  max_range_m: 15.0
+  min_z_m: -10.0
+  vox_down_m: 0.05
+  adaptive_range_on: True
+sampler:
+  surface_sample_range_m: 0.15
+  surface_sample_n: 3
+  free_sample_begin_ratio: 0.3
+  free_sample_end_dist_m: 0.6
+  free_front_sample_n: 1 
+neuralpoints:
+  voxel_size_m: 0.15
+  search_alpha: 0.5
+  weighted_first: False
+loss:
+  sigma_sigmoid_m: 0.05
+  loss_weight_on: True
+  dist_weight_scale: 0.5
+continual:
+  batch_size_new_sample: 1000
+  pool_capacity: 1e7
+tracker:
+  source_vox_down_m: 0.2
+  iter_n: 100
+pgo:
+  map_context: True
+  context_cosdist: 0.3
+  min_loop_travel_ratio: 3.0
+optimizer: # mapper
+  iters: 15  # iterations per frame
+  batch_size: 16384
+  adaptive_iters: True
+  ba_freq_frame: 20  
+  lr_pose_ba: 1e-3
+eval:
+  wandb_vis_on: False # log to wandb or not
+  o3d_vis_on: True # visualize the mapping or not
+  silence_log: True
+  mesh_freq_frame: 50 
+  mesh_min_nn: 18
+  save_map: False

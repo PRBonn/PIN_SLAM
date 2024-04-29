@@ -3,9 +3,11 @@
 # @author    Yue Pan     [yue.pan@igg.uni-bonn.de]
 # Copyright (c) 2024 Yue Pan, all rights reserved
 
-import yaml
 import os
+
 import torch
+import yaml
+
 
 class Config:
     def __init__(self):
@@ -71,7 +73,7 @@ class Config:
         self.filter_moving_object: bool = True
 
         # color (intensity) related 
-        self.color_map_on: bool = False # texture mapping default on
+        self.color_map_on: bool = True # colorized mapping default on
         self.color_on: bool = False
         self.color_channel: int = 0 # For RGB, channel=3, For Lidar with intensity, channel=1
 
@@ -125,7 +127,6 @@ class Config:
         self.bs_new_sample: int = 2048 # number of the sample per batch for the current frame's data, half of all the data
         self.new_certainty_thre: float = 1.0
         self.pool_filter_freq: int = 10 
-        self.new_sample_ratio_thre: float = 0.01 # if smaller than this ratio, we think there's not much new information collected
 
         # MLP decoder
         self.mlp_bias_on: bool = True
@@ -174,7 +175,6 @@ class Config:
 
         # optimizer
         self.mapping_freq_frame: int = 1
-        self.adaptive_iters: bool = False # adptive map optimization iterations on (train for fewer iterations when there's not much new information to learn)
         self.iters: int = 12 # training iterations per frame. to have a better reconstruction results, you need to set a larger iters, a smaller lr
         self.init_iter_ratio: int = 40 # train init_iter_ratio x iters for the first frame to kick the SLAM off
         self.opt_adam: bool = True  # use adam (default) or sgd as the gradient descent optimizer
@@ -183,6 +183,10 @@ class Config:
         self.lr_pose: float = 1e-4 # learning rate for poses during bundle adjustment
         self.weight_decay: float = 0.0 # weight_decay is only applied to the latent codes for the l2 regularization
         self.adam_eps: float = 1e-15
+        self.adaptive_iters: bool = False # adptive map optimization iterations on (train for fewer iterations when there's not much new information to learn)
+        self.new_sample_ratio_less: float = 0.02 # if smaller than this ratio, we think there's not much new information collected, train less
+        self.new_sample_ratio_more: float = 0.15 # if larger than this ratio, we think there are a lot new observations to learn, train more
+        self.new_sample_ratio_restart: float = 0.3 # if larger than this ratio, we think maybe tracking is lost, train much more
         
         # local bundle adjustment (ba)  
         self.ba_freq_frame: int = 0 # frame frequency for conducting ba
@@ -224,6 +228,7 @@ class Config:
         self.context_num_candidates: int = 1 # select the best K candidates after comparing the ring key for further checking
         self.context_cosdist_threshold: float = 0.2 # cosine distance threshold for a candidate loop
         self.context_virtual_side_count: int = 5 # augment context_virtual_side_count virtual sensor positions on each side of the actual sensor position
+        self.context_virtual_step_m: float = 2.0 # voxel_size_m * 4.0 
         self.loop_z_check_on: bool = False # check the z axix difference of the found loop frames to deal with the potential abitary issue in a multi-floor building
         self.loop_dist_drift_ratio_thre: float = 2.0 # find the loop candidate only within the distance of (loop_dist_drift_ratio_thre * drift)
         self.use_gt_loop: bool = False # use the gt loop closure derived from the gt pose or not (only used for debugging)
@@ -440,6 +445,8 @@ class Config:
             self.loop_with_feature = config_args["pgo"].get("loop_with_feature", self.loop_with_feature)
             self.local_map_context_latency = config_args["pgo"].get('local_map_latency', self.local_map_context_latency)
             self.context_virtual_side_count = config_args["pgo"].get("virtual_side_count", self.context_virtual_side_count)
+            self.context_virtual_step_m = config_args["pgo"].get("virtual_step_m", self.voxel_size_m * 4.0)
+            self.npmc_max_dist = config_args["pgo"].get("npmc_max_dist", self.max_range * 0.7)
             self.pgo_freq = config_args["pgo"].get("pgo_freq_frame", self.pgo_freq)
             self.pgo_with_pose_prior = config_args["pgo"].get("with_pose_prior", self.pgo_with_pose_prior)
             # default cov (constant for all the edges)
@@ -510,5 +517,4 @@ class Config:
         self.consistency_count = int(self.bs / 4)
         self.window_radius = max(self.max_range, 6.0) # for the sampling data poo, should not be too small
         self.local_map_radius = self.max_range + 2.0 # for the local neural points
-        self.npmc_max_dist = self.local_map_radius * 0.7 # could be a bit too small
         self.vis_frame_axis_len = self.max_range / 50.0

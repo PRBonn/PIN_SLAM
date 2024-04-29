@@ -5,15 +5,16 @@
 
 
 import torch
-import torch.nn.functional as F
 import torch.nn as nn
-from torch.autograd import grad
+import torch.nn.functional as F
 
 from utils.config import Config
 
 
 class Decoder(nn.Module):
-    def __init__(self, config: Config, hidden_dim, hidden_level, out_dim, is_time_conditioned = False): 
+    def __init__(self, config: Config, 
+                 hidden_dim, hidden_level, out_dim, 
+                 is_time_conditioned = False): 
         
         super().__init__()
     

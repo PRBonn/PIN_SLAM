@@ -51,5 +51,4 @@ eval:
   mesh_min_nn: 9
   sensor_cad_path: ./cad/camera.ply
   skip_top_voxel: 5
-  save_map: True
-  
+  save_map: True 

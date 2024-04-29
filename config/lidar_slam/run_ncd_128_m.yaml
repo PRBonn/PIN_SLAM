@@ -1,8 +1,8 @@
-setting:
-  name: "test_ncd_128_easy"
+setting: # used for middle scenes such as cloister
+  name: "test_ncd_128_middle"
   output_root: "./experiments"
-  pc_path: "./data/ncd_128/quad_e/ply"
-  pose_path: "./data/ncd_128/quad_e/poses.txt" 
+  pc_path: "./data/ncd_128/cloister/ply"
+  pose_path: "./data/ncd_128/cloister/poses.txt" 
   deskew: True
 process:
   min_range_m: 1.5
@@ -11,7 +11,7 @@ process:
   vox_down_m: 0.08
   adaptive_range_on: True
 sampler:
-  surface_sample_range_m: 0.25
+  surface_sample_range_m: 0.35
   surface_sample_n: 4
   free_sample_begin_ratio: 0.5
   free_sample_end_dist_m: 1.2
@@ -21,11 +21,11 @@ neuralpoints:
   search_alpha: 0.5
   weighted_first: False
 loss:
-  sigma_sigmoid_m: 0.08
+  sigma_sigmoid_m: 0.1
   loss_weight_on: True
   dist_weight_scale: 0.8
 continual:
-  batch_size_new_sample: 1000
+  batch_size_new_sample: 3000
   pool_capacity: 2e7
 tracker:
   source_vox_down_m: 0.6

@@ -3,34 +3,33 @@
 # @author    Yue Pan     [yue.pan@igg.uni-bonn.de]
 # Copyright (c) 2024 Yue Pan, all rights reserved
 
-from typing import List
-import sys
+import getpass
+import json
+import multiprocessing
 import os
 import random
-import multiprocessing
-import getpass
-import time
-from pathlib import Path
-from datetime import datetime
 import shutil
 import subprocess
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import List
+
+import numpy as np
+import open3d as o3d
+import roma
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch import optim
-from torch.optim.optimizer import Optimizer
-from torch.autograd import grad
-import math
-import roma
-import numpy as np
 import wandb
-import json
-import open3d as o3d
 from matplotlib import pyplot as plt
 from matplotlib.cm import viridis
-# 'plasma', 'inferno', 'magma', Pastel1', 'Pastel2', 'Paired', 'Accent', 'Dark2',  'Set1', 'Set2', 'Set3', 'tab10', 'tab20', 'tab20b', 'tab20c'
-                  
+from torch import optim
+from torch.autograd import grad
+from torch.optim.optimizer import Optimizer
+
 from utils.config import Config
+
 
 # setup this run
 def setup_experiment(config: Config, argv = None, debug_mode: bool = False): 
@@ -83,15 +82,19 @@ def setup_experiment(config: Config, argv = None, debug_mode: bool = False):
                 reproduce_shell.write(run_str)
     
     # set the random seed for all
-    os.environ['PYTHONHASHSEED']=str(config.seed)
-    torch.manual_seed(config.seed)
-    np.random.seed(config.seed)
-    random.seed(config.seed) 
-    o3d.utility.random.seed(config.seed)
-
     torch.set_default_dtype(config.dtype)
 
+    # set the random seed for all
+    setup_seed(config.seed)
+    
     return run_path
+
+def setup_seed(seed):
+    os.environ['PYTHONHASHSEED']=str(seed)
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed) 
+    o3d.utility.random.seed(seed)
 
 def setup_optimizer(config: Config, neural_point_feat, mlp_geo_param = None, 
                     mlp_sem_param = None, mlp_color_param = None, poses = None, lr_ratio = 1.0) -> Optimizer:
@@ -330,6 +333,7 @@ def quat_multiply(q1: torch.tensor, q2: torch.tensor):
     """
     Perform quaternion multiplication for batches.
     q' = q1 @ q2
+    apply rotation q1 to quat q2
     """
     w1, x1, y1, z1 = torch.unbind(q1, dim=1) # quaternion representing the rotation
     w2, x2, y2, z2 = torch.unbind(q2, dim=1) # quaternion to be rotated

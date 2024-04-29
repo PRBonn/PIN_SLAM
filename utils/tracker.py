@@ -3,22 +3,27 @@
 # @author    Yue Pan     [yue.pan@igg.uni-bonn.de]
 # Copyright (c) 2024 Yue Pan, all rights reserved
 
-import numpy as np
-from tqdm import tqdm
-import torch
 import math
-import open3d as o3d
-from rich import print
 
-from utils.config import Config
-from utils.semantic_kitti_utils import *
-from utils.tools import get_gradient, transform_torch, get_time, color_to_intensity
-from model.neural_points import NeuralPoints
+import numpy as np
+import open3d as o3d
+import torch
+from rich import print
+from tqdm import tqdm
+
 from model.decoder import Decoder
+from model.neural_points import NeuralPoints
+from utils.config import Config
+from utils.tools import color_to_intensity, get_gradient, get_time, transform_torch
+
 
 class Tracker():
 
-    def __init__(self, config: Config, neural_points: NeuralPoints, geo_decoder: Decoder, sem_decoder: Decoder, color_decoder: Decoder):
+    def __init__(self, config: Config, 
+                neural_points: NeuralPoints, 
+                geo_decoder: Decoder, 
+                sem_decoder: Decoder, 
+                color_decoder: Decoder):
     
         self.config = config
 
@@ -263,7 +268,8 @@ class Tracker():
     def registration_step(self, points: torch.Tensor, normals: torch.Tensor, 
                           sdf_labels: torch.Tensor, colors: torch.Tensor,
                           min_grad_norm, max_grad_norm,
-                          GM_dist=None, GM_grad=None, lm_lambda = 0., vis_weight_pc = False): # if lm_lambda = 0, then it's Gaussian Newton Optimization
+                          GM_dist=None, GM_grad=None, 
+                          lm_lambda = 0., vis_weight_pc = False): # if lm_lambda = 0, then it's Gaussian Newton Optimization
 
         T0 = get_time()
         
@@ -428,7 +434,9 @@ class Tracker():
         return T, cov_mat, eigenvalues, weight_point_cloud, valid_points, sdf_residual_mean_cm, color_residual_mean
 
 # function adapted from LocNDF by Louis Wiesmann
-def implicit_reg(points, sdf_grad, sdf_residual, weight, lm_lambda = 0.0, require_cov=False, require_eigen=False):
+def implicit_reg(points, sdf_grad, sdf_residual, 
+                weight, lm_lambda = 0.0, 
+                require_cov=False, require_eigen=False):
     """
     One step point-to-implicit model registration using LM optimization.
 
@@ -495,7 +503,8 @@ def implicit_reg(points, sdf_grad, sdf_residual, weight, lm_lambda = 0.0, requir
     return T_mat, cov_mat, eigenvalues
 
 # functions
-def implicit_color_reg(points, sdf_grad, sdf_residual, colors, color_grad, color_residual, weight, w_photo_loss = 0.1, lm_lambda = 0.):
+def implicit_color_reg(points, sdf_grad, sdf_residual, colors, color_grad, 
+                       color_residual, weight, w_photo_loss = 0.1, lm_lambda = 0.0):
     
     geo_cross = torch.cross(points, sdf_grad)
     J_geo = torch.cat([geo_cross, sdf_grad], -1)  # first rotation, then translation

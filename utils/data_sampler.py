@@ -15,14 +15,16 @@ class DataSampler():
         self.config = config
         self.dev = config.device
 
-
-    # input and output are all torch tensors
     def sample(self, points_torch, 
                normal_torch,
                sem_label_torch,
                color_torch):
-        # points_torch is in the sensor's local coordinate system, not yet transformed to the global system
-
+        """
+            Sample training sample points for current scan, get the labels for online training
+            input and output are all torch tensors
+            points_torch is in the sensor's local coordinate system, not yet transformed to the global system
+        """
+        
         # T0 = get_time()
 
         dev = self.dev
@@ -168,33 +170,3 @@ class DataSampler():
         # all super fast, all together in 0.5 ms
 
         return all_sample_points, sdf_label_tensor, normal_label_tensor, sem_label_tensor, color_tensor, weight_tensor
-
-    
-    def sample_source_pc(self, points):
-
-        dev = self.dev
-        sample_count_per_point = 0 
-        sampel_max_range = 0.2
-
-        if sample_count_per_point == 0: # use only the original points
-            return points, torch.zeros(points.shape[0], device=dev)
-        
-        unground_points = points[points[:,2]> -1.5]
-        point_num = unground_points.shape[0]
-
-        repeated_points = unground_points.repeat(sample_count_per_point,1)
-
-        surface_sample_displacement = (torch.rand(point_num*sample_count_per_point, 1, device=dev)-0.5)*2*sampel_max_range 
-        
-        distances = torch.linalg.norm(unground_points, dim=1, keepdim=True) # ray distances 
-
-        repeated_dist = distances.repeat(sample_count_per_point,1)
-        sample_dist_ratio = surface_sample_displacement/repeated_dist + 1.0 # 1.0 means on the surface
-
-        sample_points = repeated_points*sample_dist_ratio
-        sample_labels = -surface_sample_displacement.squeeze(-1)
-
-        sample_points = torch.cat((points, sample_points), 0)
-        sample_labels = torch.cat((torch.zeros(points.shape[0], device=dev), sample_labels), 0)
-
-        return sample_points, sample_labels

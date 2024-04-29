@@ -5,9 +5,10 @@
 
 # Adapted from Nacho's awesome lidar visualizer (https://github.com/PRBonn/lidar-visualizer)
 
-from functools import partial
 import os
+from functools import partial
 from typing import Callable, List
+
 import numpy as np
 import open3d as o3d
 

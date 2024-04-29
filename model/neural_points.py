@@ -3,17 +3,27 @@
 # @author    Yue Pan     [yue.pan@igg.uni-bonn.de]
 # Copyright (c) 2024 Yue Pan, all rights reserved
 
+import sys
+
+import matplotlib.cm as cm
+import numpy as np
+import open3d as o3d
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import sys
-import open3d as o3d
 from rich import print
-import numpy as np
-import matplotlib.cm as cm
 
 from utils.config import Config
-from utils.tools import voxel_down_sample_torch, voxel_down_sample_min_value_torch, apply_quaternion_rotation, transform_batch_torch, rotmat_to_quat, quat_multiply, get_time
+from utils.tools import (
+    apply_quaternion_rotation,
+    get_time,
+    quat_multiply,
+    rotmat_to_quat,
+    transform_batch_torch,
+    voxel_down_sample_min_value_torch,
+    voxel_down_sample_torch,
+)
+
 
 class NeuralPoints(nn.Module):
 
@@ -482,13 +492,13 @@ class NeuralPoints(nn.Module):
         return False
             
     def adjust_map(self, pose_diff_torch):
-        # for each neural point, use it ts to find the diff between old and new pose, transform the position and rotate the orientation
+        # for each neural point, use its ts to find the diff between old and new pose, transform the position and rotate the orientation
         # we use the mid_ts for each neural point
 
         self.after_pgo = True
 
         if self.config.use_mid_ts:
-            used_ts = (self.point_ts_create + self.point_ts_update) / 2 # still as dtype long
+            used_ts = ((self.point_ts_create + self.point_ts_update) / 2).long() # still as dtype long
         else:
             used_ts = self.point_ts_create 
         
@@ -496,7 +506,7 @@ class NeuralPoints(nn.Module):
         
         diff_quat_torch = rotmat_to_quat(pose_diff_torch[:,:3,:3]) # rotation part
         
-        self.point_orientations = quat_multiply(diff_quat_torch[used_ts], self.point_orientations) # no problem here
+        self.point_orientations = quat_multiply(diff_quat_torch[used_ts], self.point_orientations).to(self.point_orientations)
 
     def recreate_hash(self, sensor_position: torch.Tensor, sensor_orientation: torch.Tensor, 
                       kept_points: bool = True, with_ts: bool = True, cur_ts = 0):
@@ -509,7 +519,7 @@ class NeuralPoints(nn.Module):
         # also update the timestep of neural points during merging
         if with_ts:
             if self.config.use_mid_ts:
-                ts_used = (self.point_ts_create + self.point_ts_update) / 2 # still as dtype long
+                ts_used = ((self.point_ts_create + self.point_ts_update) / 2).long() # still as dtype long
             else:
                 ts_used = self.point_ts_create
             ts_diff = torch.abs(ts_used - cur_ts).float()
@@ -678,8 +688,10 @@ class NeuralPoints(nn.Module):
     # def feature_tsne(self):
     #     tsne = TSNE(n_components=3, perplexity=30, n_iter=300)
     #     tsne_result = tsne.fit_transform(self.geo_features[:-1].cpu().detach().numpy())
-    
-# Borrow from Louis's LocNDF # but the positional encoding is actually not used
+
+# the positional encoding is actually not used
+# Borrow from Louis's LocNDF 
+# https://github.com/PRBonn/LocNDF
 class PositionalEncoder(nn.Module):
     # out_dim = in_dimnesionality * (2 * bands + 1)
     def __init__(self, config: Config):
@@ -719,6 +731,7 @@ class PositionalEncoder(nn.Module):
         return self.out_dim
 
 # Borrow from Louis's Loc_NDF
+# https://github.com/PRBonn/LocNDF
 class GaussianFourierFeatures(nn.Module):
     def __init__(self, config: Config) -> None:
         super().__init__()

@@ -3,18 +3,20 @@
 # @author    Yue Pan     [yue.pan@igg.uni-bonn.de]
 # Copyright (c) 2024 Yue Pan, all rights reserved
 
+import math
+
+import matplotlib.cm as cm
 import numpy as np
-from tqdm import tqdm
+import open3d as o3d
 import skimage.measure
 import torch
-import math
-import open3d as o3d
-import matplotlib.cm as cm
+from tqdm import tqdm
 
-from utils.config import Config
-from utils.semantic_kitti_utils import *
-from model.neural_points import NeuralPoints
 from model.decoder import Decoder
+from model.neural_points import NeuralPoints
+from utils.config import Config
+from utils.semantic_kitti_utils import sem_kitti_color_map
+
 
 class Mesher():
 
@@ -36,8 +38,14 @@ class Mesher():
 
         self.global_transform = np.eye(4)
     
-    def query_points(self, coord, bs, query_sdf = True, query_sem = False, query_color = False, query_mask = True, 
-                     query_locally = False, mask_min_nn_count: int = 4, out_torch: bool = False):
+    def query_points(self, coord, bs, 
+                     query_sdf = True, 
+                     query_sem = False, 
+                     query_color = False, 
+                     query_mask = True, 
+                     query_locally = False, 
+                     mask_min_nn_count: int = 4, 
+                     out_torch: bool = False):
         """ query the sdf value, semantic label and marching cubes mask for points
         Args:
             coord: Nx3 torch tensor, the coordinates of all N (axbxc) query points in the scaled

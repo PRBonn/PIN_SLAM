@@ -3,26 +3,40 @@
 # @author    Yue Pan     [yue.pan@igg.uni-bonn.de]
 # Copyright (c) 2024 Yue Pan, all rights reserved
 
+import os
 import sys
+
 import numpy as np
-import wandb
+import open3d as o3d
 import torch
+import wandb
 from rich import print
 from tqdm import tqdm
 
-from utils.config import Config
-from utils.tools import *
-from utils.loss import *
-from utils.pgo import PoseGraphManager
-from utils.loop_detector import NeuralPointMapContextManager, GTLoopManager, detect_local_loop
-from utils.mesher import Mesher
-from utils.tracker import Tracker
-from utils.mapper import Mapper
-from utils.visualizer import MapVisualizer
-from model.neural_points import NeuralPoints
-from model.decoder import Decoder
-from dataset.slam_dataset import SLAMDataset
 from dataset.dataset_indexing import set_dataset_path
+from dataset.slam_dataset import SLAMDataset
+from model.decoder import Decoder
+from model.neural_points import NeuralPoints
+from utils.config import Config
+from utils.loop_detector import (
+    GTLoopManager,
+    NeuralPointMapContextManager,
+    detect_local_loop,
+)
+from utils.mapper import Mapper
+from utils.mesher import Mesher
+from utils.pgo import PoseGraphManager
+from utils.tools import (
+    freeze_decoders,
+    get_time,
+    load_decoder,
+    save_implicit_map,
+    setup_experiment,
+    split_chunks,
+    transform_torch,
+)
+from utils.tracker import Tracker
+from utils.visualizer import MapVisualizer
 
 '''
     📍PIN-SLAM: LiDAR SLAM Using a Point-Based Implicit Neural Representation for Achieving Global Map Consistency
@@ -253,7 +267,8 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
 
         # for the first frame, we need more iterations to do the initialization (warm-up)
         cur_iter_num = config.iters * config.init_iter_ratio if used_frame_id == 0 else config.iters
-        if config.adaptive_iters and dataset.stop_status:
+        # if config.adaptive_iters and dataset.stop_status:
+        if dataset.stop_status:
             cur_iter_num = max(1, cur_iter_num-10)
         if used_frame_id == config.freeze_after_frame: # freeze the decoder after certain frame 
             freeze_decoders(geo_mlp, sem_mlp, color_mlp, config)

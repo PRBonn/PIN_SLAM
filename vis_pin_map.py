@@ -3,20 +3,20 @@
 # @author    Yue Pan     [yue.pan@igg.uni-bonn.de]
 # Copyright (c) 2024 Yue Pan, all rights reserved
 
+import glob
+import os
 import sys
-import numpy as np
+
+import open3d as o3d
 import torch
 from rich import print
-import glob
 
-from utils.config import Config
-from utils.tools import *
-from utils.loss import *
-from utils.mesher import Mesher
-from utils.visualizer import MapVisualizer
-from model.neural_points import NeuralPoints
 from model.decoder import Decoder
-
+from model.neural_points import NeuralPoints
+from utils.config import Config
+from utils.mesher import Mesher
+from utils.tools import setup_experiment, split_chunks
+from utils.visualizer import MapVisualizer
 
 '''
     load the pin-map and do the reconstruction 

@@ -3,14 +3,15 @@
 # @author    Yue Pan     [yue.pan@igg.uni-bonn.de]
 # Copyright (c) 2024 Yue Pan, all rights reserved
 
-import numpy as np
-from numpy.linalg import inv
 import gtsam
 import matplotlib.pyplot as plt
+import numpy as np
+from numpy.linalg import inv
 from rich import print
 
 from utils.config import Config
-    
+
+
 class PoseGraphManager:
     def __init__(self, config: Config):
 
@@ -276,7 +277,7 @@ class PoseGraphManager:
         ax.set_axis_off()
         # turn of the gray background
         ax.xaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
-        ax.set_box_aspect([1, 1, 1])
+        # ax.set_box_aspect([1, 1, 1])
 
         plt.tight_layout()
 

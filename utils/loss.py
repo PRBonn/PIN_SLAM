@@ -6,6 +6,7 @@
 import torch
 import torch.nn as nn
 
+
 def sdf_diff_loss(pred, label, weight, scale=1.0, l2_loss=True):
     count = pred.shape[0]
     diff = pred - label

@@ -3,24 +3,31 @@
 # @author    Yue Pan     [yue.pan@igg.uni-bonn.de]
 # Copyright (c) 2024 Yue Pan, all rights reserved
 
-import numpy as np
-from tqdm import tqdm
-import torch
-import torch.nn.functional as F
 import math
-import open3d as o3d
-import matplotlib.cm as cm
-import wandb
-from rich import print
 import sys
 
-from utils.config import Config
+import matplotlib.cm as cm
+import numpy as np
+import open3d as o3d
+import torch
+import torch.nn.functional as F
+import wandb
+from rich import print
+from tqdm import tqdm
+
 from dataset.slam_dataset import SLAMDataset
-from utils.data_sampler import DataSampler
-from utils.tools import setup_optimizer, get_time, get_gradient, transform_torch, transform_batch_torch
-from utils.loss import *
-from model.neural_points import NeuralPoints
 from model.decoder import Decoder
+from model.neural_points import NeuralPoints
+from utils.config import Config
+from utils.data_sampler import DataSampler
+from utils.loss import color_diff_loss, sdf_bce_loss, sdf_diff_loss, sdf_zhong_loss
+from utils.tools import (
+    get_gradient,
+    get_time,
+    setup_optimizer,
+    transform_batch_torch,
+    transform_torch,
+)
 
 
 class Mapper():
@@ -53,7 +60,7 @@ class Mapper():
 
         self.new_idx = None
         self.ba_done_flag = False
-        self.train_less = False
+        self.adaptive_iter_offset = 0
 
         # data pool
         self.coord_pool = torch.empty((0, 3), device=self.device, dtype=self.dtype) # coordinate in each frame's coordinate frame
@@ -291,15 +298,22 @@ class Mapper():
             self.new_idx += (self.pool_sample_count - self.cur_sample_count) # new idx in the data pool
 
             new_sample_count = self.new_idx.shape[0]
-            # for fast adaptive operation
-            if self.config.adaptive_iters and new_sample_count / self.cur_sample_count < self.config.new_sample_ratio_thre:
-                self.train_less = True
-            else:
-                self.train_less = False
-
             if not self.silence:
                 print("# New sample          : ", new_sample_count)
-
+            
+            # for determine adaptive mapping iteration
+            self.adaptive_iter_offset = 0
+            new_obs_ratio = new_sample_count / self.cur_sample_count 
+            if self.config.adaptive_iters:
+                if new_obs_ratio < self.config.new_sample_ratio_less:
+                    # print('Train less:', new_obs_ratio)
+                    self.adaptive_iter_offset = -5
+                elif new_obs_ratio > self.config.new_sample_ratio_more:
+                    # print('Train more:', new_obs_ratio)
+                    self.adaptive_iter_offset = 5
+                    if frame_id > self.config.freeze_after_frame and new_obs_ratio > self.config.new_sample_ratio_restart:
+                        self.adaptive_iter_offset = 10
+                
         T3_3 = get_time()
 
         T4 = get_time()
@@ -416,8 +430,7 @@ class Mapper():
     # the main training function
     def mapping(self, iter_count): 
 
-        if self.train_less:
-            iter_count = max(1, iter_count-5)
+        iter_count = max(1, iter_count + self.adaptive_iter_offset)
 
         neural_point_feat = list(self.neural_points.parameters())
         geo_mlp_param = list(self.geo_mlp.parameters())
@@ -541,7 +554,7 @@ class Mapper():
             # optional semantic loss
             sem_loss = 0.
             if self.config.semantic_on and self.config.weight_s > 0:
-                loss_nll = nn.NLLLoss(reduction='mean')
+                loss_nll = torch.nn.NLLLoss(reduction='mean')
                 if self.config.freespace_label_on:
                     label_mask = sem_label >= 0 # only use the points with labels (-1, unlabled would not be used)
                 else:
@@ -622,8 +635,8 @@ class Mapper():
 
             sdf_pred = self.sdf(coord)[0]
 
-            if not self.config.loss_weight_on:
-                weight = 1.0
+            # if not self.config.loss_weight_on:
+            weight = 1.0
 
             # calculate the weighted l2 loss            
             # cur_loss = (weight * (sdf_pred**2)).mean()

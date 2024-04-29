@@ -3,15 +3,17 @@
 # @author    Yue Pan     [yue.pan@igg.uni-bonn.de]
 # Copyright (c) 2024 Yue Pan, all rights reserved
 
+import math
+
 import numpy as np
 import torch
 import torch.nn.functional as F
-import math
 from rich import print
 
 from utils.config import Config
 from utils.mapper import Mapper
 from utils.tools import get_time, transform_torch
+
 
 class NeuralPointMapContextManager:
     def __init__(self, config: Config, mapper: Mapper):
@@ -48,7 +50,7 @@ class NeuralPointMapContextManager:
         self.curr_node_idx = 0 
 
         # needs to cover 10 m
-        self.virtual_step_m = config.voxel_size_m * 4.0 # * 5.0
+        self.virtual_step_m = config.context_virtual_step_m
         self.virtual_side_count = config.context_virtual_side_count # 5
         self.virtual_sdf_thre = 0.0
        
