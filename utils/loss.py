@@ -10,25 +10,28 @@ import torch.nn as nn
 def sdf_diff_loss(pred, label, weight, scale=1.0, l2_loss=True):
     count = pred.shape[0]
     diff = pred - label
-    diff_m = diff / scale # so it's still in m unit
+    diff_m = diff / scale  # so it's still in m unit
     if l2_loss:
         loss = (weight * (diff_m**2)).sum() / count  # l2 loss
     else:
         loss = (weight * torch.abs(diff_m)).sum() / count  # l1 loss
     return loss
 
+
 def sdf_l1_loss(pred, label):
-    loss = torch.abs(pred-label)
+    loss = torch.abs(pred - label)
     return loss.mean()
 
+
 def sdf_l2_loss(pred, label):
-    loss = (pred-label)**2
+    loss = (pred - label) ** 2
     return loss.mean()
+
 
 def color_diff_loss(pred, label, weight, weighted=False, l2_loss=False):
     diff = pred - label
     if not weighted:
-        weight = 1.
+        weight = 1.0
     else:
         weight = weight.unsqueeze(1)
     if l2_loss:
@@ -37,8 +40,9 @@ def color_diff_loss(pred, label, weight, weighted=False, l2_loss=False):
         loss = (weight * torch.abs(diff)).mean()
     return loss
 
+
 # used by our approach
-def sdf_bce_loss(pred, label, sigma, weight, weighted=False, bce_reduction = "mean"):
+def sdf_bce_loss(pred, label, sigma, weight, weighted=False, bce_reduction="mean"):
     if weighted:
         loss_bce = nn.BCEWithLogitsLoss(reduction=bce_reduction, weight=weight)
     else:
@@ -47,39 +51,44 @@ def sdf_bce_loss(pred, label, sigma, weight, weighted=False, bce_reduction = "me
     loss = loss_bce(pred / sigma, label_op)
     return loss
 
+
 # the loss divised by Starry Zhong
-def sdf_zhong_loss(pred, label, trunc_dist=None, weight=None, weighted = False):
+def sdf_zhong_loss(pred, label, trunc_dist=None, weight=None, weighted=False):
     if not weighted:
-        weight = 1.
+        weight = 1.0
     else:
         weight = weight
-    loss = torch.zeros_like(label, dtype = label.dtype, device = label.device)
-    middle_point = label/2.0
+    loss = torch.zeros_like(label, dtype=label.dtype, device=label.device)
+    middle_point = label / 2.0
     middle_point_abs = torch.abs(middle_point)
-    shift_difference_abs = torch.abs(pred-middle_point)
+    shift_difference_abs = torch.abs(pred - middle_point)
     mask = shift_difference_abs > middle_point_abs
-    loss[mask] = (shift_difference_abs - middle_point_abs)[mask] # not masked region simply has a loss of zero, masked region L1 loss
+    loss[mask] = (shift_difference_abs - middle_point_abs)[
+        mask
+    ]  # not masked region simply has a loss of zero, masked region L1 loss
     if trunc_dist is not None:
-        surface_mask = (torch.abs(label) < trunc_dist)
-        loss[surface_mask] = torch.abs(pred-label)[surface_mask]
+        surface_mask = torch.abs(label) < trunc_dist
+        loss[surface_mask] = torch.abs(pred - label)[surface_mask]
     loss *= weight
     return loss.mean()
 
+
 # not used
-def smooth_sdf_loss(pred, label, delta = 20., weight=None, weighted = False):
+def smooth_sdf_loss(pred, label, delta=20.0, weight=None, weighted=False):
     if not weighted:
-        weight = 1.
+        weight = 1.0
     else:
         weight = weight
-    sign_factors = torch.ones_like(label, dtype = label.dtype, device = label.device)
-    sign_factors[label<0.0] = -1.0
-    sign_loss = -sign_factors*delta*pred/2.
-    no_loss = torch.zeros_like(pred, dtype = pred.dtype, device = pred.device)
-    truncated_loss = sign_factors*delta*(pred/2.-label)
-    losses = torch.stack((sign_loss, no_loss, truncated_loss),dim=0)
+    sign_factors = torch.ones_like(label, dtype=label.dtype, device=label.device)
+    sign_factors[label < 0.0] = -1.0
+    sign_loss = -sign_factors * delta * pred / 2.0
+    no_loss = torch.zeros_like(pred, dtype=pred.dtype, device=pred.device)
+    truncated_loss = sign_factors * delta * (pred / 2.0 - label)
+    losses = torch.stack((sign_loss, no_loss, truncated_loss), dim=0)
     final_loss = torch.logsumexp(losses, dim=0)
-    final_loss = ((2.0/delta)*final_loss*weight).mean()
+    final_loss = ((2.0 / delta) * final_loss * weight).mean()
     return final_loss
+
 
 def ray_estimation_loss(x, y, d_meas):  # for each ray
     # x as depth
@@ -132,7 +141,7 @@ def batch_ray_rendering_loss(x, y, d_meas, neus_on=True):  # for all rays in a b
     sort_y = torch.gather(y, 1, indices)  # for each row
 
     if neus_on:
-        neus_alpha = (sort_y[:, 1:] - sort_y[:, 0:-1]) / ( 1. - sort_y[:, 0:-1] + 1e-10)
+        neus_alpha = (sort_y[:, 1:] - sort_y[:, 0:-1]) / (1.0 - sort_y[:, 0:-1] + 1e-10)
         # avoid dividing by 0 (nan)
         # print(neus_alpha)
         alpha = torch.clamp(neus_alpha, min=0.0, max=1.0)

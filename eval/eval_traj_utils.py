@@ -3,36 +3,40 @@
 # @author    Yue Pan     [yue.pan@igg.uni-bonn.de]
 # Copyright (c) 2024 Yue Pan, all rights reserved
 
-from typing import List, Tuple, Dict
-
-import numpy as np
-import matplotlib.pyplot as plt
 from collections import defaultdict
-# from kiss_icp.pybind import kiss_icp_pybind
+from typing import Dict, List, Tuple
+
+import matplotlib.pyplot as plt
+import numpy as np
+
 
 # our implmentation
-def absolute_error(gt_poses: List[np.ndarray], results_poses: List[np.ndarray], align_on: bool = True):   
-      
+def absolute_error(
+    gt_poses: List[np.ndarray], results_poses: List[np.ndarray], align_on: bool = True
+):
+
     align_mat = np.eye(4)
     if align_on:
         align_rot, align_tran, _ = align_traj(results_poses, gt_poses)
-        align_mat[:3,:3] = align_rot
+        align_mat[:3, :3] = align_rot
         align_mat[:3, 3] = np.squeeze(align_tran)
 
     frame_count = len(gt_poses)
-    
+
     rot_errors = []
     tran_errors = []
-    
+
     for i in range(frame_count):
         cur_results_pose_aligned = align_mat @ results_poses[i]
         cur_gt_pose = gt_poses[i]
-        delta_rot = np.linalg.inv(cur_gt_pose[:3,:3]) @ cur_results_pose_aligned[:3,:3] # rotation part, BUG FIXED
-        delta_tran = cur_gt_pose[:3,3] - cur_results_pose_aligned[:3,3]
+        delta_rot = (
+            np.linalg.inv(cur_gt_pose[:3, :3]) @ cur_results_pose_aligned[:3, :3]
+        )  # rotation part, BUG FIXED
+        delta_tran = cur_gt_pose[:3, 3] - cur_results_pose_aligned[:3, 3]
 
         # the one used for kiss-icp
-        # delta_tran = cur_gt_pose[:3,3] - delta_rot @ cur_results_pose_aligned[:3,3] 
-        
+        # delta_tran = cur_gt_pose[:3,3] - delta_rot @ cur_results_pose_aligned[:3,3]
+
         delta_rot_theta = rotation_error(delta_rot)
         delta_t = np.linalg.norm(delta_tran)
 
@@ -42,7 +46,9 @@ def absolute_error(gt_poses: List[np.ndarray], results_poses: List[np.ndarray], 
     rot_errors = np.array(rot_errors)
     tran_errors = np.array(tran_errors)
 
-    rot_rmse = np.sqrt(np.dot(rot_errors, rot_errors) / frame_count) * 180.0 / np.pi # this seems to have some problem
+    rot_rmse = (
+        np.sqrt(np.dot(rot_errors, rot_errors) / frame_count) * 180.0 / np.pi
+    )  # this seems to have some problem
     tran_rmse = np.sqrt(np.dot(tran_errors, tran_errors) / frame_count)
 
     rot_mean = np.mean(rot_errors)
@@ -50,19 +56,20 @@ def absolute_error(gt_poses: List[np.ndarray], results_poses: List[np.ndarray], 
 
     rot_median = np.median(rot_errors)
     tran_median = np.median(tran_errors)
-        
+
     rot_std = np.std(rot_errors)
     tran_std = np.std(tran_errors)
 
     return rot_rmse, tran_rmse, align_mat
-        
+
 
 def align_traj(poses_1, poses_2):
-    
+
     traj_1 = np.vstack([arr[:3, 3] for arr in poses_1]).T
     traj_2 = np.vstack([arr[:3, 3] for arr in poses_2]).T
 
     return align(traj_1, traj_2)
+
 
 def align(model, data):
     """Align two trajectories using the method of Horn (closed-form).
@@ -83,23 +90,24 @@ def align(model, data):
 
     W = np.zeros((3, 3))
     for column in range(model.shape[1]):
-        W += np.outer(model_zerocentered[:,
-                         column], data_zerocentered[:, column])
+        W += np.outer(model_zerocentered[:, column], data_zerocentered[:, column])
     U, d, Vh = np.linalg.linalg.svd(W.transpose())
     S = np.matrix(np.identity(3))
-    if(np.linalg.det(U) * np.linalg.det(Vh) < 0):
+    if np.linalg.det(U) * np.linalg.det(Vh) < 0:
         S[2, 2] = -1
-    rot = U*S*Vh
+    rot = U * S * Vh
     trans = data.mean(1, keepdims=True) - rot * model.mean(1, keepdims=True)
 
     model_aligned = rot * model + trans
 
     alignment_error = model_aligned - data
 
-    trans_error = np.sqrt(np.sum(np.multiply(
-        alignment_error, alignment_error), 0)).A[0] # as RMSE
+    trans_error = np.sqrt(np.sum(np.multiply(alignment_error, alignment_error), 0)).A[
+        0
+    ]  # as RMSE
 
     return rot, trans, trans_error
+
 
 def relative_error(poses_gt, poses_result):
     """calculate sequence error (kitti metric, relative drifting error)
@@ -118,26 +126,26 @@ def relative_error(poses_gt, poses_result):
     dist = trajectory_distances(poses_gt)
     step_size = 10
 
-    lengths = [100, 200, 300, 400, 500, 600, 700, 800] # unit: m
+    lengths = [100, 200, 300, 400, 500, 600, 700, 800]  # unit: m
     num_lengths = len(lengths)
 
     for first_frame in range(0, len(poses_gt), step_size):
         for i in range(num_lengths):
             len_ = lengths[i]
-            last_frame = last_frame_from_segment_length(
-                dist, first_frame, len_
-            )
+            last_frame = last_frame_from_segment_length(dist, first_frame, len_)
 
             # Continue if sequence not long enough
             if last_frame == -1:
                 continue
 
             # compute rotational and translational errors
-        
-            pose_delta_gt = np.linalg.inv(poses_gt[first_frame]) @ poses_gt[last_frame]
-            pose_delta_result = np.linalg.inv(poses_result[first_frame]) @ poses_result[last_frame] 
 
-            pose_error = np.linalg.inv(pose_delta_result) @ pose_delta_gt 
+            pose_delta_gt = np.linalg.inv(poses_gt[first_frame]) @ poses_gt[last_frame]
+            pose_delta_result = (
+                np.linalg.inv(poses_result[first_frame]) @ poses_result[last_frame]
+            )
+
+            pose_error = np.linalg.inv(pose_delta_result) @ pose_delta_gt
 
             r_err = rotation_error(pose_error)
             # print(r_err)
@@ -152,19 +160,20 @@ def relative_error(poses_gt, poses_result):
     t_err = 0
     r_err = 0
 
-    if len(err) == 0: # the case when the trajectory is not long enough
-        return 0, 0 
-    
+    if len(err) == 0:  # the case when the trajectory is not long enough
+        return 0, 0
+
     for i in range(len(err)):
         r_err += err[i][1]
         t_err += err[i][2]
-    
+
     r_err /= len(err)
     t_err /= len(err)
-    drift_ate = t_err*100.
-    drift_are = r_err/np.pi*180.
+    drift_ate = t_err * 100.0
+    drift_are = r_err / np.pi * 180.0
 
     return drift_ate, drift_are
+
 
 def trajectory_distances(poses):
     """Compute distance for each pose w.r.t frame-0
@@ -175,16 +184,17 @@ def trajectory_distances(poses):
     """
     dist = [0]
 
-    for i in range(len(poses)-1):
+    for i in range(len(poses) - 1):
         cur_frame_idx = i
-        next_frame_idx = i+1
+        next_frame_idx = i + 1
         P1 = poses[cur_frame_idx]
         P2 = poses[next_frame_idx]
         dx = P1[0, 3] - P2[0, 3]
         dy = P1[1, 3] - P2[1, 3]
         dz = P1[2, 3] - P2[2, 3]
-        dist.append(dist[i] + np.sqrt(dx ** 2 + dy ** 2 + dz ** 2))
+        dist.append(dist[i] + np.sqrt(dx**2 + dy**2 + dz**2))
     return dist
+
 
 def rotation_error(pose_error):
     """Compute rotation error
@@ -200,8 +210,9 @@ def rotation_error(pose_error):
     # 0.5 * (trace - 1)
     d = 0.5 * (a + b + c - 1.0)
     # make sure the rot_mat is valid (trace < 3, det = 1)
-    rot_error = np.arccos(max(min(d, 1.0), -1.0)) # in rad
+    rot_error = np.arccos(max(min(d, 1.0), -1.0))  # in rad
     return rot_error
+
 
 def translation_error(pose_error):
     """Compute translation error
@@ -213,8 +224,9 @@ def translation_error(pose_error):
     dx = pose_error[0, 3]
     dy = pose_error[1, 3]
     dz = pose_error[2, 3]
-    trans_error = np.sqrt(dx ** 2 + dy ** 2 + dz ** 2)
+    trans_error = np.sqrt(dx**2 + dy**2 + dz**2)
     return trans_error
+
 
 def last_frame_from_segment_length(dist, first_frame, length):
     """Find frame (index) that away from the first_frame with
@@ -231,19 +243,28 @@ def last_frame_from_segment_length(dist, first_frame, length):
             return i
     return -1
 
-def plot_trajectories(traj_plot_path: str, poses_est, poses_ref, poses_est_2 = None, 
-                      plot_3d: bool = True, grid_on: bool = True, plot_start_end_markers: bool = True,
-                      vis_now: bool = False, close_all: bool = True) -> None:
-    
+
+def plot_trajectories(
+    traj_plot_path: str,
+    poses_est,
+    poses_ref,
+    poses_est_2=None,
+    plot_3d: bool = True,
+    grid_on: bool = True,
+    plot_start_end_markers: bool = True,
+    vis_now: bool = False,
+    close_all: bool = True,
+) -> None:
+
     from evo.core.trajectory import PosePath3D
     from evo.tools import plot as evoplot
     from evo.tools.settings import SETTINGS
 
     # without alignment
-    
+
     if close_all:
         plt.close("all")
-   
+
     poses = PosePath3D(poses_se3=poses_est)
     gt_poses = PosePath3D(poses_se3=poses_ref)
     if poses_est_2 is not None:
@@ -264,7 +285,7 @@ def plot_trajectories(traj_plot_path: str, poses_est, poses_ref, poses_est_2 = N
         style=SETTINGS.plot_reference_linestyle,
         color=SETTINGS.plot_reference_color,
         alpha=SETTINGS.plot_reference_alpha,
-        plot_start_end_markers=False
+        plot_start_end_markers=False,
     )
     evoplot.traj(
         ax=ax,
@@ -274,9 +295,9 @@ def plot_trajectories(traj_plot_path: str, poses_est, poses_ref, poses_est_2 = N
         style=SETTINGS.plot_trajectory_linestyle,
         color="#4c72b0bf",
         alpha=SETTINGS.plot_trajectory_alpha,
-        plot_start_end_markers=plot_start_end_markers
+        plot_start_end_markers=plot_start_end_markers,
     )
-    if poses_est_2 is not None: # better to change color (or the alpha)
+    if poses_est_2 is not None:  # better to change color (or the alpha)
         evoplot.traj(
             ax=ax,
             plot_mode=plot_mode,
@@ -284,23 +305,24 @@ def plot_trajectories(traj_plot_path: str, poses_est, poses_ref, poses_est_2 = N
             label="PIN-Odom",
             style=SETTINGS.plot_trajectory_linestyle,
             color="#FF940E",
-            alpha=SETTINGS.plot_trajectory_alpha/2.,
-            plot_start_end_markers=False
+            alpha=SETTINGS.plot_trajectory_alpha / 2.0,
+            plot_start_end_markers=False,
         )
 
     plt.tight_layout()
     ax.legend(frameon=grid_on)
-    
+
     if traj_plot_path is not None:
         plt.savefig(traj_plot_path, dpi=600)
-    
+
     if vis_now:
         plt.show()
 
+
 def read_kitti_format_calib(filename: str):
-    """ 
-        read calibration file (with the kitti format)
-        returns -> dict calibration matrices as 4*4 numpy arrays
+    """
+    read calibration file (with the kitti format)
+    returns -> dict calibration matrices as 4*4 numpy arrays
     """
     calib = {}
     calib_file = open(filename)
@@ -320,10 +342,11 @@ def read_kitti_format_calib(filename: str):
     calib_file.close()
     return calib
 
+
 def read_kitti_format_poses(filename: str) -> List[np.ndarray]:
-    """ 
-        read pose file (with the kitti format)
-        returns -> list, transformation before calibration transformation
+    """
+    read pose file (with the kitti format)
+    returns -> list, transformation before calibration transformation
     """
     pose_file = open(filename)
 
@@ -340,15 +363,17 @@ def read_kitti_format_poses(filename: str) -> List[np.ndarray]:
         poses.append(pose)
 
     pose_file.close()
-    return poses   
+    return poses
+
 
 # copyright: Nacho et al. KISS-ICP
 def apply_kitti_format_calib(poses: List[np.ndarray], calib_T_cl) -> List[np.ndarray]:
-    """Converts from Velodyne to Camera Frame (# T_camera<-lidar)""" 
+    """Converts from Velodyne to Camera Frame (# T_camera<-lidar)"""
     poses_calib = []
     for pose in poses:
         poses_calib.append(calib_T_cl @ pose @ np.linalg.inv(calib_T_cl))
-    return poses_calib 
+    return poses_calib
+
 
 # copyright: Nacho et al. KISS-ICP
 def write_kitti_format_poses(filename: str, poses: List[np.ndarray]):
@@ -357,13 +382,19 @@ def write_kitti_format_poses(filename: str, poses: List[np.ndarray]):
 
     np.savetxt(fname=f"{filename}_kitti.txt", X=_to_kitti_format(poses))
 
+
 # for LiDAR dataset
 def get_metrics(seq_result: List[Dict]):
-    odom_ate = (seq_result[0])['Average Translation Error [%]']
-    odom_are = (seq_result[0])['Average Rotational Error [deg/m]'] * 100.0
-    slam_rmse = (seq_result[1])['Absoulte Trajectory Error [m]']
-    metrics_dict = {'Odometry ATE [%]': odom_ate, 'Odometry ARE [deg/100m]': odom_are, 'SLAM RMSE [m]': slam_rmse}
+    odom_ate = (seq_result[0])["Average Translation Error [%]"]
+    odom_are = (seq_result[0])["Average Rotational Error [deg/m]"] * 100.0
+    slam_rmse = (seq_result[1])["Absoulte Trajectory Error [m]"]
+    metrics_dict = {
+        "Odometry ATE [%]": odom_ate,
+        "Odometry ARE [deg/100m]": odom_are,
+        "SLAM RMSE [m]": slam_rmse,
+    }
     return metrics_dict
+
 
 def mean_metrics(seq_metrics: List[Dict]):
     sums = defaultdict(float)
@@ -376,17 +407,3 @@ def mean_metrics(seq_metrics: List[Dict]):
 
     mean_metrics = {key: sums[key] / counts[key] for key in sums}
     return mean_metrics
-    
-# metrics used by kiss-icp
-# def sequence_error(
-#     gt_poses: List[np.ndarray], results_poses: List[np.ndarray]
-# ) -> Tuple[float, float]:
-#     """Sptis the sequence error for a given trajectory in camera coordinate frames."""
-#     ate_drift, are_drift = kiss_icp_pybind._kitti_seq_error(gt_poses, results_poses)
-#     return ate_drift, are_drift / 100.0
-
-# def absolute_trajectory_error(
-#     gt_poses: List[np.ndarray], results_poses: List[np.ndarray]
-# ) -> Tuple[float, float]:
-#     """Sptis the sequence error for a given trajectory in camera coordinate frames."""
-#     return kiss_icp_pybind._absolute_trajectory_error(gt_poses, results_poses)

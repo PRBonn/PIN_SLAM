@@ -12,12 +12,17 @@ from utils.config import Config
 
 
 class Decoder(nn.Module):
-    def __init__(self, config: Config, 
-                 hidden_dim, hidden_level, out_dim, 
-                 is_time_conditioned = False): 
-        
+    def __init__(
+        self,
+        config: Config,
+        hidden_dim,
+        hidden_level,
+        out_dim,
+        is_time_conditioned=False,
+    ):
+
         super().__init__()
-    
+
         self.out_dim = out_dim
 
         bias_on = config.mlp_bias_on
@@ -31,10 +36,10 @@ class Decoder(nn.Module):
             position_dim = config.pos_input_dim + 2 * config.pos_encoding_band
         else:
             position_dim = config.pos_input_dim * (2 * config.pos_encoding_band + 1)
-            
+
         feature_dim = config.feature_dim
         input_layer_count = feature_dim + position_dim
-        
+
         if is_time_conditioned:
             input_layer_count += 1
 
@@ -49,10 +54,10 @@ class Decoder(nn.Module):
         self.layers = nn.ModuleList(layers)
         self.lout = nn.Linear(hidden_dim, out_dim, bias_on)
 
-        if config.main_loss_type == 'bce':
-            self.sdf_scale = config.logistic_gaussian_ratio*config.sigma_sigmoid_m
-        else: # l1, l2 or zhong loss
-            self.sdf_scale = 1.
+        if config.main_loss_type == "bce":
+            self.sdf_scale = config.logistic_gaussian_ratio * config.sigma_sigmoid_m
+        else:  # l1, l2 or zhong loss
+            self.sdf_scale = 1.0
 
         self.to(config.device)
         # torch.cuda.empty_cache()
@@ -86,8 +91,7 @@ class Decoder(nn.Module):
         # linear (hidden_dim -> 1)
 
         return out
-    
-    
+
     def time_conditionded_sdf(self, features, ts):
 
         # print(ts.shape)
@@ -113,7 +117,7 @@ class Decoder(nn.Module):
 
     # predict the occupancy probability
     def occupancy(self, features):
-        out = torch.sigmoid(self.sdf(features)/-self.sdf_scale)  # to [0, 1]
+        out = torch.sigmoid(self.sdf(features) / -self.sdf_scale)  # to [0, 1]
         return out
 
     # predict the probabilty of each semantic label
@@ -136,7 +140,7 @@ class Decoder(nn.Module):
     def sem_label(self, features):
         out = torch.argmax(self.sem_label_prob(features), dim=1)
         return out
-    
+
     def regress_color(self, features):
         for k, l in enumerate(self.layers):
             if k == 0:
@@ -150,7 +154,7 @@ class Decoder(nn.Module):
                 else:
                     h = F.relu(l(h))
 
-        out = torch.clamp(self.lout(h), 0., 1.)
+        out = torch.clamp(self.lout(h), 0.0, 1.0)
         # out = torch.sigmoid(self.lout(h))
         # print(out)
         return out

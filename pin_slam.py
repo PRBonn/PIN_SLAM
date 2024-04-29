@@ -170,17 +170,14 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
                     lcd_npmc.add_node(cur_frame, context_pc_local, neural_points_feature)
                 else: # first frame not yet have local map, use scan context
                     lcd_npmc.add_node(used_frame_id, dataset.cur_point_cloud_torch)
-            
             pgm.add_frame_node(used_frame_id, dataset.pgo_poses[-1]) # add new node and pose initial guess
             pgm.init_poses = dataset.pgo_poses
-
             if used_frame_id > 0:
                 cur_edge_cov = cur_odom_cov if config.use_reg_cov_mat else None                    
                 pgm.add_odometry_factor(used_frame_id, used_frame_id-1, dataset.last_odom_tran, cov = cur_edge_cov) # T_p<-c
                 pgm.estimate_drift(dataset.travel_dist, used_frame_id) # estimate the current drift
                 if config.pgo_with_pose_prior: # add pose prior
                     pgm.add_pose_prior(used_frame_id, dataset.pgo_poses[-1])
-            
             local_map_context_loop = False
             if used_frame_id - pgm.last_loop_idx > config.pgo_freq and not dataset.stop_status:
                 if config.use_gt_loop:
@@ -301,7 +298,6 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
         if config.o3d_vis_on: # if visualizer is off, there's no need to reconstruct the mesh
 
             o3d_vis.cur_frame_id = frame_id # frame id in the data folder
-
             dataset.static_mask = mapper.static_mask
             dataset.update_o3d_map()
             if config.track_on and used_frame_id > 0 and (not o3d_vis.vis_pc_color) and (weight_pc_o3d is not None): 
