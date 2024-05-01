@@ -110,6 +110,9 @@ class Mapper:
         )  # predict the scaled sdf with the feature # [N, K, 1]
         if not self.config.weighted_first:
             sdf_pred = torch.sum(sdf_pred * weight_knn, dim=1).squeeze(1)  # N
+
+        # print(sdf_pred[sdf_pred>2.0])
+
         if type_2_on:
             sdf_grad = get_gradient(
                 points_torch, sdf_pred

@@ -79,7 +79,7 @@ class Config:
 
         # map-based dynamic filtering (observations in certain freespace are dynamic)
         self.dynamic_filter_on: bool = False
-        self.dynamic_certainty_thre: float = 4.0
+        self.dynamic_certainty_thre: float = 2.0
         self.dynamic_sdf_ratio_thre: float = 1.5
 
         # neural points
@@ -110,7 +110,7 @@ class Config:
 
         # map management
         self.prune_map_on: bool = False
-        self.max_prune_certainty: float = 2.0 # neural point pruning threshold
+        self.max_prune_certainty: float = 3.0 # neural point pruning threshold
 
         # training sampler
         # spilt into 3 parts for sampling: close-to-surface (+ exact beam endpoint) + front-surface-freespace + behind-surface-freespace
@@ -223,6 +223,7 @@ class Config:
         self.min_loop_travel_dist_ratio: float = 4.0 # accumulated travel distance should be larger than this ratio * local map radius to be considered as an valid candidate
         self.local_map_context_latency: int = 5 # only used for local map context, wait for local_map_context_latency before descriptor generation for enough training of the new observations
         self.loop_local_map_time_window: int = 100 # unit: frame
+        self.local_loop_dist_thre: float = 2.0 # unit: m, find local loop within this distance
         self.context_shape = [20, 60] # ring, sector count for the descriptor
         self.npmc_max_dist: float = 60.0  # max distance for the neural point map context descriptor
         self.context_num_candidates: int = 1 # select the best K candidates after comparing the ring key for further checking
@@ -265,7 +266,7 @@ class Config:
         self.skip_top_voxel: int = 2 # slip the top x voxels (mainly for visualization indoor, remove the roof)
         self.mc_mask_on: bool = True # use mask for marching cubes to avoid the artifacts
         self.mesh_min_nn: int = 8  # The minimum number of the neighbor neural points for a valid SDF prediction for meshing, too small would cause some artifacts (more complete but less accurate), too large would lead to lots of holes (more accurate but less complete)
-        self.min_cluster_vertices: int = 200 # if a connected's vertices number is smaller than this value, it would get filtered (as a postprocessing to filter outliers)
+        self.min_cluster_vertices: int = 300 # if a connected's vertices number is smaller than this value, it would get filtered (as a postprocessing to filter outliers)
         self.keep_local_mesh: bool = False # keep the local mesh in the visualizer or not (don't delete them could cause a too large memory consumption)
         self.infer_bs: int = 4096 # batch size for inference
 
@@ -343,6 +344,8 @@ class Config:
             else:
                 self.vox_down_m = config_args["process"].get("vox_down_m", self.max_range*1e-3)
             self.dynamic_filter_on = config_args["process"].get("dynamic_filter_on", self.dynamic_filter_on)
+            self.dynamic_sdf_ratio_thre = config_args["process"].get("dynamic_sdf_ratio_thre", self.dynamic_sdf_ratio_thre)
+            self.dynamic_certainty_thre = config_args["process"].get("dynamic_certainty_thre", self.dynamic_certainty_thre)
             self.adaptive_range_on = config_args["process"].get("adaptive_range_on", self.adaptive_range_on)
 
         # sampler
@@ -461,6 +464,7 @@ class Config:
             self.context_cosdist_threshold = config_args["pgo"].get("context_cosdist", self.context_cosdist_threshold) 
             self.min_loop_travel_dist_ratio = config_args["pgo"].get("min_loop_travel_ratio", self.min_loop_travel_dist_ratio) 
             self.loop_dist_drift_ratio_thre = config_args["pgo"].get("max_loop_dist_ratio", self.loop_dist_drift_ratio_thre)
+            self.local_loop_dist_thre = config_args["pgo"].get("local_loop_dist_thre", self.voxel_size_m * 5.0)
             
         # mapping optimizer
         if "optimizer" in config_args:

@@ -320,7 +320,7 @@ class PoseGraphManager:
         return pose_diff
 
     def estimate_drift(
-        self, travel_dist_list, used_frame_id, drfit_ratio=0.01, correct_ratio=0.01
+        self, travel_dist_list, used_frame_id, drfit_ratio=0.01, correct_ratio=0.005
     ):
         # estimate the current drift # better to calculate according to residual
         self.drift_radius = (
@@ -333,7 +333,8 @@ class PoseGraphManager:
                 travel_dist_list[self.min_loop_idx]
                 + travel_dist_list[used_frame_id] * correct_ratio
             ) * drfit_ratio
-        # print("Estimated drift (m):", self.drift_radius)
+        if not self.silence:
+            print("Estimated drift (m):", self.drift_radius)
 
     def plot_loops(self, loop_plot_path, vis_now=False):
 

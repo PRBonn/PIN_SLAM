@@ -73,30 +73,32 @@ class SLAMDataset(Dataset):
         self.poses_w = None
         self.poses_w_closed = None
 
+        self.poses_ts = None # timestamp for each reference pose
+
         self.travel_dist = []
         self.time_table = []
 
         self.poses_ref = [np.eye(4)]  # only used when gt_pose_provided
 
         self.calib = {}
-        self.calib["Tr"] = np.eye(
-            4
-        )  # as default if calib file is not provided # as T_lidar<-camera
+        # as default if calib file is not provided # as T_lidar<-camera
+        self.calib["Tr"] = np.eye(4)
 
         if self.gt_pose_provided:
             if config.calib_path != "":
                 self.calib = read_kitti_format_calib(config.calib_path)
-            # TODO: this should be updated, select the pose with correct format, tum format may not endwith csv
+            poses_uncalib = None
             if config.pose_path.endswith("txt"):
                 poses_uncalib = read_kitti_format_poses(config.pose_path)
-                if config.closed_pose_path is not None and config.use_gt_loop:
-                    poses_closed_uncalib = read_kitti_format_poses(
-                        config.closed_pose_path
-                    )
-            elif config.pose_path.endswith("csv"):
-                poses_uncalib = read_tum_format_poses_csv(config.pose_path)
-            else:
-                sys.exit("Wrong pose file format. Please use either *.txt or *.csv")
+                if poses_uncalib is None:
+                    poses_uncalib, self.poses_ts = read_tum_format_poses(config.pose_path)
+            if poses_uncalib is None:
+                sys.exit("Wrong pose file format. Please use either kitti or tum format with *.txt")
+     
+            if config.closed_pose_path is not None and config.use_gt_loop:
+                poses_closed_uncalib = read_kitti_format_poses(
+                    config.closed_pose_path
+                )
 
             # apply calibration
             # actually from camera frame to LiDAR frame, lidar pose in world frame
@@ -107,11 +109,11 @@ class SLAMDataset(Dataset):
                 self.poses_w_closed = apply_kitti_format_calib(
                     poses_closed_uncalib, inv(self.calib["Tr"])
                 )
-
+            # print('# Total frames:', self.total_pc_count)
             # pose in the reference frame (might be the first frame used)
             self.poses_ref = self.poses_w  # initialize size
             if len(self.poses_w) != self.total_pc_count:
-                sys.exit("Number of the pose and point cloud are not identical")
+                sys.exit(f"Number of the pose ({len(self.poses_w)}) and point cloud ({self.total_pc_count}) are not identical")
             if self.total_pc_count > 2000:
                 config.local_map_context = True
 
@@ -626,7 +628,7 @@ class SLAMDataset(Dataset):
     def write_results(self, run_path: str):
         odom_poses_out = apply_kitti_format_calib(self.odom_poses, self.calib["Tr"])
         write_kitti_format_poses(os.path.join(run_path, "odom_poses_"), odom_poses_out)
-        write_tum_format_poses(os.path.join(run_path, "odom_poses_"), odom_poses_out)
+        write_tum_format_poses(os.path.join(run_path, "odom_poses_"), odom_poses_out, self.poses_ts)
         write_traj_as_o3d(self.odom_poses, os.path.join(run_path, "odom_poses.ply"))
 
         if self.config.pgo_on:
@@ -635,7 +637,7 @@ class SLAMDataset(Dataset):
                 os.path.join(run_path, "slam_poses_"), slam_poses_out
             )
             write_tum_format_poses(
-                os.path.join(run_path, "slam_poses_"), slam_poses_out
+                os.path.join(run_path, "slam_poses_"), slam_poses_out, self.poses_ts
             )
             write_traj_as_o3d(self.pgo_poses, os.path.join(run_path, "slam_poses.ply"))
 
@@ -913,14 +915,17 @@ def read_point_cloud(
 
     # read point cloud from either (*.ply, *.pcd, *.las) or (kitti *.bin) format
     if ".bin" in filename:
+        is_nclt_bin = False # FIXME
         # we also read the intensity channel here
-        data_loaded = np.fromfile(filename, dtype=np.float32)
-
-        # print(data_loaded)
-        # for NCLT, it's a bit different from KITTI format, check: http://robots.engin.umich.edu/nclt/python/read_vel_sync.py
-        # for KITTI, bin_channel_count = 4
-        # for Boreas, bin_channel_count = 6 # (x,y,z,i,r,ts)
-        points = data_loaded.reshape((-1, bin_channel_count))
+        if is_nclt_bin:
+            # for NCLT, it's a bit different from KITTI format, check: http://robots.engin.umich.edu/nclt/python/read_vel_sync.py
+            points = load_nclt_bin(filename)
+        else:
+            data_loaded = np.fromfile(filename, dtype=np.float32)
+            # print(data_loaded)
+            # for KITTI, bin_channel_count = 4
+            # for Boreas, bin_channel_count = 6 # (x,y,z,i,r,ts)
+            points = data_loaded.reshape((-1, bin_channel_count))
         # print(points)
         ts = None
         if bin_channel_count == 6:
@@ -1038,55 +1043,61 @@ def read_kitti_format_poses(filename: str) -> List[np.ndarray]:
     """
     read pose file (with the kitti format)
     returns -> list, transformation before calibration transformation
+    if the format is incorrect, return None
     """
-    pose_file = open(filename)
-
     poses = []
+    with open(filename, 'r') as file:            
+        for line in file:
+            values = line.strip().split()
+            if len(values) != 12:
+                print('Not a kitti format pose file')
+                return None
 
-    for line in pose_file:
-        values = [float(v) for v in line.strip().split()]
-
-        pose = np.zeros((4, 4))
-        pose[0, 0:4] = values[0:4]
-        pose[1, 0:4] = values[4:8]
-        pose[2, 0:4] = values[8:12]
-        pose[3, 3] = 1.0
-        poses.append(pose)
-
-    pose_file.close()
+            values = [float(value) for value in values]
+            pose = np.zeros((4, 4))
+            pose[0, 0:4] = values[0:4]
+            pose[1, 0:4] = values[4:8]
+            pose[2, 0:4] = values[8:12]
+            pose[3, 3] = 1.0
+            poses.append(pose)
+    
     return poses
 
-
-def read_tum_format_poses_csv(filename: str) -> List[np.ndarray]:
-    # now it supports csv file only (TODO)
+def read_tum_format_poses(filename: str):
+    """
+    read pose file (with the tum format), support txt file
+    # timestamp tx ty tz qx qy qz qw
+    returns -> list, transformation before calibration transformation
+    """
     from pyquaternion import Quaternion
 
     poses = []
-    with open(filename, mode="r") as f:
-        reader = csv.reader(f)
-        # get header and change timestamp label name
-        header = next(reader)
-        header[0] = "ts"
-        # Convert string odometry to numpy transfor matrices
-        for row in reader:
-            odom = {l: row[i] for i, l in enumerate(header)}
-            # Translarion and rotation quaternion as numpy arrays
-            trans = np.array([float(odom[l]) for l in ["tx", "ty", "tz"]])
-            quat_ijkw = np.array([float(odom[l]) for l in ["qx", "qy", "qz", "qw"]])
-            quat = Quaternion(
-                quat_ijkw[3], quat_ijkw[0], quat_ijkw[1], quat_ijkw[2]
-            )  # quaternion needs to use the w, i, j, k order , you need to switch as bit
+    timestamps = []
+    with open(filename, 'r') as file:
+        first_line = file.readline().strip()
+        
+        # check if the first line contains any numeric characters
+        # if contain, then skip the first line # timestamp tx ty tz qx qy qz qw
+        if any(char.isdigit() for char in first_line):
+            file.seek(0)
+        
+        for line in file: # read each line in the file 
+            values = line.strip().split()
+            if len(values) != 8: 
+                print('Not a tum format pose file')
+                return None, None
+            values = [float(value) for value in values]
+            timestamps.append(values[0])
+            trans = np.array(values[1:4])
+            quat = Quaternion(np.array([values[7], values[4], values[5], values[6]])) # w, i, j, k
             rot = quat.rotation_matrix
             # Build numpy transform matrix
             odom_tf = np.eye(4)
             odom_tf[0:3, 3] = trans
             odom_tf[0:3, 0:3] = rot
-            # Add transform to timestamp indexed dictionary
-            # odom_tfs[odom["ts"]] = odom_tf
             poses.append(odom_tf)
-
-    return poses
-
+    
+    return poses, timestamps
 
 # copyright: Nacho et al. KISS-ICP
 # https://github.com/PRBonn/kiss-icp
@@ -1099,7 +1110,7 @@ def write_kitti_format_poses(filename: str, poses: List[np.ndarray]):
 
 # copyright: Nacho et al. KISS-ICP
 # https://github.com/PRBonn/kiss-icp
-def write_tum_format_poses(filename: str, poses: List[np.ndarray], timestamps=None):
+def write_tum_format_poses(filename: str, poses: List[np.ndarray], timestamps=None, frame_s = 0.1):
     from pyquaternion import Quaternion
 
     def _to_tum_format(poses, timestamps=None):
@@ -1110,7 +1121,7 @@ def write_tum_format_poses(filename: str, poses: List[np.ndarray], timestamps=No
                 qw, qx, qy, qz = Quaternion(matrix=poses[idx], atol=0.01).elements
                 if timestamps is None:
                     tum_data.append(
-                        [idx, tx, ty, tz, qx, qy, qz, qw]
+                        [idx * frame_s, tx, ty, tz, qx, qy, qz, qw]
                     )  # index as the ts
                 else:
                     tum_data.append(
@@ -1218,3 +1229,26 @@ def write_traj_as_o3d(poses: List[np.ndarray], path):
         o3d.io.write_point_cloud(path, o3d_pcd)
 
     return o3d_pcd
+
+def load_nclt_bin(file_path: str):
+    def _convert(x_s, y_s, z_s):
+        # Copied from http://robots.engin.umich.edu/nclt/python/read_vel_sync.py
+        scaling = 0.005
+        offset = -100.0
+
+        x = x_s * scaling + offset
+        y = y_s * scaling + offset
+        z = z_s * scaling + offset
+        return x, y, z
+
+    binary = np.fromfile(file_path, dtype=np.int16)
+    x = np.ascontiguousarray(binary[::4])
+    y = np.ascontiguousarray(binary[1::4])
+    z = np.ascontiguousarray(binary[2::4])
+    x = x.astype(np.float32).reshape(-1, 1)
+    y = y.astype(np.float32).reshape(-1, 1)
+    z = z.astype(np.float32).reshape(-1, 1)
+    x, y, z = _convert(x, y, z)
+    # Flip to have z pointing up
+    points = np.concatenate([x, -y, -z], axis=1)
+    return points.astype(np.float64)

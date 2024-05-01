@@ -191,7 +191,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
                     loop_id = None
                     if loop_candidate_mask.any(): # have at least one candidate
                         # firstly try to detect the local loop
-                        loop_id, loop_dist, loop_transform = detect_local_loop(dist_to_past, loop_candidate_mask, dataset.pgo_poses, pgm.drift_radius, used_frame_id, loop_reg_failed_count, config.voxel_size_m*5.0, config.silence)
+                        loop_id, loop_dist, loop_transform = detect_local_loop(dist_to_past, loop_candidate_mask, dataset.pgo_poses, pgm.drift_radius, used_frame_id, loop_reg_failed_count, config.local_loop_dist_thre, config.local_loop_dist_thre*2.0, config.silence)
                         if loop_id is None and config.global_loop_on: # global loop detection (large drift)
                             loop_id, loop_cos_dist, loop_transform, local_map_context_loop = lcd_npmc.detect_global_loop(cur_pgo_poses, dataset.pgo_poses, pgm.drift_radius*config.loop_dist_drift_ratio_thre, loop_candidate_mask, neural_points)     
                 if loop_id is not None:
@@ -252,19 +252,19 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
         # IV: Mapping and bundle adjustment
         # if lose track, we will not update the map and data pool (don't let the wrong pose to corrupt the map)
         # if the robot stop, also don't process this frame, since there's no new oberservations
+        mapper.determine_used_pose()
+        neural_points.reset_local_map(dataset.cur_pose_torch[:3,3], None, used_frame_id)
+        mapper.static_mask = None
+
         if not mapper.lose_track and not dataset.stop_status:
             mapper.process_frame(dataset.cur_point_cloud_torch, dataset.cur_sem_labels_torch,
                                  dataset.cur_pose_torch, used_frame_id, (config.dynamic_filter_on and used_frame_id > 0))
-        else: # lose track, still need to set back the local map
-            mapper.determine_used_pose()
-            neural_points.reset_local_map(dataset.cur_pose_torch[:3,3], None, used_frame_id)
-            mapper.static_mask = None
+    
                                 
         T5 = get_time()
 
         # for the first frame, we need more iterations to do the initialization (warm-up)
         cur_iter_num = config.iters * config.init_iter_ratio if used_frame_id == 0 else config.iters
-        # if config.adaptive_iters and dataset.stop_status:
         if dataset.stop_status:
             cur_iter_num = max(1, cur_iter_num-10)
         if used_frame_id == config.freeze_after_frame: # freeze the decoder after certain frame 

@@ -83,7 +83,7 @@ class Tracker:
             min_valid_ratio = 0.15
 
         max_increment_sdf_residual_ratio = 1.1
-        eigenvalue_ratio_thre = 0.01
+        eigenvalue_ratio_thre = 0.005
         min_valid_points = 30
         converged = False
         valid_flag = True
@@ -405,6 +405,7 @@ class Tracker:
             & (grad_norm < max_grad_norm)
             & (grad_norm > min_grad_norm)
             & (sdf_std < max_sdf_std)
+            # & (sdf_pred_abs < max_sdf)
         )
 
         valid_points = points[valid_idx]

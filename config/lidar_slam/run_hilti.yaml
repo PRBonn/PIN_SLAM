@@ -1,47 +1,46 @@
 setting:
-  name: "test_apollo"
+  name: "test_hilti"
   output_root: "./experiments"
-  pc_path: "./data/apollo/ColumbiaPark/2018-10-11/pcds"
-  pose_path: "./data/apollo/ColumbiaPark/2018-10-11/gt_poses_kitti_format.txt"
-  first_frame_ref: True
+  pc_path: "./data/HILTI/cons2/ply" #rpg, lab, base1, base4, camp2, cons2
+  deskew: True
 process:
-  min_range_m: 3.0
-  max_range_m: 80.0
-  vox_down_m: 0.08
+  min_range_m: 1.0
+  max_range_m: 60.0
+  min_z_m: -10.0
+  vox_down_m: 0.06
+  adaptive_range_on: True
 sampler:
-  surface_sample_range_m: 0.25 
+  surface_sample_range_m: 0.25
   surface_sample_n: 4
   free_sample_begin_ratio: 0.5
   free_sample_end_dist_m: 1.0
   free_front_sample_n: 2 
 neuralpoints:
-  voxel_size_m: 0.4
-  search_alpha: 0.5
+  voxel_size_m: 0.3
+  search_alpha: 0.8
 loss:
   sigma_sigmoid_m: 0.08
   loss_weight_on: True
   dist_weight_scale: 0.8
+  ekional_loss_on: True
+  weight_e: 0.5
 continual:
   batch_size_new_sample: 1000
   pool_capacity: 2e7
 tracker:
-  source_vox_down_m: 0.6
-  iter_n: 50
-  valid_nn_k: 5
+  source_vox_down_m: 0.4
+  iter_n: 100
 pgo:
   map_context: True
   pgo_freq_frame: 30
-  context_cosdist: 0.3
-  virtual_side_count: 10
-  local_loop_dist_thre: 20.0
 optimizer: # mapper
   iters: 15  # iterations per frame
   batch_size: 16384
+  adaptive_iters: True
 eval:
   wandb_vis_on: False # log to wandb or not
   o3d_vis_on: True # visualize the mapping or not
   silence_log: True
-  sensor_cad_path: ./cad/ipb_car.ply
   mesh_freq_frame: 50 # reconstruct the mesh every x frames
-  mesh_min_nn: 9
   save_map: True
+  mesh_min_nn: 18

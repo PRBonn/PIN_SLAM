@@ -191,12 +191,12 @@ class PINSLAMer:
 
         # if lose track, we will not update the map and data pool (don't let the wrong pose to corrupt the map)
         # if the robot stop, also don't process this frame, since there's no new oberservations
+        self.neural_points.reset_local_map(self.dataset.cur_pose_torch[:3,3], None, self.dataset.processed_frame)
+        self.mapper.static_mask = None
         if not self.mapper.lose_track and not self.dataset.stop_status:
             self.mapper.process_frame(self.dataset.cur_point_cloud_torch, self.dataset.cur_sem_labels_torch,
                                       self.dataset.cur_pose_torch, self.dataset.processed_frame)
-        else: # lose track, still need to set back the local map
-            self.neural_points.reset_local_map(self.dataset.cur_pose_torch[:3,3], None, self.dataset.processed_frame)
-            self.mapper.static_mask = None
+
                                 
         T5 = get_time()
 
@@ -426,7 +426,7 @@ class PINSLAMer:
                 local_map_context_loop = False
                 if loop_candidate_mask.any(): # have at least one candidate
                     # firstly try to detect the local loop
-                    loop_id, loop_dist, loop_transform = detect_local_loop(dist_to_past, loop_candidate_mask, self.dataset.pgo_poses, self.pgm.drift_radius, cur_frame_id, self.loop_reg_failed_count, dist_thre=self.config.voxel_size_m*5.0, silence=self.config.silence)
+                    loop_id, loop_dist, loop_transform = detect_local_loop(dist_to_past, loop_candidate_mask, self.dataset.pgo_poses, self.pgm.drift_radius, cur_frame_id, self.loop_reg_failed_count, dist_thre=self.config.local_loop_dist_thre, drift_thre = self.config.local_loop_dist_thre*2.0, silence=self.config.silence)
                     if loop_id is None and self.config.global_loop_on: # global loop detection (large drift)
                         loop_id, loop_cos_dist, loop_transform, local_map_context_loop = self.lcd_npmc.detect_global_loop(cur_pgo_poses, self.dataset.pgo_poses, self.pgm.drift_radius*3.0, loop_candidate_mask, self.neural_points)
 

@@ -49,8 +49,8 @@ def set_dataset_path(config: Config, dataset_name: str, seq: str):
     elif dataset_name == "hilti":
         config.name = config.name + "_hilti_" + seq
         base_path = config.pc_path.rsplit('/', 2)[0]
-        config.pc_path = os.path.join(base_path, seq, "pointcloud")  # input point cloud folder
-        config.pose_path = os.path.join(base_path, seq, "poses.txt")   # input pose file
+        config.pc_path = os.path.join(base_path, seq, "ply")  # input point cloud folder
+        # config.pose_path = os.path.join(base_path, seq, "poses.txt")   # input pose file
     elif dataset_name == "m2dgr":
         config.name = config.name + "_m2dgr_" + seq
         base_path = config.pc_path.rsplit('/', 2)[0]

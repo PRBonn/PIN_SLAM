@@ -408,12 +408,13 @@ def detect_local_loop(
     cur_frame_id,
     loop_reg_failed_count=0,
     dist_thre=1.0,
+    drift_thre = 3.0, 
     silence=False,
 ):
     min_dist = np.min(dist_to_past[loop_candidate_mask])
     min_index = np.where(dist_to_past == min_dist)[0]
     if (
-        min_dist < dist_thre and cur_drift < dist_thre * 2 and loop_reg_failed_count < 3
+        min_dist < dist_thre and cur_drift < drift_thre and loop_reg_failed_count < 3
     ):  # local loop
         loop_id, loop_dist = min_index[0], min_dist  # a candidate found
         loop_transform = np.linalg.inv(pgo_poses[loop_id]) @ pgo_poses[-1]
@@ -429,6 +430,9 @@ def detect_local_loop(
             )
         return loop_id, loop_dist, loop_transform
     else:
+        if not silence:
+            print("No local loop")
+                
         return None, None, None
 
 
