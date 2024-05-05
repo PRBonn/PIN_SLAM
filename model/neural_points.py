@@ -101,11 +101,12 @@ class NeuralPoints(nn.Module):
             )
         else:
             self.color_features = None
+        # here, the ts represent the actually processed frame id (not neccessarily the frame id of the dataset)
         self.point_ts_create = torch.empty(
-            (0), device=self.device, dtype=torch.long
+            (0), device=self.device, dtype=torch.int
         )  # create ts
         self.point_ts_update = torch.empty(
-            (0), device=self.device, dtype=torch.long
+            (0), device=self.device, dtype=torch.int
         )  # last update ts
         self.point_certainties = torch.empty((0), dtype=self.dtype, device=self.device)
 
@@ -122,7 +123,7 @@ class NeuralPoints(nn.Module):
             (0), dtype=self.dtype, device=self.device
         )
         self.local_point_ts_update = torch.empty(
-            (0), device=self.device, dtype=torch.long
+            (0), device=self.device, dtype=torch.int
         )
         self.local_mask = None
         self.global2local = None
@@ -225,7 +226,7 @@ class NeuralPoints(nn.Module):
         elif color_mode == 2:  # "ts": # frame number (ts) as the color
             if query_global:
                 if self.config.use_mid_ts:
-                    show_ts = ((self.point_ts_create + self.point_ts_update) / 2).long()
+                    show_ts = ((self.point_ts_create + self.point_ts_update) / 2).int()
                 else:
                     show_ts = self.point_ts_create
                 ts_np = (
@@ -293,9 +294,8 @@ class NeuralPoints(nn.Module):
         cur_resolution = self.resolution
         # if self.mean_grid_sampling:
         #     sample_points = meanGridSampling(points, resolution=cur_resolution)
-        sample_idx = voxel_down_sample_torch(
-            points, cur_resolution
-        )  # take the point that is the closest to the voxel center (now used)
+        # take the point that is the closest to the voxel center (now used)
+        sample_idx = voxel_down_sample_torch(points, cur_resolution)
         sample_points = points[sample_idx]
 
         grid_coords = (sample_points / cur_resolution).floor().to(self.primes)
@@ -322,9 +322,6 @@ class NeuralPoints(nn.Module):
                 | (dist2 > 3 * cur_resolution**2)
                 | (delta_travel_dist > self.diff_travel_dist_local)
             )
-            # if torch.sum((hash_idx != -1) & (dist2 > 3*cur_resolution**2)) > 0:
-            #     print("Collision detected !!!!!!!")
-            # so actually almost no collision, for larger scenes, there are collisions (but would not exsit for local map)
         else:
             update_mask = torch.ones(
                 hash_idx.shape, dtype=torch.bool, device=self.device
@@ -341,6 +338,7 @@ class NeuralPoints(nn.Module):
             + cur_pt_count
         )
 
+        # torch.cat could be slow for large map
         self.buffer_pt_index[hash] = cur_pt_idx
         self.neural_points = torch.cat((self.neural_points, added_pt), 0)
 
@@ -353,7 +351,7 @@ class NeuralPoints(nn.Module):
         )
 
         new_points_ts = (
-            torch.ones(new_point_count, device=self.device, dtype=torch.long) * cur_ts
+            torch.ones(new_point_count, device=self.device, dtype=torch.int) * cur_ts
         )
         self.point_ts_create = torch.cat((self.point_ts_create, new_points_ts), 0)
         self.point_ts_update = torch.cat((self.point_ts_update, new_points_ts), 0)
@@ -394,32 +392,38 @@ class NeuralPoints(nn.Module):
         use_travel_dist: bool = True,
         diff_ts_local: int = 50,
     ):
-
+    # TODO: not very efficient, optimize the code
+    
         self.cur_ts = cur_ts
         self.max_ts = max(self.max_ts, cur_ts)
-
-        vec2sensor = self.neural_points - sensor_position
-        dist2sensor = torch.sum(vec2sensor**2, dim=-1)  # dist square
 
         if self.config.use_mid_ts:
             point_ts_used = (
                 (self.point_ts_create + self.point_ts_update) / 2
-            ).long()  # still as dtype long
+            ).int()
         else:
             point_ts_used = self.point_ts_create
 
-        if use_travel_dist:
+        if use_travel_dist: # self.travel_dist as torch tensor
             delta_travel_dist = torch.abs(
                 self.travel_dist[cur_ts] - self.travel_dist[point_ts_used]
             )
-            local_mask = (dist2sensor < self.local_map_radius**2) & (
-                delta_travel_dist < self.diff_travel_dist_local
-            )
+            time_mask = (delta_travel_dist < self.diff_travel_dist_local)
         else:  # use delta_t
             delta_t = torch.abs(cur_ts - point_ts_used)
-            local_mask = (dist2sensor < self.local_map_radius**2) & (
-                delta_t < diff_ts_local
-            )
+            time_mask = (delta_t < diff_ts_local) 
+        
+        # speed up by calulating distance only with the t filtered points
+        masked_vec2sensor = self.neural_points[time_mask] - sensor_position
+        masked_dist2sensor = torch.sum(masked_vec2sensor**2, dim=-1)  # dist square
+
+        dist_mask = (masked_dist2sensor < self.local_map_radius**2)
+        time_mask_idx = torch.nonzero(time_mask).squeeze() # True index
+        local_mask_idx = time_mask_idx[dist_mask] # True index
+
+        local_mask = torch.full((time_mask.shape), False, dtype=torch.bool, device=self.device)
+
+        local_mask[local_mask_idx] = True 
 
         self.local_neural_points = self.neural_points[local_mask]
         self.local_point_orientations = self.point_orientations[local_mask]
@@ -431,9 +435,9 @@ class NeuralPoints(nn.Module):
         )  # padding with one element in the end
         self.local_mask = local_mask
 
-        global2local = torch.full_like(
-            local_mask, -1
-        ).long()  # if Flase (not in the local map), the mapping get an idx as -1
+        # if Flase (not in the local map), the mapping get an idx as -1
+        global2local = torch.full_like(local_mask, -1).long()
+        
         local_indices = torch.nonzero(local_mask).flatten()
         local_point_count = local_indices.size(0)
         global2local[local_indices] = torch.arange(
@@ -452,8 +456,8 @@ class NeuralPoints(nn.Module):
     def assign_local_to_global(self):
 
         local_mask = self.local_mask
-        self.neural_points[local_mask[:-1]] = self.local_neural_points
-        self.point_orientations[local_mask[:-1]] = self.local_point_orientations
+        # self.neural_points[local_mask[:-1]] = self.local_neural_points
+        # self.point_orientations[local_mask[:-1]] = self.local_point_orientations
         self.geo_features[local_mask] = self.local_geo_features.data
         if self.color_features is not None:
             self.color_features[local_mask] = self.local_color_features.data
@@ -670,7 +674,7 @@ class NeuralPoints(nn.Module):
         )
 
     # prune inactive uncertain neural points
-    def prune_map(self, prune_certainty_thre):
+    def prune_map(self, prune_certainty_thre, min_prune_count = 500):
 
         diff_travel_dist = torch.abs(
             self.travel_dist[self.cur_ts] - self.travel_dist[self.point_ts_update]
@@ -682,7 +686,7 @@ class NeuralPoints(nn.Module):
         )  # True for prune
 
         prune_count = torch.sum(prune_mask).item()
-        if prune_count > 100:
+        if prune_count > min_prune_count:
             if not self.silence:
                 print("# Prune neural points: ", prune_count)
 
@@ -712,7 +716,7 @@ class NeuralPoints(nn.Module):
         if self.config.use_mid_ts:
             used_ts = (
                 (self.point_ts_create + self.point_ts_update) / 2
-            ).long()  # still as dtype long
+            ).int() 
         else:
             used_ts = self.point_ts_create
 
@@ -747,7 +751,7 @@ class NeuralPoints(nn.Module):
             if self.config.use_mid_ts:
                 ts_used = (
                     (self.point_ts_create + self.point_ts_update) / 2
-                ).long()  # still as dtype long
+                ).int()
             else:
                 ts_used = self.point_ts_create
             ts_diff = torch.abs(ts_used - cur_ts).float()
@@ -761,9 +765,6 @@ class NeuralPoints(nn.Module):
                 cur_resolution,
                 self.point_certainties.max() - self.point_certainties,
             )
-
-        original_point_count = self.neural_points.shape[0]
-        kept_point_count = sample_idx.shape[0]
 
         if kept_points:
             # don't filter the neural points (keep them, only merge when neccessary, figure out the better merging method later)

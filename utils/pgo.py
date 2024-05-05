@@ -51,9 +51,9 @@ class PoseGraphManager:
         self.cur_pose = None
         self.curr_node_idx = None
         self.graph_optimized = None
+        self.init_poses = None # as np.array
+        self.pgo_poses = None # as np.array
 
-        self.init_poses = []
-        self.pgo_poses = []
         self.loop_edges_vis = []
         self.loop_edges = []
         self.loop_trans = []
@@ -215,9 +215,8 @@ class PoseGraphManager:
         self.graph_initials = self.graph_optimized  # update the initial guess
 
         # update the pose of each frame after pgo
-        frame_count = self.curr_node_idx + 1
-        self.pgo_poses = [None] * frame_count  # start from 0
-        for idx in range(frame_count):
+        self.pgo_poses = self.init_poses.copy()
+        for idx in range(self.curr_node_idx+1):
             self.pgo_poses[idx] = get_node_pose(self.graph_optimized, idx)
 
         self.cur_pose = self.pgo_poses[self.curr_node_idx]
@@ -308,30 +307,23 @@ class PoseGraphManager:
 
     # get the difference of poses before and after pgo
     def get_pose_diff(self):
-        assert len(self.pgo_poses) == len(
-            self.init_poses
-        ), "Lists of poses must have the same size."
-        pose_diff = np.array(
-            [
-                (pgo_pose @ np.linalg.inv(init_pose))
-                for pgo_pose, init_pose in zip(self.pgo_poses, self.init_poses)
-            ]
-        )
+        assert self.pgo_poses.shape[0] == self.init_poses.shape[0], "poses before and after pgo must have the same size."
+        pose_diff = np.matmul(self.pgo_poses, np.linalg.inv(self.init_poses))
         return pose_diff
 
     def estimate_drift(
-        self, travel_dist_list, used_frame_id, drfit_ratio=0.01, correct_ratio=0.005
+        self, travel_dist, used_frame_id, drfit_ratio=0.01, correct_ratio=0.005
     ):
-        # estimate the current drift # better to calculate according to residual
+        # estimate the current drift # better to calculate also considering the residual
         self.drift_radius = (
-            travel_dist_list[used_frame_id] - travel_dist_list[self.last_loop_idx]
+            travel_dist[used_frame_id] - travel_dist[self.last_loop_idx]
         ) * drfit_ratio
         if (
             self.min_loop_idx < self.last_loop_idx
         ):  # the loop has been corrected previously
             self.drift_radius += (
-                travel_dist_list[self.min_loop_idx]
-                + travel_dist_list[used_frame_id] * correct_ratio
+                travel_dist[self.min_loop_idx]
+                + travel_dist[used_frame_id] * correct_ratio
             ) * drfit_ratio
         if not self.silence:
             print("Estimated drift (m):", self.drift_radius)

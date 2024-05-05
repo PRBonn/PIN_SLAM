@@ -11,14 +11,12 @@ import torch.nn.functional as F
 from rich import print
 
 from utils.config import Config
-from utils.mapper import Mapper
 from utils.tools import get_time, transform_torch
 
 
 class NeuralPointMapContextManager:
-    def __init__(self, config: Config, mapper: Mapper):
+    def __init__(self, config: Config):
 
-        self.mapper = mapper
         self.config = config
         self.device = config.device
         self.dtype = config.dtype
@@ -38,9 +36,11 @@ class NeuralPointMapContextManager:
 
         self.max_length = config.npmc_max_dist
 
-        self.ENOUGH_LARGE = (
-            config.end_frame + 1
-        )  # capable of up to ENOUGH_LARGE number of nodes
+        # capable of up to ENOUGH_LARGE number of nodes
+        if config.end_frame == -1:
+            self.ENOUGH_LARGE = 100000 # about 3 hours operation
+        else:
+            self.ENOUGH_LARGE = config.end_frame+1
 
         self.contexts = [None] * self.ENOUGH_LARGE
         self.ringkeys = [None] * self.ENOUGH_LARGE
@@ -63,9 +63,8 @@ class NeuralPointMapContextManager:
         sc, sc_feature = ptcloud2sc_torch(
             ptcloud, ptfeatures, self.des_shape, self.max_length
         )  # RxS # keep the highest point's height in each bin
-        rk = sc2rk(
-            sc
-        )  # Rx1 # take the mean for all the sectors of each ring, get r ring circles (to keep the rotation invariance)
+        # Rx1 # take the mean for all the sectors of each ring, get r ring circles (to keep the rotation invariance)
+        rk = sc2rk(sc)
 
         # print("Generate descriptor")
         self.curr_node_idx = frame_id
@@ -157,9 +156,9 @@ class NeuralPointMapContextManager:
 
     # main function for global loop detection
     def detect_global_loop(
-        self, cur_pgo_poses, pgo_poses, dist_thre, loop_candidate_mask, neural_points
+        self, cur_pgo_poses, dist_thre, loop_candidate_mask, neural_points
     ):
-
+        # TODO: use torch tensor
         dist_to_past = np.linalg.norm(
             cur_pgo_poses[:, :3, 3] - cur_pgo_poses[self.curr_node_idx, :3, 3], axis=1
         )
@@ -170,11 +169,11 @@ class NeuralPointMapContextManager:
                 neural_points.local_neural_points.detach()
             )  # augment virtual poses
             cur_pose = torch.tensor(
-                pgo_poses[self.curr_node_idx], device=self.device, dtype=torch.float64
-            )
+                cur_pgo_poses[self.curr_node_idx], device=self.device, dtype=torch.float64
+            ) # pose at cur frame with latency
             last_pose = (
                 torch.tensor(
-                    pgo_poses[self.curr_node_idx - 1],
+                    cur_pgo_poses[self.curr_node_idx - 1],
                     device=self.device,
                     dtype=torch.float64,
                 )
@@ -191,11 +190,11 @@ class NeuralPointMapContextManager:
             )
         loop_id, loop_cos_dist, loop_transform = self.detect_loop(
             global_loop_candidate_idx, use_feature=self.config.loop_with_feature
-        )
+        ) # get the init tran from cur_frame with latency to loop frame
 
         local_map_context_loop = False
         if loop_id is not None:
-            if self.config.local_map_context:  # with the latency
+            if self.config.local_map_context:  # get init tran from cur frame to loop frame, considering the latency
                 loop_transform = (
                     loop_transform
                     @ np.linalg.inv(cur_pgo_poses[self.curr_node_idx])
@@ -213,11 +212,16 @@ class NeuralPointMapContextManager:
                     ")",
                 )
             # print("[bold red]Candidate global loop event detected: [/bold red]", self.curr_node_idx, "---", loop_id, "(" , loop_cos_dist, ")")
+        else:
+            if not self.silence:
+                print("No global loop")
 
         return loop_id, loop_cos_dist, loop_transform, local_map_context_loop
 
     def detect_loop(self, candidate_idx, use_feature: bool = False):
-
+        """
+        Detect global loop closure candidate using neural point local map context
+        """
         # t1 = get_time()
 
         if candidate_idx.shape[0] == 0:
@@ -338,7 +342,7 @@ class GTLoopManager:
         self.max_loop_dist = config.max_loop_dist
         self.min_travel_dist_ratio = 2.5
 
-        self.ENOUGH_LARGE = config.end_frame + 1
+        self.ENOUGH_LARGE = 100000
         self.gt_position = [None] * self.ENOUGH_LARGE
         self.gt_pose = [None] * self.ENOUGH_LARGE
         self.travel_dist = [0.0] * self.ENOUGH_LARGE
@@ -401,16 +405,19 @@ class GTLoopManager:
 
 
 def detect_local_loop(
-    dist_to_past,
-    loop_candidate_mask,
     pgo_poses,
+    loop_candidate_mask,
     cur_drift,
     cur_frame_id,
     loop_reg_failed_count=0,
     dist_thre=1.0,
-    drift_thre = 3.0, 
+    drift_thre=3.0, 
     silence=False,
 ):
+    """
+    Detect local loop closure candidate by according to distance
+    """
+    dist_to_past = np.linalg.norm(pgo_poses[:,:3,3] - pgo_poses[-1,:3,3], axis=1) 
     min_dist = np.min(dist_to_past[loop_candidate_mask])
     min_index = np.where(dist_to_past == min_dist)[0]
     if (

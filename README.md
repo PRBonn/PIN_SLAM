@@ -185,7 +185,7 @@ Generally speaking, you only need to edit in the config file the
 `pc_path`, which is the path to the folder containing the point cloud (`.bin`, `.ply`, `.pcd` or `.las` format) for each frame. 
 For ROS bag, you can use `./scripts/rosbag2ply.py` to extract the point cloud in `.ply` format.
 
-For pose estimation evaluation, you may also provide the path `pose_path` to the reference pose file and optionally the path `calib_path` to the extrinsic calibration file. Note the pose file and calibration file should be in the [KITTI odometry data format](https://www.cvlibs.net/datasets/kitti/eval_odometry.php).
+For pose estimation evaluation, you may also provide the path `pose_path` to the reference pose file and optionally the path `calib_path` to the extrinsic calibration file. Note the pose file and calibration file should be in the [KITTI odometry data format](https://www.cvlibs.net/datasets/kitti/eval_odometry.php) or TUM format.
 
 The SLAM results and logs will be output in the `output_root` folder specified in the config file. 
 
@@ -219,6 +219,11 @@ rviz -d ./config/pin_slam_ros.rviz
 ```
 
 You may use the ROS service `save_results` and `save_mesh` to save the results and mesh in the `output_root` folder.
+
+```
+rosservice call /pin_slam/save_results
+rosservice call /pin_slam/save_mesh
+```
 
 The process will stop and the results and logs will be saved in the `output_root` folder if no new messages are received for more than 30 seconds.
 
@@ -298,8 +303,10 @@ If you have any questions, please contact:
 
 ## Related Projects
 
-[SHINE-Mapping](https://github.com/PRBonn/SHINE_mapping): Large-Scale 3D Mapping Using Sparse Hierarchical Implicit Neural Representations
+[SHINE-Mapping (ICRA 23)](https://github.com/PRBonn/SHINE_mapping): Large-Scale 3D Mapping Using Sparse Hierarchical Implicit Neural Representations
 
-[LocNDF](https://github.com/PRBonn/LocNDF): Neural Distance Field Mapping for Robot Localization
+[LocNDF (RAL 23)](https://github.com/PRBonn/LocNDF): Neural Distance Field Mapping for Robot Localization
 
-[KISS-ICP](https://github.com/PRBonn/kiss-icp): A LiDAR odometry pipeline that just works
+[KISS-ICP (RAL 23)](https://github.com/PRBonn/kiss-icp): A LiDAR odometry pipeline that just works
+
+[4DNDF (CVPR 24)](https://github.com/PRBonn/4dNDF): 3D LiDAR Mapping in Dynamic Environments using a 4D Implicit Neural Representation

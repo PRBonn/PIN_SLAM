@@ -94,7 +94,7 @@ class PINSLAMer:
             self.pgm.add_pose_prior(0, np.eye(4), fixed=True)
 
         # loop closure detector
-        self.lcd_npmc = NeuralPointMapContextManager(self.config, self.mapper) # npmc: neural point map context
+        self.lcd_npmc = NeuralPointMapContextManager(self.config) # npmc: neural point map context
         self.loop_corrected = False
         self.loop_reg_failed_count = 0
 
@@ -103,7 +103,7 @@ class PINSLAMer:
         self.mc_res_m = self.config.mc_res_m
 
         # publisher
-        queue_size_ = 10  # Replace with your actual queue size
+        queue_size_ = 10
         self.traj_pub = rospy.Publisher("~pin_path", nav_msgs.msg.Path, queue_size=queue_size_)
         self.path_msg = nav_msgs.msg.Path()
         self.path_msg.header.frame_id = self.global_frame_name
@@ -119,6 +119,7 @@ class PINSLAMer:
 
         self.last_message_time = time.time()
         self.begin = False
+        self.travel_dist = None
         
         # ros service
         rospy.Service('~save_results', Empty, self.save_slam_result_service_callback)
@@ -168,16 +169,14 @@ class PINSLAMer:
         if self.dataset.processed_frame > 0: 
             tracking_result = self.tracker.tracking(self.dataset.cur_source_points, self.dataset.cur_pose_guess_torch, 
                                                 self.dataset.cur_source_colors, self.dataset.cur_source_normals)
-            
             cur_pose_torch, _, _, valid_flag = tracking_result
-
             self.dataset.lose_track = not valid_flag 
-            self.mapper.lose_track = not valid_flag
 
             self.dataset.update_odom_pose(cur_pose_torch) # update dataset.cur_pose_torch
             self.begin = True
         
-        self.neural_points.travel_dist = torch.tensor(np.array(self.dataset.travel_dist), device = self.config.device, dtype=self.config.dtype) 
+        self.travel_dist = self.dataset.travel_dist[:self.dataset.processed_frame+1]
+        self.neural_points.travel_dist = torch.tensor(self.travel_dist, device=self.config.device, dtype=self.config.dtype) 
         
         T3 = get_time()
 
@@ -188,16 +187,14 @@ class PINSLAMer:
         T4 = get_time()
 
         # IV: Mapping and bundle adjustment
-
         # if lose track, we will not update the map and data pool (don't let the wrong pose to corrupt the map)
-        # if the robot stop, also don't process this frame, since there's no new oberservations
-        self.neural_points.reset_local_map(self.dataset.cur_pose_torch[:3,3], None, self.dataset.processed_frame)
-        self.mapper.static_mask = None
-        if not self.mapper.lose_track and not self.dataset.stop_status:
+        # if the robot stop, also don't process this frame, since there's no new oberservations        
+        if not self.dataset.lose_track and not self.dataset.stop_status:
             self.mapper.process_frame(self.dataset.cur_point_cloud_torch, self.dataset.cur_sem_labels_torch,
                                       self.dataset.cur_pose_torch, self.dataset.processed_frame)
-
-                                
+        else:
+            self.neural_points.reset_local_map(self.dataset.cur_pose_torch[:3,3], None, self.dataset.processed_frame)
+              
         T5 = get_time()
 
         # for the first frame, we need more iterations to do the initialization (warm-up)
@@ -263,7 +260,7 @@ class PINSLAMer:
         
         print("Mission completed")
         
-        self.dataset.write_results(self.run_path)
+        self.dataset.write_results()
         if self.config.pgo_on and self.pgm.pgo_count>0:
             print("# Loop corrected: ", self.pgm.pgo_count)
             self.pgm.write_g2o(os.path.join(self.run_path, "final_pose_graph.g2o"))
@@ -271,7 +268,7 @@ class PINSLAMer:
 
         if terminate:
             self.neural_points.recreate_hash(None, None, False, False) # merge the final neural point map
-            self.neural_points.prune_map(self.config.max_prune_certainty) # prune uncertain points for the final output 
+            self.neural_points.prune_map(self.config.max_prune_certainty, 0) # prune uncertain points for the final output 
 
         if self.config.save_map:
             neural_pcd = self.neural_points.get_neural_points_o3d(query_global=True, color_mode=0)
@@ -322,7 +319,8 @@ class PINSLAMer:
 
         if self.loop_corrected: # update traj after pgo
             self.path_msg.poses = []
-            for cur_pose in self.dataset.pgo_poses:
+            for i in range(self.dataset.processed_frame):
+                cur_pose = self.dataset.pgo_poses[i]
                 cur_q = tf.transformations.quaternion_from_matrix(cur_pose)
                 cur_t = cur_pose[0:3,3]
 
@@ -400,35 +398,34 @@ class PINSLAMer:
         cur_frame_id = self.dataset.processed_frame
         if self.config.global_loop_on:
             if self.config.local_map_context and cur_frame_id >= self.config.local_map_context_latency: # local map context
-                cur_frame = cur_frame_id-self.config.local_map_context_latency
-                cur_pose = torch.tensor(self.dataset.pgo_poses[cur_frame], device=self.config.device, dtype=torch.float64)
-                self.neural_points.reset_local_map(cur_pose[:3,3], None, cur_frame, False, self.config.loop_local_map_time_window) 
-                context_pc_local = transform_torch(self.neural_points.local_neural_points.detach(), torch.linalg.inv(cur_pose)) # transformed back into the local frame
+                local_map_frame_id = cur_frame_id-self.config.local_map_context_latency
+                local_map_pose = torch.tensor(self.dataset.pgo_poses[local_map_frame_id], device=self.config.device, dtype=torch.float64)
+                if self.config.local_map_context_latency > 0:
+                    self.neural_points.reset_local_map(local_map_pose[:3,3], None, local_map_frame_id, False, self.config.loop_local_map_time_window)
+                context_pc_local = transform_torch(self.neural_points.local_neural_points.detach(), torch.linalg.inv(local_map_pose)) # transformed back into the local frame
                 neural_points_feature = self.neural_points.local_geo_features[:-1].detach() if self.config.loop_with_feature else None
-                self.lcd_npmc.add_node(cur_frame, context_pc_local, neural_points_feature)
+                self.lcd_npmc.add_node(local_map_frame_id, context_pc_local, neural_points_feature)
             else: # first frame not yet have local map, use scan context
-                self.lcd_npmc.add_node(0, self.dataset.cur_point_cloud_torch)
+                self.lcd_npmc.add_node(cur_frame_id, self.dataset.cur_point_cloud_torch)
             
         self.pgm.add_frame_node(cur_frame_id, self.dataset.pgo_poses[cur_frame_id]) # add new node and pose initial guess
-        self.pgm.init_poses = self.dataset.pgo_poses
+        self.pgm.init_poses = self.dataset.pgo_poses[:cur_frame_id+1]
 
-        if cur_frame_id > 0:     
+        if cur_frame_id > 0: 
             self.pgm.add_odometry_factor(cur_frame_id, cur_frame_id-1, self.dataset.last_odom_tran) # T_p<-c
-            self.pgm.estimate_drift(self.dataset.travel_dist, cur_frame_id) # estimate the current drift
+            self.pgm.estimate_drift(self.travel_dist, cur_frame_id) # estimate the current drift
             if self.config.pgo_with_pose_prior: # add pose prior
                 self.pgm.add_pose_prior(cur_frame_id, self.dataset.pgo_poses[cur_frame_id])
 
             if cur_frame_id - self.pgm.last_loop_idx > self.config.pgo_freq and not self.dataset.stop_status:
-                cur_pgo_poses = np.stack(self.dataset.pgo_poses)
-                dist_to_past = np.linalg.norm(cur_pgo_poses[:,:3,3] - cur_pgo_poses[-1,:3,3], axis=1)
-                loop_candidate_mask = (self.dataset.travel_dist[-1] - self.dataset.travel_dist > self.config.min_loop_travel_dist_ratio*self.config.local_map_radius)
+                loop_candidate_mask = ((self.travel_dist[-1] - self.travel_dist) > (self.config.min_loop_travel_dist_ratio*self.config.local_map_radius))
                 loop_id = None
                 local_map_context_loop = False
-                if loop_candidate_mask.any(): # have at least one candidate
-                    # firstly try to detect the local loop
-                    loop_id, loop_dist, loop_transform = detect_local_loop(dist_to_past, loop_candidate_mask, self.dataset.pgo_poses, self.pgm.drift_radius, cur_frame_id, self.loop_reg_failed_count, dist_thre=self.config.local_loop_dist_thre, drift_thre = self.config.local_loop_dist_thre*2.0, silence=self.config.silence)
+                if np.any(loop_candidate_mask): # have at least one candidate
+                    # firstly try to detect the local loop by checking the distance
+                    loop_id, loop_dist, loop_transform = detect_local_loop(self.dataset.pgo_poses[:cur_frame_id+1], loop_candidate_mask, self.pgm.drift_radius, cur_frame_id, self.loop_reg_failed_count, dist_thre=self.config.local_loop_dist_thre, drift_thre = self.config.local_loop_dist_thre*2.0, silence=self.config.silence)
                     if loop_id is None and self.config.global_loop_on: # global loop detection (large drift)
-                        loop_id, loop_cos_dist, loop_transform, local_map_context_loop = self.lcd_npmc.detect_global_loop(cur_pgo_poses, self.dataset.pgo_poses, self.pgm.drift_radius*3.0, loop_candidate_mask, self.neural_points)
+                        loop_id, loop_cos_dist, loop_transform, local_map_context_loop = self.lcd_npmc.detect_global_loop(self.dataset.pgo_poses[:cur_frame_id+1], self.pgm.drift_radius*self.config.loop_dist_drift_ratio_thre, loop_candidate_mask, self.neural_points)
 
                 if loop_id is not None: # if a loop is found, we refine loop closure transform initial guess with a scan-to-map registration                    
                     if self.config.loop_z_check_on and abs(loop_transform[2,3]) > self.config.voxel_size_m*3.0: # for multi-floor buildings, z may cause ambiguilties

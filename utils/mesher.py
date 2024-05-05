@@ -499,7 +499,9 @@ class Mesher:
         mesh_min_nn=10,
         use_torch_mc=False,
     ):
-
+        if not self.silence:
+            print("# Chunk for meshing: ", len(aabbs))
+            
         mesh_merged = o3d.geometry.TriangleMesh()
         for bbx in tqdm(aabbs, disable=self.silence):
             cur_mesh = self.recon_aabb_mesh(

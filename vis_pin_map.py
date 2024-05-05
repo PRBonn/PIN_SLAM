@@ -54,7 +54,6 @@ def vis_pin_map():
     loaded_model = torch.load(config.model_path)
     neural_points = loaded_model["neural_points"]
 
-   
     # print(loaded_model.keys())
     geo_mlp.load_state_dict(loaded_model["geo_decoder"])
     if 'sem_decoder' in loaded_model.keys():
@@ -65,8 +64,6 @@ def vis_pin_map():
 
     if config.o3d_vis_on:
         vis = MapVisualizer(config)
-
-    # neural_points.recreate_hash(neural_points.neural_points[0], torch.eye(3).cuda(), True, True) # FIXME
 
     neural_points.recreate_hash(neural_points.neural_points[0], torch.eye(3).cuda(), False, False)
 

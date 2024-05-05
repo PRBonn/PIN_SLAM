@@ -31,7 +31,7 @@ class Config:
         self.first_frame_ref: bool = False  # if false, we directly use the world
         # frame as the reference frame
         self.begin_frame: int = 0  # begin from this frame
-        self.end_frame: int = 0  # end at this frame
+        self.end_frame: int = -1  # end at this frame
         self.every_frame: int = 1  # process every x frame
 
         self.seed: int = 42 # random seed for the experiment
@@ -79,7 +79,7 @@ class Config:
 
         # map-based dynamic filtering (observations in certain freespace are dynamic)
         self.dynamic_filter_on: bool = False
-        self.dynamic_certainty_thre: float = 2.0
+        self.dynamic_certainty_thre: float = 0.5
         self.dynamic_sdf_ratio_thre: float = 1.5
 
         # neural points
@@ -111,6 +111,7 @@ class Config:
         # map management
         self.prune_map_on: bool = False
         self.max_prune_certainty: float = 3.0 # neural point pruning threshold
+        self.prune_freq_frame: int = 100
 
         # training sampler
         # spilt into 3 parts for sampling: close-to-surface (+ exact beam endpoint) + front-surface-freespace + behind-surface-freespace
@@ -318,7 +319,7 @@ class Config:
             
             self.first_frame_ref = config_args["setting"].get("first_frame_ref", self.first_frame_ref)
             self.begin_frame = config_args["setting"].get("begin_frame", 0)
-            self.end_frame = config_args["setting"].get("end_frame", 999999)
+            self.end_frame = config_args["setting"].get("end_frame", -1)
             self.every_frame = config_args["setting"].get("every_frame", 1)
 
             self.seed = config_args["setting"].get("random_seed", self.seed)
@@ -331,6 +332,8 @@ class Config:
 
             self.deskew = config_args["setting"].get("deskew", self.deskew) # apply motion undistortion or not
             self.valid_ts_in_points = config_args["setting"].get("valid_ts", self.valid_ts_in_points)
+            if self.every_frame > 1:
+                self.deskew = False
 
         # process
         if "process" in config_args:
@@ -371,9 +374,11 @@ class Config:
             self.from_sample_points = config_args["neuralpoints"].get("from_sample_points", self.from_sample_points)
             if self.from_sample_points:
                 self.map_surface_ratio = config_args["neuralpoints"].get("map_surface_ratio", self.map_surface_ratio)
+            self.prune_map_on = config_args["neuralpoints"].get("prune_map_on", self.prune_map_on)
             self.max_prune_certainty = config_args["neuralpoints"].get("max_prune_certainty", self.max_prune_certainty)
             self.use_mid_ts = config_args["neuralpoints"].get("use_mid_ts", self.use_mid_ts)
             self.local_map_travel_dist_ratio = config_args["neuralpoints"].get("local_map_travel_dist_ratio", self.local_map_travel_dist_ratio)
+            
 
         # decoder
         if "decoder" in config_args: # only on if indicated

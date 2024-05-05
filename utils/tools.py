@@ -355,6 +355,8 @@ def apply_quaternion_rotation(quat: torch.tensor, points: torch.tensor) -> torch
 def rotmat_to_quat(rot_matrix: torch.tensor):
     """
     Convert a batch of 3x3 rotation matrices to quaternions.
+    rot_matrix: N,3,3
+    return N,4
     """
     qw = (
         torch.sqrt(
@@ -408,6 +410,7 @@ def quat_multiply(q1: torch.tensor, q2: torch.tensor):
     Perform quaternion multiplication for batches.
     q' = q1 @ q2
     apply rotation q1 to quat q2
+    both in the shape of N, 4
     """
     w1, x1, y1, z1 = torch.unbind(q1, dim=1)  # quaternion representing the rotation
     w2, x2, y2, z2 = torch.unbind(q2, dim=1)  # quaternion to be rotated
@@ -417,7 +420,7 @@ def quat_multiply(q1: torch.tensor, q2: torch.tensor):
     y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
     z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
 
-    return torch.stack((w, x, y, z), dim=1)
+    return torch.stack((w, x, y, z), dim=1) # N, 4
 
 
 def torch2o3d(points_torch):
@@ -450,11 +453,21 @@ def transform_batch_torch(points: torch.tensor, transformation: torch.tensor):
     # points [N, 3]
     # transformation [N, 4, 4]
     # N,3,3 @ N,3,1 -> N,3,1 + N,3,1 -> N,3,1 -> N,3
-    points = torch.matmul(
-        transformation[:, :3, :3].to(points), points.unsqueeze(-1)
-    ) + transformation[:, :3, 3:].to(points)
 
-    return points.squeeze(-1)
+    # Extract rotation and translation components
+    rotation = transformation[:, :3, :3].to(points)
+    translation = transformation[:, :3, 3:].to(points)
+
+    # Reshape points to match dimensions for batch matrix multiplication
+    points = points.unsqueeze(-1)
+
+    # Perform batch matrix multiplication using torch.bmm(), instead of memory hungry matmul
+    transformed_points = torch.bmm(rotation, points) + translation
+
+    # Squeeze to remove the last dimension
+    transformed_points = transformed_points.squeeze(-1)
+
+    return transformed_points
 
 
 def voxel_down_sample_torch(points: torch.tensor, voxel_size: float):

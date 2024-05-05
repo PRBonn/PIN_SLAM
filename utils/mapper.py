@@ -12,6 +12,7 @@ import open3d as o3d
 import torch
 import torch.nn.functional as F
 import wandb
+import pandas as pd
 from rich import print
 from tqdm import tqdm
 
@@ -51,7 +52,6 @@ class Mapper:
         self.device = config.device
         self.dtype = config.dtype
         self.used_poses = None
-        self.lose_track: bool = False
         self.require_gradient = False
         if (
             config.ekional_loss_on
@@ -89,12 +89,12 @@ class Mapper:
         self.color_pool = torch.empty(
             (0, self.config.color_channel), device=self.device, dtype=self.dtype
         )
-        self.sem_label_pool = torch.empty((0), device=self.device, dtype=torch.long)
+        self.sem_label_pool = torch.empty((0), device=self.device, dtype=torch.int)
         self.normal_label_pool = torch.empty(
             (0, 3), device=self.device, dtype=self.dtype
         )
         self.weight_pool = torch.empty((0), device=self.device, dtype=self.dtype)
-        self.time_pool = torch.empty((0), device=self.device, dtype=torch.long)
+        self.time_pool = torch.empty((0), device=self.device, dtype=torch.int)
 
     def dynamic_filter(self, points_torch, type_2_on: bool = False):
 
@@ -137,21 +137,25 @@ class Mapper:
         return static_mask
 
     def determine_used_pose(self):
+        
+        cur_frame = self.dataset.processed_frame
         if self.config.pgo_on:
             self.used_poses = torch.tensor(
-                np.array(self.dataset.pgo_poses),
+                self.dataset.pgo_poses[:cur_frame+1],
                 device=self.device,
                 dtype=torch.float64,
             )
         elif self.config.track_on:
             self.used_poses = torch.tensor(
-                np.array(self.dataset.odom_poses),
+                self.dataset.odom_poses[:cur_frame+1],
                 device=self.device,
                 dtype=torch.float64,
             )
         elif self.dataset.gt_pose_provided:  # for pure reconstruction with known pose
             self.used_poses = torch.tensor(
-                np.array(self.dataset.gt_poses), device=self.device, dtype=torch.float64
+                self.dataset.gt_poses[:cur_frame+1],
+                device=self.device, 
+                dtype=torch.float64
             )
 
     def process_frame(
@@ -179,12 +183,15 @@ class Mapper:
             frame_point_torch.shape[0], dtype=torch.bool, device=self.config.device
         )
         if filter_dynamic:
+            # reset local map (consider the frame description for loop with latency) 
+            self.neural_points.reset_local_map(frame_origin_torch, frame_orientation_torch, frame_id)
+
             # transformed to the global frame
             frame_point_torch_global = transform_torch(
                 frame_point_torch, cur_pose_torch
             )
             self.static_mask = self.dynamic_filter(frame_point_torch_global)
-            dynamic_count = (self.static_mask == False).sum().item()
+            dynamic_count = (self.static_mask == 0).sum().item()
             if not self.silence:
                 print("# Dynamic points filtered: ", dynamic_count)
             frame_point_torch = frame_point_torch[self.static_mask]
@@ -200,6 +207,8 @@ class Mapper:
                 frame_label_torch = frame_label_torch[self.static_mask]
 
         frame_normal_torch = None  # not used yet
+        
+        self.dataset.static_mask = self.static_mask
 
         T1 = get_time()
 
@@ -217,7 +226,7 @@ class Mapper:
         # coord is in sensor local frame
 
         time_repeat = torch.tensor(
-            frame_id, dtype=torch.long, device=self.device
+            frame_id, dtype=torch.int, device=self.device
         ).repeat(coord.shape[0])
 
         self.cur_sample_count = sdf_label.shape[0]  # before filtering
@@ -241,7 +250,7 @@ class Mapper:
             update_points = transform_torch(frame_point_torch, cur_pose_torch)
 
         # prune map and recreate hash
-        if self.config.prune_map_on:
+        if self.config.prune_map_on and ((frame_id + 1) % self.config.prune_freq_frame == 0):
             if self.neural_points.prune_map(self.config.max_prune_certainty):
                 self.neural_points.recreate_hash(None, None, True, True, frame_id)
         self.neural_points.update(
@@ -278,13 +287,10 @@ class Mapper:
         # update the data pool
         # get the data pool ready for training
 
-        T3_0 = get_time()
-
-        # determine used poses
+        # determine used poses # speed fixed
         self.determine_used_pose()
 
         if self.ba_done_flag:  # bundle adjustment is not done
-            # this may also cause some memory issue when the data pool is too large (5e7) # FIXME
             self.global_coord_pool = transform_batch_torch(
                 self.coord_pool, self.used_poses[self.time_pool]
             )  # very slow here [if ba is not done, then you don't need to transform the whole data pool]
@@ -440,7 +446,7 @@ class Mapper:
         if (
             self.config.bs_new_sample > 0
             and self.new_idx is not None
-            and not self.lose_track
+            and not self.dataset.lose_track
             and not self.dataset.stop_status
         ):
             # half, half for the history and current samples

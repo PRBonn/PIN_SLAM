@@ -56,8 +56,10 @@ class MapVisualizer:
         self.pgo_edges = o3d.geometry.LineSet()
 
         self.log_path = "./"
-
         self.sdf_slice_height = 0.0
+        self.mc_res_m = 0.1
+        self.mesh_min_nn = 10
+        self.keep_local_mesh = True
 
         if config is not None:
             self.log_path = os.path.join(config.run_path, "log")
@@ -66,6 +68,9 @@ class MapVisualizer:
             if self.config.sensor_cad_path is not None:
                 self.sensor_cad = o3d.io.read_triangle_mesh(config.sensor_cad_path)
                 self.sensor_cad.compute_vertex_normals()
+            self.mc_res_m = config.mc_res_m
+            self.mesh_min_nn = config.mesh_min_nn
+            self.keep_local_mesh = config.keep_local_mesh
 
         self.before_pgo = True
         self.last_pose = np.eye(4)
@@ -91,21 +96,10 @@ class MapVisualizer:
 
         self.sdf_slice_height_step: float = 0.1
 
-        self.keep_local_mesh = True
-        if config is not None:
-            self.keep_local_mesh = config.keep_local_mesh
-
         self.vis_pc_color: bool = True
         self.pc_uniform_color: bool = False
 
         self.vis_only_cur_samples: bool = False
-
-        if config is not None:
-            self.mc_res_m = config.mc_res_m
-            self.mesh_min_nn = config.mesh_min_nn
-        else:
-            self.mc_res_m = 0.1
-            self.mesh_min_nn = 10
 
         self.mc_res_change_interval_m: float = 0.2 * self.mc_res_m
 
@@ -581,13 +575,13 @@ class MapVisualizer:
             self.reset_bounding_box = False
 
     # show traj as lineset
-    # FIXME: this may take a long time when there are 10000+ frames
+    # long list to np conversion time
     def _update_traj(
         self,
         cur_pose=None,
-        odom_poses=None,
-        gt_poses=None,
-        pgo_poses=None,
+        odom_poses_np=None,
+        gt_poses_np=None,
+        pgo_poses_np=None,
         loop_edges=None,
     ):
 
@@ -596,37 +590,35 @@ class MapVisualizer:
         self.vis.remove_geometry(self.pgo_traj, self.reset_bounding_box)
         self.vis.remove_geometry(self.pgo_edges, self.reset_bounding_box)
 
-        if self.render_trajectory and odom_poses is not None and len(odom_poses) > 1:
-            odom_poses_np = np.array(odom_poses, dtype=np.float64)
-            odom_position_np = odom_poses_np[:, :3, 3]
-            self.odom_traj.points = o3d.utility.Vector3dVector(odom_position_np)
-            odom_edges = np.array([[i, i + 1] for i in range(len(odom_poses) - 1)])
-            self.odom_traj.lines = o3d.utility.Vector2iVector(odom_edges)
-
-            if pgo_poses is None or self.before_pgo:
-                self.odom_traj.paint_uniform_color(RED)
-            else:
-                self.odom_traj.paint_uniform_color(BLUE)
-
-            if self.ego_view and cur_pose is not None:
-                self.odom_traj.transform(np.linalg.inv(cur_pose))
-
-            if pgo_poses is not None and (not self.render_odom_trajectory):
+        if (self.render_trajectory and odom_poses_np is not None and odom_poses_np.shape[0] > 1):
+            if pgo_poses_np is not None and (not self.render_odom_trajectory):
                 self.odom_traj = o3d.geometry.LineSet()
+            else:
+                odom_position_np = odom_poses_np[:, :3, 3]
+                self.odom_traj.points = o3d.utility.Vector3dVector(odom_position_np)
+                odom_edges = np.array([[i, i + 1] for i in range(odom_poses_np.shape[0] - 1)])
+                self.odom_traj.lines = o3d.utility.Vector2iVector(odom_edges)
+
+                if pgo_poses_np is None or self.before_pgo:
+                    self.odom_traj.paint_uniform_color(RED)
+                else:
+                    self.odom_traj.paint_uniform_color(BLUE)
+
+                if self.ego_view and cur_pose is not None:
+                    self.odom_traj.transform(np.linalg.inv(cur_pose))        
         else:
             self.odom_traj = o3d.geometry.LineSet()
 
         if (
             self.render_trajectory
-            and pgo_poses is not None
-            and len(pgo_poses) > 1
+            and pgo_poses_np is not None
+            and pgo_poses_np.shape[0] > 1
             and (not self.before_pgo)
         ):
-            pgo_poses_np = np.array(pgo_poses, dtype=np.float64)
             pgo_position_np = pgo_poses_np[:, :3, 3]
 
             self.pgo_traj.points = o3d.utility.Vector3dVector(pgo_position_np)
-            pgo_traj_edges = np.array([[i, i + 1] for i in range(len(pgo_poses) - 1)])
+            pgo_traj_edges = np.array([[i, i + 1] for i in range(pgo_poses_np.shape[0] - 1)])
             self.pgo_traj.lines = o3d.utility.Vector2iVector(pgo_traj_edges)
             self.pgo_traj.paint_uniform_color(RED)
 
@@ -650,16 +642,15 @@ class MapVisualizer:
         if (
             self.render_trajectory
             and self.render_gt_trajectory
-            and gt_poses is not None
-            and len(gt_poses) > 1
+            and gt_poses_np is not None
+            and gt_poses_np.shape[0] > 1
         ):
-            gt_poses_np = np.array(gt_poses, dtype=np.float64)
             gt_position_np = gt_poses_np[:, :3, 3]
             self.gt_traj.points = o3d.utility.Vector3dVector(gt_position_np)
-            gt_edges = np.array([[i, i + 1] for i in range(len(gt_poses) - 1)])
+            gt_edges = np.array([[i, i + 1] for i in range(gt_poses_np.shape[0] - 1)])
             self.gt_traj.lines = o3d.utility.Vector2iVector(gt_edges)
             self.gt_traj.paint_uniform_color(BLACK)
-            if odom_poses is None:
+            if odom_poses_np is None:
                 self.gt_traj.paint_uniform_color(RED)
             if self.ego_view and cur_pose is not None:
                 self.gt_traj.transform(np.linalg.inv(cur_pose))

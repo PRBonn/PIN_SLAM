@@ -12,26 +12,26 @@ import numpy as np
 
 # our implmentation
 def absolute_error(
-    gt_poses: List[np.ndarray], results_poses: List[np.ndarray], align_on: bool = True
+    poses_gt: np.ndarray, poses_result: np.ndarray, align_on: bool = True
 ):
-
+    assert poses_gt.shape[0] == poses_result.shape[0], "poses length should be identical"
     align_mat = np.eye(4)
     if align_on:
-        align_rot, align_tran, _ = align_traj(results_poses, gt_poses)
+        align_rot, align_tran, _ = align_traj(poses_result, poses_gt)
         align_mat[:3, :3] = align_rot
         align_mat[:3, 3] = np.squeeze(align_tran)
 
-    frame_count = len(gt_poses)
+    frame_count = poses_gt.shape[0]
 
     rot_errors = []
     tran_errors = []
 
     for i in range(frame_count):
-        cur_results_pose_aligned = align_mat @ results_poses[i]
-        cur_gt_pose = gt_poses[i]
+        cur_results_pose_aligned = align_mat @ poses_result[i]
+        cur_gt_pose = poses_gt[i]
         delta_rot = (
             np.linalg.inv(cur_gt_pose[:3, :3]) @ cur_results_pose_aligned[:3, :3]
-        )  # rotation part, BUG FIXED
+        ) 
         delta_tran = cur_gt_pose[:3, 3] - cur_results_pose_aligned[:3, 3]
 
         # the one used for kiss-icp
@@ -51,23 +51,23 @@ def absolute_error(
     )  # this seems to have some problem
     tran_rmse = np.sqrt(np.dot(tran_errors, tran_errors) / frame_count)
 
-    rot_mean = np.mean(rot_errors)
-    tran_mean = np.mean(tran_errors)
+    # rot_mean = np.mean(rot_errors)
+    # tran_mean = np.mean(tran_errors)
 
-    rot_median = np.median(rot_errors)
-    tran_median = np.median(tran_errors)
+    # rot_median = np.median(rot_errors)
+    # tran_median = np.median(tran_errors)
 
-    rot_std = np.std(rot_errors)
-    tran_std = np.std(tran_errors)
+    # rot_std = np.std(rot_errors)
+    # tran_std = np.std(tran_errors)
 
     return rot_rmse, tran_rmse, align_mat
 
 
-def align_traj(poses_1, poses_2):
+def align_traj(poses_np_1, poses_np_2):
 
-    traj_1 = np.vstack([arr[:3, 3] for arr in poses_1]).T
-    traj_2 = np.vstack([arr[:3, 3] for arr in poses_2]).T
-
+    traj_1 = poses_np_1[:,:3,3].squeeze().T
+    traj_2 = poses_np_2[:,:3,3].squeeze().T
+    
     return align(traj_1, traj_2)
 
 
@@ -112,8 +112,8 @@ def align(model, data):
 def relative_error(poses_gt, poses_result):
     """calculate sequence error (kitti metric, relative drifting error)
     Args:
-        poses_gt (dict): {idx: 4x4 array}, ground truth poses
-        poses_result (dict): {idx: 4x4 array}, predicted poses
+        poses_gt, kx4x4 np.array, ground truth poses
+        poses_result, kx4x4 np.array, predicted poses
     Returns:
         err (list list): [first_frame, rotation error, translation error, length, speed]
             - first_frame: frist frame index
@@ -122,6 +122,7 @@ def relative_error(poses_gt, poses_result):
             - length: evaluation trajectory length
             - speed: car speed (#FIXME: 10FPS is assumed)
     """
+    assert poses_gt.shape[0] == poses_result.shape[0], "poses length should be identical"
     err = []
     dist = trajectory_distances(poses_gt)
     step_size = 10
@@ -129,7 +130,7 @@ def relative_error(poses_gt, poses_result):
     lengths = [100, 200, 300, 400, 500, 600, 700, 800]  # unit: m
     num_lengths = len(lengths)
 
-    for first_frame in range(0, len(poses_gt), step_size):
+    for first_frame in range(0, poses_gt.shape[0], step_size):
         for i in range(num_lengths):
             len_ = lengths[i]
             last_frame = last_frame_from_segment_length(dist, first_frame, len_)
@@ -139,7 +140,6 @@ def relative_error(poses_gt, poses_result):
                 continue
 
             # compute rotational and translational errors
-
             pose_delta_gt = np.linalg.inv(poses_gt[first_frame]) @ poses_gt[last_frame]
             pose_delta_result = (
                 np.linalg.inv(poses_result[first_frame]) @ poses_result[last_frame]
@@ -148,7 +148,6 @@ def relative_error(poses_gt, poses_result):
             pose_error = np.linalg.inv(pose_delta_result) @ pose_delta_gt
 
             r_err = rotation_error(pose_error)
-            # print(r_err)
             t_err = translation_error(pose_error)
 
             # compute speed
@@ -175,24 +174,19 @@ def relative_error(poses_gt, poses_result):
     return drift_ate, drift_are
 
 
-def trajectory_distances(poses):
+def trajectory_distances(poses_np):
     """Compute distance for each pose w.r.t frame-0
     Args:
-        poses (dict): {idx: 4x4 array}
+        poses kx4x4 np.array
     Returns:
         dist (float list): distance of each pose w.r.t frame-0
     """
     dist = [0]
 
-    for i in range(len(poses) - 1):
-        cur_frame_idx = i
-        next_frame_idx = i + 1
-        P1 = poses[cur_frame_idx]
-        P2 = poses[next_frame_idx]
-        dx = P1[0, 3] - P2[0, 3]
-        dy = P1[1, 3] - P2[1, 3]
-        dz = P1[2, 3] - P2[2, 3]
-        dist.append(dist[i] + np.sqrt(dx**2 + dy**2 + dz**2))
+    for i in range(poses_np.shape[0] - 1):
+        rela_dist = np.linalg.norm(poses_np[i+1] - poses_np[i])
+        dist.append(dist[i] + rela_dist)
+        
     return dist
 
 
@@ -255,6 +249,7 @@ def plot_trajectories(
     vis_now: bool = False,
     close_all: bool = True,
 ) -> None:
+    # positions_est, positions_ref, positions_est_2 as list of numpy array
 
     from evo.core.trajectory import PosePath3D
     from evo.tools import plot as evoplot

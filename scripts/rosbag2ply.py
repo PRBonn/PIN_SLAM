@@ -13,6 +13,7 @@ def rosbag2ply(args):
     
     begin_flag = False
 
+    print('Start extraction')
     in_bag = rosbag.Bag(args.input_bag)
     for topic, msg, t in in_bag.read_messages():
 
@@ -26,10 +27,10 @@ def rosbag2ply(args):
 
             # NOTE: point cloud array: x,y,z,intensity,timestamp,ring,others...
             # could be different for some other rosbags
-            #print(array[:, :6])
+            # print(array[:, :6])
             
-            timestamps = array[:, 4] # for hilti and others
-            # timestamps = array[:, 5] # for m2dgr
+            timestamps = array[:, 4] # for hilti, vbr, and others
+            # timestamps = array[:, 5] # for m2dgrmm
             # print(timestamps)
 
             if not begin_flag:
