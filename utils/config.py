@@ -23,7 +23,11 @@ class Config:
         self.pose_path: str = ""  # input pose file
         self.calib_path: str = ""  # input calib file (to sensor frame), optional
         self.label_path: str = "" # input point-wise label path, for semantic mapping (optional)
-        self.closed_pose_path = None
+
+        # for uisng kiss-icp data loader
+        self.use_kiss_dataloader: bool = False # use the dataloader providied by kiss-icp or not
+        self.data_loader_name: str = "generic"
+        self.data_loader_seq: str = ""
 
         self.load_model: bool = False  # load the pre-trained model or not
         self.model_path: str = "/"  # pre-trained model path
@@ -233,8 +237,6 @@ class Config:
         self.context_virtual_step_m: float = 2.0 # voxel_size_m * 4.0 
         self.loop_z_check_on: bool = False # check the z axix difference of the found loop frames to deal with the potential abitary issue in a multi-floor building
         self.loop_dist_drift_ratio_thre: float = 2.0 # find the loop candidate only within the distance of (loop_dist_drift_ratio_thre * drift)
-        self.use_gt_loop: bool = False # use the gt loop closure derived from the gt pose or not (only used for debugging)
-        self.max_loop_dist: float = 8.0 # distance threshold for a gt loop candidate (only used for debugging)
     
         # pose graph optimization
         self.pgo_on: bool = False
@@ -296,6 +298,8 @@ class Config:
         if "setting" in config_args:
             self.name = config_args["setting"].get("name", "pin_slam")
             
+            self.use_kiss_dataloader = config_args["setting"].get("use_kiss_icp_dataloader", False)
+
             self.output_root = config_args["setting"].get("output_root", "./experiments")
             self.pc_path = config_args["setting"].get("pc_path", "") 
             self.pose_path = config_args["setting"].get("pose_path", "")
@@ -446,9 +450,6 @@ class Config:
         if self.track_on:
             self.pgo_on = config_args.get("pgo", False) # only on if indicated
         if self.pgo_on: 
-            # loop detection mode
-            self.use_gt_loop = config_args["pgo"].get("gt_loop", False) # only for debugging, not used for real cases
-            self.closed_pose_path = self.pose_path
             self.local_map_context = config_args["pgo"].get("map_context", self.local_map_context)
             self.loop_with_feature = config_args["pgo"].get("loop_with_feature", self.loop_with_feature)
             self.local_map_context_latency = config_args["pgo"].get('local_map_latency', self.local_map_context_latency)

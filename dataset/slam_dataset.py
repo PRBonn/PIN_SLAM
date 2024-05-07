@@ -3,7 +3,6 @@
 # @author    Yue Pan     [yue.pan@igg.uni-bonn.de]
 # Copyright (c) 2024 Yue Pan, all rights reserved
 
-import contextlib
 import csv
 import math
 import os
@@ -47,25 +46,73 @@ class SLAMDataset(Dataset):
 
         max_frame_number: int = 100000 # about 3 hours of operation
 
-        # point cloud files
-        if config.pc_path != "":
-            from natsort import natsorted
+        self.poses_ts = None # timestamp for each reference pose, also as np.array
+        self.gt_poses = None
+        self.calib = {"Tr": np.eye(4)} # as T_lidar<-camera
+        
+        self.loader = None
+        if config.use_kiss_dataloader: 
+            from kiss_icp.datasets import dataset_factory
 
-            self.pc_filenames = natsorted(
-                os.listdir(config.pc_path)
-            )  # sort files as 1, 2,… 9, 10 not 1, 10, 100 with natsort
-            self.total_pc_count_in_folder = len(self.pc_filenames)
-            config.end_frame = min(config.end_frame, self.total_pc_count_in_folder)
-            self.pc_filenames = self.pc_filenames[config.begin_frame:config.end_frame:config.every_frame]
-
-            self.total_pc_count = len(self.pc_filenames)
+            self.loader = dataset_factory(
+                dataloader=config.data_loader_name,
+                data_dir=config.pc_path,
+                sequence=config.data_loader_seq,
+            )
+            if config.end_frame == -1:
+                config.end_frame = len(self.loader)
+            used_frame_count = int((config.end_frame - config.begin_frame) / config.every_frame)
+            self.total_pc_count = min(used_frame_count, len(self.loader))
             max_frame_number = self.total_pc_count
+            if hasattr(self.loader, 'gt_poses'):
+                self.gt_poses = self.loader.gt_poses[config.begin_frame:config.end_frame:config.every_frame]
+                self.gt_pose_provided = True
+            else:
+                self.gt_pose_provided = False
+            if hasattr(self.loader, 'calibration'):
+                self.calib["Tr"][:3, :4] = self.loader.calibration["Tr"].reshape(3, 4)
+        else: # pin-slam generic loader
+            # point cloud files
+            if config.pc_path != "":
+                from natsort import natsorted
+                # sort files as 1, 2,… 9, 10 not 1, 10, 100 with natsort
+                self.pc_filenames = natsorted(os.listdir(config.pc_path))    
+                self.total_pc_count_in_folder = len(self.pc_filenames)
+                config.end_frame = min(config.end_frame, self.total_pc_count_in_folder)
+                self.pc_filenames = self.pc_filenames[config.begin_frame:config.end_frame:config.every_frame]
+                self.total_pc_count = len(self.pc_filenames)
+                max_frame_number = self.total_pc_count
 
-        # pose related
-        self.gt_pose_provided = True
-        if config.pose_path == "":
-            self.gt_pose_provided = False
-
+            self.gt_pose_provided = True
+            if config.pose_path == "":
+                self.gt_pose_provided = False
+            else:
+                if config.calib_path != "":
+                    self.calib = read_kitti_format_calib(config.calib_path)
+                poses_uncalib = None
+                if config.pose_path.endswith("txt"):
+                    poses_uncalib = read_kitti_format_poses(config.pose_path)
+                    if poses_uncalib is None:
+                        poses_uncalib, poses_ts = read_tum_format_poses(config.pose_path)
+                        self.poses_ts = np.array(poses_ts[config.begin_frame:config.end_frame:config.every_frame])
+                    poses_uncalib = np.array(poses_uncalib[config.begin_frame:config.end_frame:config.every_frame])
+                if poses_uncalib is None:
+                    sys.exit("Wrong pose file format. Please use either kitti or tum format with *.txt")
+                
+                # apply calibration
+                # actually from camera frame to LiDAR frame, lidar pose in world frame
+                self.gt_poses = apply_kitti_format_calib(poses_uncalib, inv(self.calib["Tr"]))
+                    
+                # pose in the reference frame (might be the first frame used)
+                if config.first_frame_ref:
+                    gt_poses_first_inv = inv(self.gt_poses[0])
+                    for i in range(self.total_pc_count):
+                        self.gt_poses[i] = gt_poses_first_inv @ self.gt_poses[i]
+                
+                # print('# Total frames:', self.total_pc_count)
+                if self.total_pc_count > 2000:
+                    config.local_map_context = True
+        
         # use pre-allocated numpy array
         self.odom_poses = None
         if config.track_on:
@@ -74,55 +121,6 @@ class SLAMDataset(Dataset):
         self.pgo_poses = None
         if config.pgo_on:
             self.pgo_poses = np.broadcast_to(np.eye(4), (max_frame_number, 4, 4)).copy()
-
-        self.gt_poses = None
-        if self.gt_pose_provided:
-            self.gt_poses = np.broadcast_to(np.eye(4), (max_frame_number, 4, 4)).copy()
-
-        self.poses_w_closed = None
-
-        self.poses_ts = None # timestamp for each reference pose, also as np.array
-
-        self.calib = {}
-        # as default if calib file is not provided # as T_lidar<-camera
-        self.calib["Tr"] = np.eye(4)
-
-        if self.gt_pose_provided:
-            if config.calib_path != "":
-                self.calib = read_kitti_format_calib(config.calib_path)
-            poses_uncalib = None
-            if config.pose_path.endswith("txt"):
-                poses_uncalib = read_kitti_format_poses(config.pose_path)
-                if poses_uncalib is None:
-                    poses_uncalib, poses_ts = read_tum_format_poses(config.pose_path)
-                    self.poses_ts = np.array(poses_ts[config.begin_frame:config.end_frame:config.every_frame])
-                poses_uncalib = np.array(poses_uncalib[config.begin_frame:config.end_frame:config.every_frame])
-            if poses_uncalib is None:
-                sys.exit("Wrong pose file format. Please use either kitti or tum format with *.txt")
-     
-            if config.closed_pose_path is not None and config.use_gt_loop:
-                poses_closed_uncalib = read_kitti_format_poses(config.closed_pose_path)
-                poses_closed_uncalib = np.array(poses_closed_uncalib[config.begin_frame:config.end_frame:config.every_frame])
-            
-            # apply calibration
-            # actually from camera frame to LiDAR frame, lidar pose in world frame
-            self.gt_poses = apply_kitti_format_calib(
-                poses_uncalib, inv(self.calib["Tr"])
-            )
-            if config.closed_pose_path is not None and config.use_gt_loop:
-                self.poses_w_closed = apply_kitti_format_calib(
-                    poses_closed_uncalib, inv(self.calib["Tr"])
-                )
-
-            # pose in the reference frame (might be the first frame used)
-            if config.first_frame_ref:
-                gt_poses_first_inv = inv(self.gt_poses[0])
-                for i in range(self.total_pc_count):
-                    self.gt_poses[i] = gt_poses_first_inv @ self.gt_poses[i]
-            
-            # print('# Total frames:', self.total_pc_count)
-            if self.total_pc_count > 2000:
-                config.local_map_context = True
 
         self.travel_dist = np.zeros(max_frame_number) 
         self.time_table = []
@@ -172,9 +170,7 @@ class SLAMDataset(Dataset):
     def read_frame_ros(self, msg, ts_field_name="time", ts_col=3):
 
         # ros related
-        import rospy
         from sensor_msgs import point_cloud2
-        from sensor_msgs.msg import PointCloud2
 
         # ts_col represents the column id for timestamp
         self.cur_pose_ref = np.eye(4)
@@ -219,17 +215,29 @@ class SLAMDataset(Dataset):
         if self.config.deskew:
             self.get_point_ts(point_ts)
 
+    # read frame with kiss-icp data loader
+    def read_frame_with_loader(self, frame_id):
+
+        self.set_ref_pose(frame_id)
+
+        frame_id_in_folder = self.config.begin_frame + frame_id * self.config.every_frame
+        data = self.loader[frame_id_in_folder] # data loading could be slow # FIXME
+    
+        point_ts = None
+        if isinstance(data, tuple):
+            points, point_ts = data
+        else:
+            points = data
+        self.cur_point_cloud_torch = torch.tensor(points, device=self.device, dtype=self.dtype)
+
+        if self.config.deskew:
+            self.get_point_ts(point_ts)
+
+
     def read_frame(self, frame_id):
 
-        # load gt pose if available
-        if self.gt_pose_provided:
-            self.cur_pose_ref = self.gt_poses[frame_id]
-        else:  # or initialize with identity
-            self.cur_pose_ref = np.eye(4)
-        self.cur_pose_torch = torch.tensor(
-            self.cur_pose_ref, device=self.device, dtype=self.dtype
-        )
-
+        self.set_ref_pose(frame_id)
+        
         point_ts = None
 
         # load point cloud (support *pcd, *ply and kitti *bin format)
@@ -239,7 +247,7 @@ class SLAMDataset(Dataset):
         if not self.config.semantic_on:
             point_cloud, point_ts = read_point_cloud(
                 frame_filename, self.config.color_channel
-            )  #  [N, 3], [N, 4] or [N, 6], may contain color or intensity
+            )  #  [N, 3], [N, 4] or [N, 6], may contain color or intensity # here read as numpy array
             if self.config.color_channel > 0:
                 point_cloud[:, -self.config.color_channel :] /= self.color_scale
             self.cur_sem_labels_torch = None
@@ -317,6 +325,16 @@ class SLAMDataset(Dataset):
                         ] += 1.0  # [0,1]
                         if not self.silence:
                             print("HESAI point cloud deskewed")
+    
+    def set_ref_pose(self, frame_id):
+        # load gt pose if available
+        if self.gt_pose_provided:
+            self.cur_pose_ref = self.gt_poses[frame_id]
+        else:  # or initialize with identity
+            self.cur_pose_ref = np.eye(4)
+        self.cur_pose_torch = torch.tensor(
+            self.cur_pose_ref, device=self.device, dtype=self.dtype
+        )
 
     def preprocess_frame(self): 
         # T1 = get_time()

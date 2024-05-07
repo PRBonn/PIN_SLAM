@@ -300,7 +300,7 @@ def plot_trajectories(
             label="PIN-Odom",
             style=SETTINGS.plot_trajectory_linestyle,
             color="#FF940E",
-            alpha=SETTINGS.plot_trajectory_alpha / 2.0,
+            alpha=SETTINGS.plot_trajectory_alpha / 3.0,
             plot_start_end_markers=False,
         )
 

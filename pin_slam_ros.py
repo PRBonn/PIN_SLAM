@@ -426,12 +426,8 @@ class PINSLAMer:
                     loop_id, loop_dist, loop_transform = detect_local_loop(self.dataset.pgo_poses[:cur_frame_id+1], loop_candidate_mask, self.pgm.drift_radius, cur_frame_id, self.loop_reg_failed_count, dist_thre=self.config.local_loop_dist_thre, drift_thre = self.config.local_loop_dist_thre*2.0, silence=self.config.silence)
                     if loop_id is None and self.config.global_loop_on: # global loop detection (large drift)
                         loop_id, loop_cos_dist, loop_transform, local_map_context_loop = self.lcd_npmc.detect_global_loop(self.dataset.pgo_poses[:cur_frame_id+1], self.pgm.drift_radius*self.config.loop_dist_drift_ratio_thre, loop_candidate_mask, self.neural_points)
-
                 if loop_id is not None: # if a loop is found, we refine loop closure transform initial guess with a scan-to-map registration                    
                     if self.config.loop_z_check_on and abs(loop_transform[2,3]) > self.config.voxel_size_m*3.0: # for multi-floor buildings, z may cause ambiguilties
-                        loop_id = None
-                        if not self.config.silence:
-                            print("[bold red]Delta z check failed, reject the loop[/bold red]")
                         return False 
                     pose_init_np = self.dataset.pgo_poses[loop_id] @ loop_transform # T_w<-c = T_w<-l @ T_l<-c 
                     pose_init_torch = torch.tensor(pose_init_np, device=self.config.device, dtype=torch.float64)

@@ -19,7 +19,6 @@ from model.decoder import Decoder
 from model.neural_points import NeuralPoints
 from utils.config import Config
 from utils.loop_detector import (
-    GTLoopManager,
     NeuralPointMapContextManager,
     detect_local_loop,
 )
@@ -59,6 +58,8 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
             sys.exit("Please provide the path to the config file.\nTry: \
                     python3 pin_slam.py path_to_config.yaml [dataset_name] [sequence_name] [random_seed]")       
         # specific dataset [optional]
+        if len(sys.argv) == 3:
+            set_dataset_path(config, sys.argv[2])
         if len(sys.argv) > 3:
             set_dataset_path(config, sys.argv[2], sys.argv[3])
         if len(sys.argv) > 4: # random seed [optional]
@@ -100,8 +101,6 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
     pgm.add_pose_prior(0, init_pose, fixed=True)
 
     # loop closure detector
-    if config.use_gt_loop:
-        lcd_gt = GTLoopManager(config) 
     lcd_npmc = NeuralPointMapContextManager(config) # npmc: neural point map context
 
     last_frame = dataset.total_pc_count-1
@@ -113,7 +112,10 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
         # I. Load data and preprocessing
         T0 = get_time()
 
-        dataset.read_frame(frame_id)
+        if config.use_kiss_dataloader:
+            dataset.read_frame_with_loader(frame_id)
+        else:
+            dataset.read_frame(frame_id)
 
         T1 = get_time()
         
@@ -150,9 +152,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
 
         # III. Loop detection and pgo
         if config.pgo_on: 
-            if config.use_gt_loop:
-                lcd_gt.add_node(frame_id, dataset.poses_w_closed[frame_id]) # set current node in the loop detector
-            elif config.global_loop_on:
+            if config.global_loop_on:
                 if config.local_map_context and frame_id >= config.local_map_context_latency: # local map context
                     local_map_frame_id = frame_id-config.local_map_context_latency
                     local_map_pose = torch.tensor(dataset.pgo_poses[local_map_frame_id], device=config.device, dtype=torch.float64)
@@ -173,23 +173,17 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
                     pgm.add_pose_prior(frame_id, dataset.pgo_poses[frame_id])
             local_map_context_loop = False
             if frame_id - pgm.last_loop_idx > config.pgo_freq and not dataset.stop_status:
-                if config.use_gt_loop:
-                    loop_id, loop_dist, loop_transform = lcd_gt.detect_loop() # T_l<-c
-                    if loop_id is not None and not config.silence:
-                        print("[bold red]GT loop event added: [/bold red]", lcd_gt.curr_node_idx, "---", loop_id, "(" , loop_dist, ")")
-                else: # detect candidate local loop, find the nearest history pose and activate certain local map
-                    loop_candidate_mask = ((travel_dist[-1] - travel_dist) > (config.min_loop_travel_dist_ratio*config.local_map_radius)) # should not be too close
-                    loop_id = None
-                    if np.any(loop_candidate_mask): # have at least one candidate
-                        # firstly try to detect the local loop by checking the distance
-                        loop_id, loop_dist, loop_transform = detect_local_loop(dataset.pgo_poses[:frame_id+1], loop_candidate_mask, pgm.drift_radius, frame_id, loop_reg_failed_count, config.local_loop_dist_thre, config.local_loop_dist_thre*3.0, config.silence)
-                        if loop_id is None and config.global_loop_on: # global loop detection (large drift)
-                            loop_id, loop_cos_dist, loop_transform, local_map_context_loop = lcd_npmc.detect_global_loop(dataset.pgo_poses[:frame_id+1], pgm.drift_radius*config.loop_dist_drift_ratio_thre, loop_candidate_mask, neural_points) # latency has been considered here     
+                # detect candidate local loop, find the nearest history pose and activate certain local map
+                loop_candidate_mask = ((travel_dist[-1] - travel_dist) > (config.min_loop_travel_dist_ratio*config.local_map_radius)) # should not be too close
+                loop_id = None
+                if np.any(loop_candidate_mask): # have at least one candidate
+                    # firstly try to detect the local loop by checking the distance
+                    loop_id, loop_dist, loop_transform = detect_local_loop(dataset.pgo_poses[:frame_id+1], loop_candidate_mask, pgm.drift_radius, frame_id, loop_reg_failed_count, config.local_loop_dist_thre, config.local_loop_dist_thre*3.0, config.silence)
+                    if loop_id is None and config.global_loop_on: # global loop detection (large drift)
+                        loop_id, loop_cos_dist, loop_transform, local_map_context_loop = lcd_npmc.detect_global_loop(dataset.pgo_poses[:frame_id+1], pgm.drift_radius*config.loop_dist_drift_ratio_thre, loop_candidate_mask, neural_points) # latency has been considered here     
                 if loop_id is not None:
                     if config.loop_z_check_on and abs(loop_transform[2,3]) > config.voxel_size_m*4.0: # for multi-floor buildings, z may cause ambiguilties
-                        loop_id = None
-                        if not config.silence:
-                            print("[bold red]Delta z check failed, reject the loop[/bold red]") 
+                        loop_id = None # delta z check failed
                 if loop_id is not None: # if a loop is found, we refine loop closure transform initial guess with a scan-to-map registration                    
                     pose_init_torch = torch.tensor((dataset.pgo_poses[loop_id] @ loop_transform), device=config.device, dtype=torch.float64) # T_w<-c = T_w<-l @ T_l<-c 
                     neural_points.recreate_hash(pose_init_torch[:3,3], None, True, True, loop_id) # recreate hash and local map at the loop candidate frame for registration, this is the reason why we'd better to keep the duplicated neural points until the end
@@ -381,7 +375,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
         save_implicit_map(run_path, neural_points, geo_mlp, color_mlp, sem_mlp)
     if config.save_merged_pc:
         dataset.write_merged_point_cloud() # replay: save merged point cloud map
-    
+
     if config.o3d_vis_on:
         while True:
             o3d_vis.ego_view = False

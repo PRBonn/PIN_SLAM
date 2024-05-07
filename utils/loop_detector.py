@@ -336,10 +336,10 @@ class NeuralPointMapContextManager:
         else:
             return None, None, None
 
-
+# only for debugging
 class GTLoopManager:
     def __init__(self, config: Config):
-        self.max_loop_dist = config.max_loop_dist
+        self.max_loop_dist = 10.0
         self.min_travel_dist_ratio = 2.5
 
         self.ENOUGH_LARGE = 100000
