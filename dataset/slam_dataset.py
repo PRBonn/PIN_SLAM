@@ -7,6 +7,7 @@ import csv
 import math
 import os
 import sys
+from pathlib import Path
 from typing import List
 
 import matplotlib.cm as cm
@@ -56,13 +57,13 @@ class SLAMDataset(Dataset):
 
             self.loader = dataset_factory(
                 dataloader=config.data_loader_name,
-                data_dir=config.pc_path,
+                data_dir=Path(config.pc_path),
                 sequence=config.data_loader_seq,
+                topic=config.data_loader_seq,
             )
-            if config.end_frame == -1:
-                config.end_frame = len(self.loader)
+            config.end_frame = min(len(self.loader), config.end_frame)
             used_frame_count = int((config.end_frame - config.begin_frame) / config.every_frame)
-            self.total_pc_count = min(used_frame_count, len(self.loader))
+            self.total_pc_count = used_frame_count
             max_frame_number = self.total_pc_count
             if hasattr(self.loader, 'gt_poses'):
                 self.gt_poses = self.loader.gt_poses[config.begin_frame:config.end_frame:config.every_frame]
@@ -507,7 +508,7 @@ class SLAMDataset(Dataset):
 
         if self.odom_poses is not None:
             cur_odom_pose = self.odom_poses[cur_frame_id-1] @ self.last_odom_tran  # T_world<-cur
-            self.odom_poses[cur_frame_id] = cur_odom_pose
+            self.odom_poses[cur_frame_id] = cur_odom_pose # BA bugs, fix it
 
  
         cur_frame_travel_dist = np.linalg.norm(self.last_odom_tran[:3, 3])

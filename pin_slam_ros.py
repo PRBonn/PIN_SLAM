@@ -206,7 +206,7 @@ class PINSLAMer:
         
         # conduct local bundle adjustment (with lower frequency)
         if self.config.ba_freq_frame > 0 and (self.dataset.processed_frame+1) % self.config.ba_freq_frame == 0:
-            self.mapper.bundle_adjustment(self.config.iters*4, self.config.ba_frame)
+            self.mapper.bundle_adjustment(self.config.ba_iters, self.config.ba_frame)
 
         # mapping with fixed poses (every frame)
         if self.dataset.processed_frame % self.config.mapping_freq_frame == 0:

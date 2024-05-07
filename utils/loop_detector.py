@@ -37,10 +37,7 @@ class NeuralPointMapContextManager:
         self.max_length = config.npmc_max_dist
 
         # capable of up to ENOUGH_LARGE number of nodes
-        if config.end_frame == -1:
-            self.ENOUGH_LARGE = 100000 # about 3 hours operation
-        else:
-            self.ENOUGH_LARGE = config.end_frame+1
+        self.ENOUGH_LARGE = config.end_frame
 
         self.contexts = [None] * self.ENOUGH_LARGE
         self.ringkeys = [None] * self.ENOUGH_LARGE

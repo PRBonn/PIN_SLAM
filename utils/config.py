@@ -35,7 +35,7 @@ class Config:
         self.first_frame_ref: bool = False  # if false, we directly use the world
         # frame as the reference frame
         self.begin_frame: int = 0  # begin from this frame
-        self.end_frame: int = -1  # end at this frame
+        self.end_frame: int = 100000  # end at this frame
         self.every_frame: int = 1  # process every x frame
 
         self.seed: int = 42 # random seed for the experiment
@@ -323,7 +323,7 @@ class Config:
             
             self.first_frame_ref = config_args["setting"].get("first_frame_ref", self.first_frame_ref)
             self.begin_frame = config_args["setting"].get("begin_frame", 0)
-            self.end_frame = config_args["setting"].get("end_frame", -1)
+            self.end_frame = config_args["setting"].get("end_frame", self.end_frame)
             self.every_frame = config_args["setting"].get("every_frame", 1)
 
             self.seed = config_args["setting"].get("random_seed", self.seed)
@@ -333,6 +333,7 @@ class Config:
             self.kitti_correction_on = config_args["setting"].get("kitti_correct", self.kitti_correction_on)
             if self.kitti_correction_on:
                 self.correction_deg = config_args["setting"].get("correct_deg", self.correction_deg)
+            self.stop_frame_thre = config_args["setting"].get("stop_frame_thre", self.stop_frame_thre)
 
             self.deskew = config_args["setting"].get("deskew", self.deskew) # apply motion undistortion or not
             self.valid_ts_in_points = config_args["setting"].get("valid_ts", self.valid_ts_in_points)
@@ -488,7 +489,7 @@ class Config:
             self.ba_iters = int(config_args["optimizer"].get("ba_iters", self.ba_iters))
             self.ba_bs = int(config_args["optimizer"].get("ba_bs", self.ba_bs))
 
-            if self.ba_freq_frame > 0: # dirty fix to resolve the conflict
+            if self.ba_freq_frame > 0: # dirty fix to resolve the conflict of ba with stop frame
                 self.stop_frame_thre = self.end_frame
 
         # vis and eval

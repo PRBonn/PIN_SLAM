@@ -854,14 +854,10 @@ class Mapper:
                 current_poses_mat[:-opt_window_size], ltype=pp.SE3_type, check=False
             )  # fixed part
         else:  # se3
-            current_poses_se3_opt = torch.nn.Parameter(
-                pp.from_matrix(
-                    current_poses_mat[-opt_window_size:], ltype=pp.SE3_type, check=False
-                ).Log()
-            )  # optimizable part
-            poses_se3_fix = pp.from_matrix(
-                current_poses_mat[:-opt_window_size], ltype=pp.SE3_type, check=False
-            ).Log()  # fixed part
+            current_poses_se3_opt = torch.nn.Parameter(pp.from_matrix(current_poses_mat[-opt_window_size:], ltype=pp.SE3_type, check=False).Log())    
+            # optimizable part
+            poses_se3_fix = pp.from_matrix(current_poses_mat[:-opt_window_size], ltype=pp.SE3_type, check=False).Log()    
+            # fixed part
 
         neural_point_feat = list(self.neural_points.parameters())
 
@@ -914,14 +910,13 @@ class Mapper:
         # print(diff_pose[-opt_window_size:])
 
         updated_poses_np = updated_poses_mat.cpu().numpy()
-        pose_count = np.shape(updated_poses_np)[0]
 
         if self.config.pgo_on:
-            self.dataset.pgo_poses = [updated_poses_np[i] for i in range(pose_count)]
+            self.dataset.pgo_poses[:self.dataset.processed_frame+1] = updated_poses_np
             # odom pose would not be changed in this case (odom pose is without ba)
             # update pgo odom edge
         elif self.config.track_on:
-            self.dataset.odom_poses = [updated_poses_np[i] for i in range(pose_count)]
+            self.dataset.odom_poses[:self.dataset.processed_frame+1] = updated_poses_np
 
         # FIXME
         self.dataset.cur_pose_ref = updated_poses_np[-1]
