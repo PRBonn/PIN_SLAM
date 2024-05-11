@@ -48,7 +48,7 @@ from utils.tracker import Tracker
 '''
 
 class PINSLAMer:
-    def __init__(self, config_path, point_cloud_topic, ts_field_name):
+    def __init__(self, config_path, point_cloud_topic):
 
         rospy.init_node("pin_slam")
         print("[bold green]PIN-SLAM starts[/bold green]","📍" )
@@ -59,10 +59,8 @@ class PINSLAMer:
                                             
         self.config = Config()
         self.config.load(config_path)
-        argv = ["pin_slam_ros.py", config_path, point_cloud_topic, ts_field_name]
+        argv = ["pin_slam_ros.py", config_path, point_cloud_topic]
         self.run_path = setup_experiment(self.config, argv)
-
-        self.ts_field_name = ts_field_name
         
         # initialize the mlp decoder
         self.geo_mlp = Decoder(self.config, self.config.geo_mlp_hidden_dim, self.config.geo_mlp_level, 1)
@@ -158,7 +156,7 @@ class PINSLAMer:
         
         # I. Load data and preprocessing
         T0 = get_time()
-        self.dataset.read_frame_ros(msg, ts_field_name=self.ts_field_name)
+        self.dataset.read_frame_ros(msg)
 
         T1 = get_time()
         self.dataset.preprocess_frame() 
@@ -466,14 +464,13 @@ class PINSLAMer:
                     
 if __name__ == "__main__":
 
-    config_path = rospy.get_param('~config_path', "./config/lidar_slam/run_ncd_128.yaml")
+    config_path = rospy.get_param('~config_path', "./config/lidar_slam/run_ros_general.yaml")
     point_cloud_topic = rospy.get_param('~point_cloud_topic', "/os_cloud_node/points")
-    ts_field_name = rospy.get_param('~point_timestamp_field_name', "time")
 
     # If you would like to directly run the python script without including it in a ROS package
     # python pin_slam_ros_node.py [path_to_your_config_file] [point_cloud_topic]
     print("If you would like to directly run the python script without including it in a ROS package\n\
-           python pin_slam_ros_node.py (path_to_your_config_file) (point_cloud_topic) (point_timestamp_field_name)")
+           python pin_slam_ros_node.py (path_to_your_config_file) (point_cloud_topic)")
 
     if len(sys.argv) > 1:
         config_path = sys.argv[1]
@@ -481,10 +478,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 2:
         point_cloud_topic = sys.argv[2]
 
-    if len(sys.argv) > 3:
-        ts_field_name = sys.argv[3]
-
-    slamer = PINSLAMer(config_path, point_cloud_topic, ts_field_name)
+    slamer = PINSLAMer(config_path, point_cloud_topic)
     slamer.check_exit()
 
 

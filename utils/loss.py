@@ -43,6 +43,17 @@ def color_diff_loss(pred, label, weight, weighted=False, l2_loss=False):
 
 # used by our approach
 def sdf_bce_loss(pred, label, sigma, weight, weighted=False, bce_reduction="mean"):
+    """ Calculate the binary cross entropy (BCE) loss for SDF supervision
+    Args:
+        pred (torch.tenosr): batch of predicted SDF values
+        label (torch.tensor): batch of the target SDF values
+        sigma (float): scale factor for the sigmoid function
+        weight (torch.tenosr): batch of the per-sample weight
+        weighted (bool, optional): apply the weight or not
+        bce_reduction (string, optional): specifies the reduction to apply to the output
+    Returns:
+        loss (torch.tensor): BCE loss for the batch
+    """
     if weighted:
         loss_bce = nn.BCEWithLogitsLoss(reduction=bce_reduction, weight=weight)
     else:

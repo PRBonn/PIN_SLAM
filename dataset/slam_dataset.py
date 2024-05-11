@@ -168,10 +168,9 @@ class SLAMDataset(Dataset):
         self.cur_source_normals = None
         self.cur_source_colors = None
 
-    def read_frame_ros(self, msg, ts_field_name="time", ts_col=3):
+    def read_frame_ros(self, msg):
 
-        # ros related
-        from sensor_msgs import point_cloud2
+        from utils import point_cloud2
 
         # ts_col represents the column id for timestamp
         self.cur_pose_ref = np.eye(4)
@@ -179,38 +178,15 @@ class SLAMDataset(Dataset):
             self.cur_pose_ref, device=self.device, dtype=self.dtype
         )
 
-        pc_data = point_cloud2.read_points(
-            msg, field_names=("x", "y", "z", ts_field_name), skip_nans=True
-        )
-
-        # convert the point cloud data to a numpy array
-        data = np.array(list(pc_data))
-
-        # print(data)
-
-        # how to read the timestamp information
-        if ts_col > data.shape[1] - 1:
-            point_ts = None
-        else:
-            point_ts = data[:, ts_col]
-
-            if self.processed_frame == 0:
-                self.shift_ts = point_ts[0]
-
-            point_ts = point_ts - self.shift_ts
-
-        # print(point_ts)
-
-        point_cloud = data[:, :3]
+        points, point_ts = point_cloud2.read_point_cloud(msg)
 
         if point_ts is None:
             print(
-                "The point cloud message does not contain the time stamp field:",
-                ts_field_name,
+                "The point cloud message does not contain the time stamp field"
             )
 
         self.cur_point_cloud_torch = torch.tensor(
-            point_cloud, device=self.device, dtype=self.dtype
+            points, device=self.device, dtype=self.dtype
         )
 
         if self.config.deskew:
@@ -508,9 +484,8 @@ class SLAMDataset(Dataset):
 
         if self.odom_poses is not None:
             cur_odom_pose = self.odom_poses[cur_frame_id-1] @ self.last_odom_tran  # T_world<-cur
-            self.odom_poses[cur_frame_id] = cur_odom_pose # BA bugs, fix it
+            self.odom_poses[cur_frame_id] = cur_odom_pose
 
- 
         cur_frame_travel_dist = np.linalg.norm(self.last_odom_tran[:3, 3])
         if (
             cur_frame_travel_dist > self.config.surface_sample_range_m * 40.0
@@ -1074,7 +1049,7 @@ def read_kitti_format_poses(filename: str) -> List[np.ndarray]:
     with open(filename, 'r') as file:            
         for line in file:
             values = line.strip().split()
-            if len(values) != 12:
+            if len(values) < 12: # FIXME: > 12 means maybe it's a 4x4 matrix
                 print('Not a kitti format pose file')
                 return None
 

@@ -185,7 +185,22 @@ Generally speaking, you only need to edit in the config file the
 `pc_path`, which is the path to the folder containing the point cloud (`.bin`, `.ply`, `.pcd` or `.las` format) for each frame. 
 For ROS bag, you can use `./scripts/rosbag2ply.py` to extract the point cloud in `.ply` format.
 
-For pose estimation evaluation, you may also provide the path `pose_path` to the reference pose file and optionally the path `calib_path` to the extrinsic calibration file. Note the pose file and calibration file should be in the [KITTI odometry data format](https://www.cvlibs.net/datasets/kitti/eval_odometry.php) or TUM format.
+For pose estimation evaluation, you may also provide the path `pose_path` to the reference pose file and optionally the path `calib_path` to the extrinsic calibration file. Note the pose file should be in the KITTI format or TUM format.
+
+For some popular datasets, you can run:
+```
+# KITTI dataset sequence 00
+python3 pin_slam.py ./config/lidar_slam/run_kitti.yaml kitti 00  
+
+# MulRAN dataset sequence KAIST01
+python3 pin_slam.py ./config/lidar_slam/run_mulran.yaml mulran kaist01
+
+# Newer College dataset sequence 01_short
+python3 pin_slam.py ./config/lidar_slam/run_ncd.yaml ncd 01
+
+# Replica dataset sequence room0
+python3 pin_slam.py ./config/rgbd_slam/run_replica.yaml replica room0
+```
 
 The SLAM results and logs will be output in the `output_root` folder specified in the config file. 
 
@@ -200,7 +215,7 @@ The training logs can be monitored via [Weights & Bias](wandb.ai) online if you 
 If you are not using PIN-SLAM as a part of a ROS package, you can avoid the catkin stuff and simply run:
 
 ```
-python3 pin_slam_ros.py [path_to_your_config_file] [point_cloud_topic_name] [(optional)point_timestamp_field_name]
+python3 pin_slam_ros.py [path_to_your_config_file] [point_cloud_topic_name]
 ```
 
 <details>
@@ -209,7 +224,7 @@ python3 pin_slam_ros.py [path_to_your_config_file] [point_cloud_topic_name] [(op
 For example:
 
 ```
-python3 pin_slam_ros.py ./config/lidar_slam/run_ros_general.yaml /os_cloud_node/points time
+python3 pin_slam_ros.py ./config/lidar_slam/run_ros_general.yaml /os_cloud_node/points
 ```
 
 After playing the ROS bag or launching the sensor you can then visualize the results in Rviz by:

@@ -7,15 +7,15 @@ import os
 
 from utils.config import Config
 
-def set_dataset_path(config: Config, dataset_name: str, seq: str = ''):
+def set_dataset_path(config: Config, dataset_name: str = '', seq: str = ''):
     
-    config.name = config.name + '_' + dataset_name + '_' + seq
+    config.name = config.name + '_' + dataset_name + '_' + seq.replace("/", "")
     
     if config.use_kiss_dataloader:
         config.data_loader_name = dataset_name
         config.data_loader_seq = seq
         print('KISS-ICP data loaders used')
-        from kiss_icp.datasets import available_dataloaders
+        from kiss_icp.datasets import available_dataloaders 
         print('Available dataloaders:', available_dataloaders())
 
     else:
