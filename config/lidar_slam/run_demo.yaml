@@ -7,8 +7,4 @@ process:
 tracker:
   iter_n: 20
 eval:
-  o3d_vis_on: True # visualize the mapping or not
-  silence_log: True # output the logs or not
   sensor_cad_path: ./cad/kitti_car.ply
-  save_map: True
-  save_mesh: True

@@ -75,7 +75,12 @@ def setup_experiment(config: Config, argv=None, debug_mode: bool = False):
 
         # config file and reproducable shell script
         if argv is not None:
-            shutil.copy2(argv[1], run_path)  # copy the config file to the result folder
+            if len(argv) > 1 and os.path.exists(argv[1]):
+                config_path = argv[1]
+            else:
+                config_path = "config/lidar_slam/run.yaml"
+            # copy the config file to the result folder
+            shutil.copy2(config_path, run_path)  
 
             git_commit_id = (
                 subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()

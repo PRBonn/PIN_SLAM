@@ -18,7 +18,7 @@ class Config:
         self.name: str = "dummy"  # experiment name
 
         self.run_path: str = ""
-        self.output_root: str = ""  # output root folder
+        self.output_root: str = "experiments"  # output root folder
         self.pc_path: str = ""  # input point cloud folder
         self.pose_path: str = ""  # input pose file
         self.calib_path: str = ""  # input calib file (to sensor frame), optional
@@ -36,7 +36,7 @@ class Config:
         # frame as the reference frame
         self.begin_frame: int = 0  # begin from this frame
         self.end_frame: int = 100000  # end at this frame
-        self.every_frame: int = 1  # process every x frame
+        self.step_frame: int = 1  # process every x frame
 
         self.seed: int = 42 # random seed for the experiment
         self.num_workers: int = 12 # number of worker for the dataloader
@@ -186,6 +186,7 @@ class Config:
         self.bs: int = 16384 # batch size
         self.lr: float = 0.01 # learning rate for map parameters and MLP
         self.lr_pose: float = 1e-4 # learning rate for poses during bundle adjustment
+        self.lr_ba_map: float = 0.01 # learning rate for map during bundle adjustment
         self.weight_decay: float = 0.0 # weight_decay is only applied to the latent codes for the l2 regularization
         self.adam_eps: float = 1e-15
         self.adaptive_iters: bool = False # adptive map optimization iterations on (train for fewer iterations when there's not much new information to learn)
@@ -253,18 +254,18 @@ class Config:
 
         # eval
         self.wandb_vis_on: bool = False # monitor the training on weight and bias or not
-        self.silence: bool = False # print log in the terminal or not
+        self.silence: bool = True # print log in the terminal or not
         self.o3d_vis_on: bool = False # visualize the mesh in-the-fly using o3d visualzier or not [press space to pasue/resume]
         self.o3d_vis_raw: bool = False # visualize the raw point cloud or the weight source point cloud
         self.log_freq_frame: int = 0 # save the result log per x frames
-        self.mesh_freq_frame: int = 10  # do the reconstruction per x frames
+        self.mesh_freq_frame: int = 20  # do the reconstruction per x frames
         self.sdfslice_freq_frame: int = 1 # visualize the SDF slice per x frames
         self.vis_sdf_slice_v: bool = False # also visualize the vertical SDF slice or not (default only horizontal slice)
         self.sdf_slice_height: float = -1.0 # initial height of the horizontal SDF slice (m) in sensor frame
         self.eval_traj_align: bool = True # do the SE3 alignment of the trajectory when evaluating the absolute error
         
         # mesh reconstruction, marching cubes related
-        self.mc_res_m: float = 0.1 # resolution for marching cubes
+        self.mc_res_m: float = 0.3 # resolution for marching cubes
         self.pad_voxel: int = 2 # pad x voxels on each side
         self.skip_top_voxel: int = 2 # slip the top x voxels (mainly for visualization indoor, remove the roof)
         self.mc_mask_on: bool = True # use mask for marching cubes to avoid the artifacts
@@ -324,7 +325,7 @@ class Config:
             self.first_frame_ref = config_args["setting"].get("first_frame_ref", self.first_frame_ref)
             self.begin_frame = config_args["setting"].get("begin_frame", 0)
             self.end_frame = config_args["setting"].get("end_frame", self.end_frame)
-            self.every_frame = config_args["setting"].get("every_frame", 1)
+            self.step_frame = config_args["setting"].get("step_frame", 1)
 
             self.seed = config_args["setting"].get("random_seed", self.seed)
             self.device = config_args["setting"].get("device", "cuda") # or cpu, on cpu it's about 5 times slower 
@@ -337,7 +338,7 @@ class Config:
 
             self.deskew = config_args["setting"].get("deskew", self.deskew) # apply motion undistortion or not
             self.valid_ts_in_points = config_args["setting"].get("valid_ts", self.valid_ts_in_points)
-            if self.every_frame > 1:
+            if self.step_frame > 1:
                 self.deskew = False
 
         # process
@@ -486,6 +487,7 @@ class Config:
             self.ba_freq_frame = config_args["optimizer"].get("ba_freq_frame", 0) # default off
             self.ba_frame = config_args["optimizer"].get("ba_local_frame", self.ba_frame)
             self.lr_pose = float(config_args["optimizer"].get("lr_pose_ba", self.lr_pose))
+            self.lr_map_ba = float(config_args["optimizer"].get("lr_map_ba", self.lr))
             self.ba_iters = int(config_args["optimizer"].get("ba_iters", self.ba_iters))
             self.ba_bs = int(config_args["optimizer"].get("ba_bs", self.ba_bs))
 

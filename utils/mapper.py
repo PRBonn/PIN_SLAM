@@ -12,7 +12,6 @@ import open3d as o3d
 import torch
 import torch.nn.functional as F
 import wandb
-import pandas as pd
 from rich import print
 from tqdm import tqdm
 
@@ -354,11 +353,11 @@ class Mapper:
             self.cur_sample_count = coord.shape[0]
             self.pool_sample_count = self.coord_pool.shape[0]
 
-        if not self.silence:
-            print(
-                "# Total sample in pool: ", self.pool_sample_count
-            )  # including the current samples
-            print("# Current sample      : ", self.cur_sample_count)
+        # if not self.silence:
+        #     print(
+        #         "# Total sample in pool: ", self.pool_sample_count
+        #     )  # including the current samples
+        #     print("# Current sample      : ", self.cur_sample_count)
 
         T3_2 = get_time()
 
@@ -410,8 +409,8 @@ class Mapper:
             )  # new idx in the data pool
 
             new_sample_count = self.new_idx.shape[0]
-            if not self.silence:
-                print("# New sample          : ", new_sample_count)
+            # if not self.silence:
+            #     print("# New sample          : ", new_sample_count)
 
             # for determine adaptive mapping iteration
             self.adaptive_iter_offset = 0
@@ -494,7 +493,7 @@ class Mapper:
 
         return coord, sdf_label, ts, normal_label, sem_label, color_label, weight
 
-    # get a batch of training samples (only those measured points) and labels for local bundle adjustment
+    # get a batch of training samples (only those measured end points) and labels for local bundle adjustment
     def get_ba_samples(self, subsample_count):
 
         surface_sample_idx = torch.where(self.sdf_label_pool == 0)[0]
@@ -545,6 +544,9 @@ class Mapper:
         data_pool_pc_o3d = o3d.geometry.PointCloud()
         data_pool_pc_o3d.points = o3d.utility.Vector3dVector(pool_coord_np)
 
+        if self.sdf_label_pool is None:
+            return data_pool_pc_o3d
+            
         if only_cur_data:
             pool_label_np = (
                 self.sdf_label_pool[-self.cur_sample_count :: 3]
@@ -781,7 +783,7 @@ class Mapper:
                         sem_label > 0
                     )  # only use the points with labels (even those with free space labels would not be used)
                 sem_pred = sem_pred[label_mask]
-                sem_label = sem_label[label_mask]
+                sem_label = sem_label[label_mask].long()
                 sem_loss = loss_nll(
                     sem_pred[:: self.config.sem_label_decimation, :],
                     sem_label[:: self.config.sem_label_decimation],
@@ -863,7 +865,8 @@ class Mapper:
 
         # also add the poses as param here, for pose refinement (bundle ajustment)
         opt = setup_optimizer(
-            self.config, neural_point_feat, poses=current_poses_se3_opt, lr_ratio=1.0
+            self.config, neural_point_feat, 
+            poses=current_poses_se3_opt, lr_ratio=self.config.lr_ba_map/self.config.lr
         )
 
         for iter in tqdm(range(iter_count), disable=self.silence):

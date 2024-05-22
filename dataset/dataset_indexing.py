@@ -9,6 +9,9 @@ from utils.config import Config
 
 def set_dataset_path(config: Config, dataset_name: str = '', seq: str = ''):
     
+    if seq is None:
+        seq = ''
+    
     config.name = config.name + '_' + dataset_name + '_' + seq.replace("/", "")
     
     if config.use_kiss_dataloader:
@@ -72,3 +75,5 @@ def set_dataset_path(config: Config, dataset_name: str = '', seq: str = ''):
             config.pc_path = os.path.join(base_path, seq, "rgbd_down_ply")  # input point cloud folder
             #config.pc_path = os.path.join(base_path, seq, "rgbd_ply")  # input point cloud folder
             config.pose_path = os.path.join(base_path, seq, "poses.txt")   # input pose file     
+        else:
+            print('The specified dataset has not been supported yet, try using kiss-icp data loader by adding --kiss_loader flag.')

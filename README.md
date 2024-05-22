@@ -132,11 +132,13 @@ The commands depend on your CUDA version. You may check the instructions [here](
 ### 3. Install other dependency
 
 ```
-pip3 install open3d==0.17 scikit-image gtsam wandb tqdm rich roma natsort pyquaternion pypose evo laspy rospkg 
+pip3 install open3d==0.17 scikit-image gtsam wandb tqdm rich roma natsort pyquaternion pypose evo
 ```
 
-Note that `rospkg` is optional. You can install it if you would like to use PIN-SLAM with ROS.
-
+If you would like to use some specific data loader or use PIN-SLAM with ROS, you can additionally install:
+```
+pip3 install kiss-icp laspy rospkg 
+```
 
 ## Run PIN-SLAM
 
@@ -158,55 +160,87 @@ sh ./scripts/download_kitti_example.sh
 And then run:
 
 ```
-python3 pin_slam.py ./config/lidar_slam/run_demo.yaml
+python3 pin_slam.py ./config/lidar_slam/run_demo.yaml -vsm
 ```
 
 <details>
   <summary>[Details (click to expand)]</summary>
   
-Use `run_demo_no_vis.yaml` if you are running on a server without an X service. 
-Use `run_demo_sem.yaml` if you want to conduct metric-semantic SLAM using semantic segmentation labels.
-
 You can visualize the SLAM process in PIN-SLAM visualizer and check the results in the `./experiments` folder.
+
+Use `run_demo_sem.yaml` if you want to conduct metric-semantic SLAM using semantic segmentation labels:
+```
+python3 pin_slam.py ./config/lidar_slam/run_demo_sem.yaml -vsm
+```
+
+If you are running on a server without an X service (you may first try `export DISPLAY=:0`), then you can turn off the visualization `-v` flag:
+```
+python3 pin_slam.py ./config/lidar_slam/run_demo.yaml -sm
+```
+
+If you don't have a Nvidia GPU on your device, then you can turn on the CPU-only operation by adding the `-c` flag:
+```
+python3 pin_slam.py ./config/lidar_slam/run_demo.yaml -vsmc
+```
+
 </details>
 
 
 ### Run on your datasets
 
-For an arbitrary data sequence, you can run:
+For an arbitrary data sequence, you can run with the default config file by:
 ```
-python3 pin_slam.py path_to_your_config_file.yaml
+python3 pin_slam.py -i /path/to/your/point/cloud/folder -vsm
 ```
 
 <details>
   <summary>[Details (click to expand)]</summary>
 
-Generally speaking, you only need to edit in the config file the 
-`pc_path`, which is the path to the folder containing the point cloud (`.bin`, `.ply`, `.pcd` or `.las` format) for each frame. 
-For ROS bag, you can use `./scripts/rosbag2ply.py` to extract the point cloud in `.ply` format.
+Follow the instructions on how to run PIN-SLAM by typing:
+```
+python3 pin_slam.py -h
+```
 
-For pose estimation evaluation, you may also provide the path `pose_path` to the reference pose file and optionally the path `calib_path` to the extrinsic calibration file. Note the pose file should be in the KITTI format or TUM format.
+To run PIN-SLAM with a specific config file, you can run:
+```
+python3 pin_slam.py path_to_your_config_file.yaml -vsm
+```
 
-For some popular datasets, you can run:
+The flags `-v`, `-s`, `-m` toggle the visualizer, map saving and mesh saving, respectively.
+
+To specify the path to the input point cloud folder, you can either set `pc_path` in the config file or set `-i INPUT_PATH` upon running.
+
+For pose estimation evaluation, you may also set `pose_path` in the config file to specify the path to the reference pose file (in KITTI or TUM format).
+
+For some popular datasets, you can also set the dataset name and sequence name upon running. For example:
 ```
 # KITTI dataset sequence 00
-python3 pin_slam.py ./config/lidar_slam/run_kitti.yaml kitti 00  
+python3 pin_slam.py ./config/lidar_slam/run_kitti.yaml kitti 00 -vsm
 
 # MulRAN dataset sequence KAIST01
-python3 pin_slam.py ./config/lidar_slam/run_mulran.yaml mulran kaist01
+python3 pin_slam.py ./config/lidar_slam/run_mulran.yaml mulran kaist01 -vsm
 
 # Newer College dataset sequence 01_short
-python3 pin_slam.py ./config/lidar_slam/run_ncd.yaml ncd 01
+python3 pin_slam.py ./config/lidar_slam/run_ncd.yaml ncd 01 -vsm
 
 # Replica dataset sequence room0
-python3 pin_slam.py ./config/rgbd_slam/run_replica.yaml replica room0
+python3 pin_slam.py ./config/rgbd_slam/run_replica.yaml replica room0 -vsm
 ```
 
-The SLAM results and logs will be output in the `output_root` folder specified in the config file. 
+We also support loading data from rosbag, mcap or pcap using KISS-ICP data loaders. You need to set the flag `-k` to use such data loaders. For example:
+```
+# Run on a rosbag or a folder of rosbags with certain point cloud topic
+python3 pin_slam.py ./config/lidar_slam/run.yaml rosbag point_cloud_topic_name -i /path/to/the/rosbag -vsmk
+
+# If there's only one topic for point cloud in the rosbag, you can omit it
+python3 pin_slam.py ./config/lidar_slam/run.yaml rosbag -i /path/to/the/rosbag -vsmk
+```
+
+The SLAM results and logs will be output in the `output_root` folder set in the config file or specified by the `-o OUTPUT_PATH` flag. 
 
 You may check [here](https://github.com/PRBonn/PIN_SLAM/blob/main/eval/README.md) for the results that can be obtained with this repository on a couple of popular datasets. 
 
-The training logs can be monitored via [Weights & Bias](wandb.ai) online if you turn on the `wandb_vis_on` option in the config file. If it's your first time using Weights & Bias, you will be requested to register and log in to your wandb account.
+The training logs can be monitored via [Weights & Bias](wandb.ai) online if you set the flag `-w`. If it's your first time using Weights & Bias, you will be requested to register and log in to your wandb account. You can also set the flag `-l` to turn on the log printing in the terminal.
 
 </details>
 
@@ -215,7 +249,7 @@ The training logs can be monitored via [Weights & Bias](wandb.ai) online if you 
 If you are not using PIN-SLAM as a part of a ROS package, you can avoid the catkin stuff and simply run:
 
 ```
-python3 pin_slam_ros.py [path_to_your_config_file] [point_cloud_topic_name]
+python3 pin_slam_ros.py path_to_your_config_file.yaml point_cloud_topic_name
 ```
 
 <details>
@@ -224,7 +258,7 @@ python3 pin_slam_ros.py [path_to_your_config_file] [point_cloud_topic_name]
 For example:
 
 ```
-python3 pin_slam_ros.py ./config/lidar_slam/run_ros_general.yaml /os_cloud_node/points
+python3 pin_slam_ros.py ./config/lidar_slam/run.yaml /os_cloud_node/points
 ```
 
 After playing the ROS bag or launching the sensor you can then visualize the results in Rviz by:
@@ -246,6 +280,8 @@ If you are running without a powerful GPU, PIN-SLAM may not run at the sensor fr
 
 You can also put `pin_slam_ros.py` into a ROS package for `rosrun` or `roslaunch`.
 
+We will add support for ROS2 in the near future.
+
 </details>
 
 
@@ -254,30 +290,28 @@ You can also put `pin_slam_ros.py` into a ROS package for `rosrun` or `roslaunch
 After the SLAM process, you can reconstruct mesh from the PIN map within an arbitrary bounding box with an arbitrary resolution by running:
 
 ```
-python3 vis_pin_map.py [path/to/your/result/folder] [marching_cubes_resolution_m] [(cropped)_map_file.ply] [output_mesh_file.ply] [mesh_min_nn]
+python3 vis_pin_map.py path/to/your/result/folder [marching_cubes_resolution_m] [(cropped)_map_file.ply] [output_mesh_file.ply] [mesh_min_nn]
 ```
 
 <details>
   <summary>[Details (click to expand)]</summary>
 
-The bounding box of `(cropped)_map_file.ply` will be used for the bounding box for mesh reconstruction. `mesh_min_nn` controls the trade-off between completeness and accuracy. The smaller number (for example `6`) will lead to a more complete mesh with more guessed artifacts. The larger number (for example `15`) will lead to a less complete but more accurate mesh.
+The bounding box of `(cropped)_map_file.ply` will be used as the bounding box for mesh reconstruction. `mesh_min_nn` controls the trade-off between completeness and accuracy. The smaller number (for example `6`) will lead to a more complete mesh with more guessed artifacts. The larger number (for example `15`) will lead to a less complete but more accurate mesh.
 
 For example, for the case of the sanity test, run:
 
 ```
-python3 vis_pin_map.py ./experiments/sanity_test_* 0.2 neural_points.ply mesh_20cm.ply 8
+python3 vis_pin_map.py ./experiments/sanity_test_*  0.2 neural_points.ply mesh_20cm.ply 8
 ```
 </details>
 
 
 ## Visualizer Instructions
 
-We provide a PIN-SLAM visualizer based on [lidar-visualizer](https://github.com/PRBonn/lidar-visualizer) to monitor the SLAM process.
-
-The keyboard callbacks are listed below.
+We provide a PIN-SLAM visualizer based on [lidar-visualizer](https://github.com/PRBonn/lidar-visualizer) to monitor the SLAM process. You can use `-v` flag to turn on it.
 
 <details>
-  <summary>[Details (click to expand)]</summary>
+  <summary>[Keyboard callbacks (click to expand)]</summary>
 
 | Button |                                          Function                                          |
 |:------:|:------------------------------------------------------------------------------------------:|

@@ -46,10 +46,8 @@ pgo:
 optimizer: # mapper
   batch_size: 16384
 eval:
-  wandb_vis_on: False # log to wandb or not
-  o3d_vis_on: True # visualize the mapping or not
+  o3d_vis_on: False # visualize the mapping or not
   silence_log: True # output the logs or not
   sensor_cad_path: ./cad/kitti_car.ply
   mesh_freq_frame: 50 # reconstruct the mesh every x frames
   mesh_min_nn: 9
-  save_map: True

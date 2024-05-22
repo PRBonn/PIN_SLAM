@@ -209,9 +209,9 @@ class NeuralPointMapContextManager:
                     ")",
                 )
             # print("[bold red]Candidate global loop event detected: [/bold red]", self.curr_node_idx, "---", loop_id, "(" , loop_cos_dist, ")")
-        else:
-            if not self.silence:
-                print("No global loop")
+        # else:
+        #     if not self.silence:
+        #         print("No global loop")
 
         return loop_id, loop_cos_dist, loop_transform, local_map_context_loop
 
@@ -434,8 +434,8 @@ def detect_local_loop(
             )
         return loop_id, loop_dist, loop_transform
     else:
-        if not silence:
-            print("No local loop")
+        # if not silence:
+        #     print("No local loop")
                 
         return None, None, None
 

@@ -32,12 +32,9 @@ tracker:
   source_vox_down_m: 0.2
   iter_n: 100
 optimizer:
-  mapping_freq_frame: 2
   iters: 15
   batch_size: 8192
 eval:
-  wandb_vis_on: False # log to wandb or not
-  o3d_vis_on: True # visualize the mapping or not
+  o3d_vis_on: False # visualize the mapping or not
   mesh_freq_frame: 20 # reconstruct the mesh every x frames
   mesh_min_nn: 15
-  save_map: True

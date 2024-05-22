@@ -41,9 +41,7 @@ optimizer: # mapper
   ba_freq_frame: 20  
   lr_pose_ba: 1e-3
 eval:
-  wandb_vis_on: False # log to wandb or not
-  o3d_vis_on: True # visualize the mapping or not
+  o3d_vis_on: False # visualize the mapping or not
   silence_log: True
   mesh_freq_frame: 50 
   mesh_min_nn: 18
-  save_map: False

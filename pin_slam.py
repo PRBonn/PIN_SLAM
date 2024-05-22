@@ -3,6 +3,7 @@
 # @author    Yue Pan     [yue.pan@igg.uni-bonn.de]
 # Copyright (c) 2024 Yue Pan, all rights reserved
 
+import argparse
 import os
 import sys
 
@@ -39,32 +40,59 @@ from utils.visualizer import MapVisualizer
 
 '''
     📍PIN-SLAM: LiDAR SLAM Using a Point-Based Implicit Neural Representation for Achieving Global Map Consistency
-     Y. Pan et al.
+     Y. Pan et al. from IPB
 '''
+
+parser = argparse.ArgumentParser()
+parser.add_argument('config_path', type=str, nargs='?', default='config/lidar_slam/run.yaml', help='[Optional] Path to *.yaml config file, if not set, default config would be used')
+parser.add_argument('dataset_name', type=str, nargs='?', help='[Optional] Name of a specific dataset, example: kitti, mulran, or rosbag (when -k is set)')
+parser.add_argument('sequence_name', type=str, nargs='?', help='[Optional] Name of a specific data sequence or the rostopic for point cloud (when -k is set)')
+parser.add_argument('--seed', type=int, default=42, help='Set the random seed (default 42)')
+parser.add_argument('--input_path', '-i', type=str, default=None, help='Path to the point cloud input directory (this will override the pc_path in config file)')
+parser.add_argument('--output_path', '-o', type=str, default=None, help='Path to the result output directory (this will override the output_root in config file)')
+parser.add_argument('--range', nargs=3, type=int, metavar=('START', 'END', 'STEP'), default=None, help='Specify the start, end and step of the processed frame, for example: --range 10 1000 1')
+parser.add_argument('--kiss_loader', '-k', action='store_true', help='Use KISS-ICP data loader (you can use the rosbag, pcap, mcap dataloaders and datasets supported by KISS-ICP)')
+parser.add_argument('--visualize', '-v', action='store_true', help='Turn on the visualizer')
+parser.add_argument('--cpu_only', '-c', action='store_true', help='Run only on CPU')
+parser.add_argument('--log_on', '-l', action='store_true', help='Turn on the logs printing')
+parser.add_argument('--wandb_on', '-w', action='store_true', help='Turn on the weight & bias logging')
+parser.add_argument('--save_map', '-s', action='store_true', help='Save the PIN map after SLAM')
+parser.add_argument('--save_mesh', '-m', action='store_true', help='Save the reconstructed mesh after SLAM')
+
+args = parser.parse_args()
+
 def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=None):
 
     config = Config()
-    if config_path is not None:
+    if config_path is not None: # use as a function
         config.load(config_path)
-        set_dataset_path(config, dataset_name, sequence_name)
+        if dataset_name is not None:
+            set_dataset_path(config, dataset_name, sequence_name)
         if seed is not None:
             config.seed = seed
         argv = ['pin_slam.py', config_path, dataset_name, sequence_name, str(seed)]
         run_path = setup_experiment(config, argv)
-    else:
-        if len(sys.argv) > 1:
-            config.load(sys.argv[1])
-        else:
-            sys.exit("Please provide the path to the config file.\nTry: \
-                    python3 pin_slam.py path_to_config.yaml [dataset_name] [sequence_name] [random_seed]")       
-        # specific dataset [optional]
-        if len(sys.argv) == 3:
-            set_dataset_path(config, sys.argv[2])
-        if len(sys.argv) > 3:
-            set_dataset_path(config, sys.argv[2], sys.argv[3])
-        if len(sys.argv) > 4: # random seed [optional]
-            config.seed = int(sys.argv[4])
-        run_path = setup_experiment(config, sys.argv)
+    else: # from args
+        argv = sys.argv
+        config.load(args.config_path)
+        config.use_kiss_dataloader = args.kiss_loader
+        config.seed = args.seed
+        config.silence = not args.log_on
+        config.wandb_vis_on = args.wandb_on
+        config.o3d_vis_on = args.visualize
+        config.save_map = args.save_map
+        config.save_mesh = args.save_mesh
+        if args.range is not None:
+            config.begin_frame, config.end_frame, config.step_frame = args.range
+        if args.cpu_only:
+            config.device = 'cpu'
+        if args.input_path is not None:
+            config.pc_path = args.input_path
+        if args.output_path is not None:
+            config.output_root = args.output_path
+        if args.dataset_name is not None: # specific dataset [optional]
+            set_dataset_path(config, args.dataset_name, args.sequence_name)
+        run_path = setup_experiment(config, argv)
         print("[bold green]PIN-SLAM starts[/bold green]","📍" )
 
     # non-blocking visualizer
@@ -94,6 +122,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
 
     # mesh reconstructor
     mesher = Mesher(config, neural_points, geo_mlp, sem_mlp, color_mlp)
+    cur_mesh = None
 
     # pose graph manager (for back-end optimization) initialization
     pgm = PoseGraphManager(config) 
@@ -277,6 +306,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
             print("time for training               (ms):", (T6-T5)*1e3)
 
         # V: Mesh reconstruction and visualization
+        cur_mesh = None
         if config.o3d_vis_on: # if visualizer is off, there's no need to reconstruct the mesh
 
             o3d_vis.cur_frame_id = frame_id # frame id in the data folder
@@ -296,7 +326,6 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
                 neural_pcd = neural_points.get_neural_points_o3d(query_global=o3d_vis.vis_global, color_mode=o3d_vis.neural_points_vis_mode, random_down_ratio=1) # select from geo_feature, ts and certainty
 
             # reconstruction by marching cubes
-            cur_mesh = None
             if config.mesh_freq_frame > 0:
                 if o3d_vis.render_mesh and (frame_id == 0 or frame_id == last_frame or (frame_id+1) % config.mesh_freq_frame == 0 or pgm.last_loop_idx == frame_id):              
                     # update map bbx
@@ -366,11 +395,16 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
 
     neural_points.recreate_hash(None, None, False, False) # merge the final neural point map
     neural_points.prune_map(config.max_prune_certainty, 0) # prune uncertain points for the final output     
+    neural_pcd = neural_points.get_neural_points_o3d(query_global=True, color_mode = 0)
     if config.save_map:
-        neural_pcd = neural_points.get_neural_points_o3d(query_global=True, color_mode = 0)
         o3d.io.write_point_cloud(os.path.join(run_path, "map", "neural_points.ply"), neural_pcd) # write the neural point cloud
+    if config.save_mesh and cur_mesh is None:
+        output_mc_res_m = config.mc_res_m*0.6
+        chunks_aabb = split_chunks(neural_pcd, neural_pcd.get_axis_aligned_bounding_box(), output_mc_res_m * 300) # reconstruct in chunks
+        mc_cm_str = str(round(output_mc_res_m*1e2))
+        mesh_path = os.path.join(run_path, "mesh", "mesh_" + mc_cm_str + "cm.ply")
+        cur_mesh = mesher.recon_aabb_collections_mesh(chunks_aabb, output_mc_res_m, mesh_path, False, config.semantic_on, config.color_on, filter_isolated_mesh=True, mesh_min_nn=config.mesh_min_nn)
     neural_points.clear_temp() # clear temp data for output
-
     if config.save_map:
         save_implicit_map(run_path, neural_points, geo_mlp, color_mlp, sem_mlp)
     if config.save_merged_pc:

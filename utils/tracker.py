@@ -204,7 +204,7 @@ class Tracker:
         if cov_mat is not None:
             cov_mat = cov_mat.detach().cpu().numpy()
 
-        if not valid_flag:  # NOTE: if not valid, just take the initial guess
+        if not valid_flag and i < 10:  # NOTE: if not valid and without enough iters, just take the initial guess
             T = init_pose
             cov_mat = None
 

@@ -325,8 +325,8 @@ class PoseGraphManager:
                 travel_dist[self.min_loop_idx]
                 + travel_dist[used_frame_id] * correct_ratio
             ) * drfit_ratio
-        if not self.silence:
-            print("Estimated drift (m):", self.drift_radius)
+        # if not self.silence:
+        #     print("Estimated drift (m):", self.drift_radius)
 
     def plot_loops(self, loop_plot_path, vis_now=False):
 

@@ -62,11 +62,11 @@ class SLAMDataset(Dataset):
                 topic=config.data_loader_seq,
             )
             config.end_frame = min(len(self.loader), config.end_frame)
-            used_frame_count = int((config.end_frame - config.begin_frame) / config.every_frame)
+            used_frame_count = int((config.end_frame - config.begin_frame) / config.step_frame)
             self.total_pc_count = used_frame_count
             max_frame_number = self.total_pc_count
             if hasattr(self.loader, 'gt_poses'):
-                self.gt_poses = self.loader.gt_poses[config.begin_frame:config.end_frame:config.every_frame]
+                self.gt_poses = self.loader.gt_poses[config.begin_frame:config.end_frame:config.step_frame]
                 self.gt_pose_provided = True
             else:
                 self.gt_pose_provided = False
@@ -80,9 +80,11 @@ class SLAMDataset(Dataset):
                 self.pc_filenames = natsorted(os.listdir(config.pc_path))    
                 self.total_pc_count_in_folder = len(self.pc_filenames)
                 config.end_frame = min(config.end_frame, self.total_pc_count_in_folder)
-                self.pc_filenames = self.pc_filenames[config.begin_frame:config.end_frame:config.every_frame]
+                self.pc_filenames = self.pc_filenames[config.begin_frame:config.end_frame:config.step_frame]
                 self.total_pc_count = len(self.pc_filenames)
                 max_frame_number = self.total_pc_count
+            else:
+                sys.exit("Input point cloud directory is not specified. Either use -i flag or add `pc_path:` to the config file. Check details by `python pin_slam.py -h`")
 
             self.gt_pose_provided = True
             if config.pose_path == "":
@@ -95,8 +97,8 @@ class SLAMDataset(Dataset):
                     poses_uncalib = read_kitti_format_poses(config.pose_path)
                     if poses_uncalib is None:
                         poses_uncalib, poses_ts = read_tum_format_poses(config.pose_path)
-                        self.poses_ts = np.array(poses_ts[config.begin_frame:config.end_frame:config.every_frame])
-                    poses_uncalib = np.array(poses_uncalib[config.begin_frame:config.end_frame:config.every_frame])
+                        self.poses_ts = np.array(poses_ts[config.begin_frame:config.end_frame:config.step_frame])
+                    poses_uncalib = np.array(poses_uncalib[config.begin_frame:config.end_frame:config.step_frame])
                 if poses_uncalib is None:
                     sys.exit("Wrong pose file format. Please use either kitti or tum format with *.txt")
                 
@@ -197,7 +199,7 @@ class SLAMDataset(Dataset):
 
         self.set_ref_pose(frame_id)
 
-        frame_id_in_folder = self.config.begin_frame + frame_id * self.config.every_frame
+        frame_id_in_folder = self.config.begin_frame + frame_id * self.config.step_frame
         data = self.loader[frame_id_in_folder] # data loading could be slow # FIXME
     
         point_ts = None
@@ -327,9 +329,9 @@ class SLAMDataset(Dataset):
             self.last_pose_ref = self.cur_pose_ref
         elif frame_id > 0:
             # pose initial guess
-            last_translation = np.linalg.norm(self.last_odom_tran[:3, 3])
-            # if self.config.uniform_motion_on and not self.lose_track and last_translation > 0.2 * self.config.voxel_size_m: # apply uniform motion model here
-            if self.config.uniform_motion_on and not self.lose_track:    
+            # last_translation = np.linalg.norm(self.last_odom_tran[:3, 3])
+            if self.config.uniform_motion_on and not self.lose_track: 
+            # if self.config.uniform_motion_on:   
                 # apply uniform motion model here
                 cur_pose_init_guess = (
                     self.last_pose_ref @ self.last_odom_tran
@@ -629,7 +631,7 @@ class SLAMDataset(Dataset):
         odom_poses = self.odom_poses[:self.processed_frame+1]
         odom_poses_out = apply_kitti_format_calib(odom_poses, self.calib["Tr"])
         write_kitti_format_poses(os.path.join(self.run_path, "odom_poses"), odom_poses_out)
-        write_tum_format_poses(os.path.join(self.run_path, "odom_poses"), odom_poses_out, self.poses_ts, 0.1*self.config.every_frame)
+        write_tum_format_poses(os.path.join(self.run_path, "odom_poses"), odom_poses_out, self.poses_ts, 0.1*self.config.step_frame)
         write_traj_as_o3d(odom_poses, os.path.join(self.run_path, "odom_poses.ply"))
 
         if self.config.pgo_on:
@@ -639,7 +641,7 @@ class SLAMDataset(Dataset):
                 os.path.join(self.run_path, "slam_poses"), slam_poses_out
             )
             write_tum_format_poses(
-                os.path.join(self.run_path, "slam_poses"), slam_poses_out, self.poses_ts, 0.1*self.config.every_frame
+                os.path.join(self.run_path, "slam_poses"), slam_poses_out, self.poses_ts, 0.1*self.config.step_frame
             )
             write_traj_as_o3d(pgo_poses, os.path.join(self.run_path, "slam_poses.ply"))
         
@@ -652,12 +654,12 @@ class SLAMDataset(Dataset):
         np.save(
             os.path.join(self.run_path, "time_table.npy"), time_table
         )  # save detailed time table
-        if self.config.o3d_vis_on:
-            plot_timing_detail(
-                time_table,
-                os.path.join(self.run_path, "time_details.png"),
-                self.config.pgo_on,
-            )
+
+        plot_timing_detail(
+            time_table,
+            os.path.join(self.run_path, "time_details.png"),
+            self.config.pgo_on,
+        )
 
         pose_eval = None
 
@@ -799,7 +801,7 @@ class SLAMDataset(Dataset):
 
         return pose_eval
 
-    def write_merged_point_cloud(self):
+    def write_merged_point_cloud(self, down_vox_m=None):
 
         print("Begin to replay the dataset ...")
 
@@ -840,7 +842,8 @@ class SLAMDataset(Dataset):
                     ),
                 )  # T_last<-cur
 
-            down_vox_m = self.config.vox_down_m
+            if down_vox_m is None:
+                down_vox_m = self.config.vox_down_m
             idx = voxel_down_sample_torch(self.cur_point_cloud_torch[:, :3], down_vox_m)
 
             frame_down_torch = self.cur_point_cloud_torch[idx]
