@@ -209,7 +209,7 @@ class SLAMDataset(Dataset):
             points = data
         self.cur_point_cloud_torch = torch.tensor(points, device=self.device, dtype=self.dtype)
 
-        if self.config.deskew:
+        if self.config.deskew and min(point_ts) < 1.0: # not all 1
             self.get_point_ts(point_ts)
 
 
