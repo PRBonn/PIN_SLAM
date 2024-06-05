@@ -67,7 +67,7 @@ def read_point_cloud(msg: PointCloud2) -> Tuple[np.ndarray, np.ndarray]:
     field_names = ["x", "y", "z"]
     t_field = None
     for field in msg.fields:
-        if field.name in ["t", "timestamp", "time", "ts"]:
+        if field.name in ["t", "timestamp", "time", "ts", "timestamps"]:
             t_field = field.name
             field_names.append(t_field)
             break
@@ -84,7 +84,10 @@ def read_point_cloud(msg: PointCloud2) -> Tuple[np.ndarray, np.ndarray]:
         timestamps = points_structured[t_field].astype(np.float64)
         min_timestamp = np.min(timestamps)
         max_timestamp = np.max(timestamps)
-        timestamps = (timestamps - min_timestamp) / (max_timestamp - min_timestamp)
+        if min_timestamp == max_timestamp:
+            timestamps = None
+        else:
+            timestamps = (timestamps - min_timestamp) / (max_timestamp - min_timestamp) # normalized to 0-1
     else:
         timestamps = None
     return points.astype(np.float64), timestamps

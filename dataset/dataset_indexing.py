@@ -14,11 +14,11 @@ def set_dataset_path(config: Config, dataset_name: str = '', seq: str = ''):
     
     config.name = config.name + '_' + dataset_name + '_' + seq.replace("/", "")
     
-    if config.use_kiss_dataloader:
+    if config.use_dataloader:
         config.data_loader_name = dataset_name
         config.data_loader_seq = seq
-        print('KISS-ICP data loaders used')
-        from kiss_icp.datasets import available_dataloaders 
+        print('Using data loader for specific dataset or specific input data format')
+        from dataset.dataloaders import available_dataloaders 
         print('Available dataloaders:', available_dataloaders())
 
     else:
@@ -70,10 +70,12 @@ def set_dataset_path(config: Config, dataset_name: str = '', seq: str = ''):
             config.pc_path = os.path.join(base_path, seq, "points")  # input point cloud folder
             config.pose_path = os.path.join(base_path, seq, "poses.txt")   # input pose file
         elif dataset_name == "replica":
+            # you need to preprocess replica dataset to pin format using scripts/convert_replica.sh
+            # otherwise, use: python pin_slam.py ./config/rgbd_slam/run_replica.yaml replica room0 -i data/Replica/ -vsmd
             config.name = config.name + "_replica_" + seq
             base_path = config.pc_path.rsplit('/', 2)[0]
             config.pc_path = os.path.join(base_path, seq, "rgbd_down_ply")  # input point cloud folder
             #config.pc_path = os.path.join(base_path, seq, "rgbd_ply")  # input point cloud folder
             config.pose_path = os.path.join(base_path, seq, "poses.txt")   # input pose file     
         else:
-            print('The specified dataset has not been supported yet, try using kiss-icp data loader by adding --kiss_loader flag.')
+            print('The specified dataset has not been supported yet, try using specific data loader by adding -d flag.')

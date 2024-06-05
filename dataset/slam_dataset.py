@@ -20,6 +20,7 @@ from rich import print
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
+from dataset.dataloaders import dataset_factory
 from eval.eval_traj_utils import absolute_error, plot_trajectories, relative_error
 from utils.config import Config
 from utils.semantic_kitti_utils import sem_kitti_color_map, sem_map_function
@@ -31,8 +32,6 @@ from utils.tools import (
     transform_torch,
     voxel_down_sample_torch,
 )
-
-# TODO: write a new dataloader for RGB-D inputs, not always converting them to KITTI Lidar format
 
 class SLAMDataset(Dataset):
     def __init__(self, config: Config) -> None:
@@ -52,11 +51,10 @@ class SLAMDataset(Dataset):
         self.calib = {"Tr": np.eye(4)} # as T_lidar<-camera
         
         self.loader = None
-        if config.use_kiss_dataloader: 
-            from kiss_icp.datasets import dataset_factory
+        if config.use_dataloader: 
 
             self.loader = dataset_factory(
-                dataloader=config.data_loader_name,
+                dataloader=config.data_loader_name, # a specific dataset or data format
                 data_dir=Path(config.pc_path),
                 sequence=config.data_loader_seq,
                 topic=config.data_loader_seq,
@@ -72,7 +70,7 @@ class SLAMDataset(Dataset):
                 self.gt_pose_provided = False
             if hasattr(self.loader, 'calibration'):
                 self.calib["Tr"][:3, :4] = self.loader.calibration["Tr"].reshape(3, 4)
-        else: # pin-slam generic loader
+        else: # original pin-slam generic loader
             # point cloud files
             if config.pc_path != "":
                 from natsort import natsorted
@@ -84,7 +82,8 @@ class SLAMDataset(Dataset):
                 self.total_pc_count = len(self.pc_filenames)
                 max_frame_number = self.total_pc_count
             else:
-                sys.exit("Input point cloud directory is not specified. Either use -i flag or add `pc_path:` to the config file. Check details by `python pin_slam.py -h`")
+                if not config.run_with_ros:
+                    sys.exit("Input point cloud directory is not specified. Either use -i flag or add `pc_path:` to the config file. Check details by `python pin_slam.py -h`")
 
             self.gt_pose_provided = True
             if config.pose_path == "":
@@ -194,13 +193,13 @@ class SLAMDataset(Dataset):
         if self.config.deskew:
             self.get_point_ts(point_ts)
 
-    # read frame with kiss-icp data loader
+    # read frame with specific data loader (borrow from kiss-icp: https://github.com/PRBonn/kiss-icp)
     def read_frame_with_loader(self, frame_id):
 
         self.set_ref_pose(frame_id)
 
         frame_id_in_folder = self.config.begin_frame + frame_id * self.config.step_frame
-        data = self.loader[frame_id_in_folder] # data loading could be slow # FIXME
+        data = self.loader[frame_id_in_folder]
     
         point_ts = None
         if isinstance(data, tuple):
@@ -209,7 +208,7 @@ class SLAMDataset(Dataset):
             points = data
         self.cur_point_cloud_torch = torch.tensor(points, device=self.device, dtype=self.dtype)
 
-        if self.config.deskew and min(point_ts) < 1.0: # not all 1
+        if self.config.deskew: 
             self.get_point_ts(point_ts)
 
 
@@ -257,13 +256,13 @@ class SLAMDataset(Dataset):
     # point-wise timestamp is now only used for motion undistortion (deskewing)
     def get_point_ts(self, point_ts=None):
         if self.config.deskew:
-            if point_ts is not None and self.config.valid_ts_in_points:
+            if point_ts is not None and min(point_ts) < 1.0: # not all 1
                 if not self.silence:
                     print("Pointwise timestamp available")
                 self.cur_point_ts_torch = torch.tensor(
                     point_ts, device=self.device, dtype=self.dtype
                 )
-            else:
+            else: # point_ts not available, guess the ts
                 if (
                     self.cur_point_cloud_torch.shape[0] == 64 * 1024
                 ):  # for Ouster 64-beam LiDAR
@@ -648,8 +647,9 @@ class SLAMDataset(Dataset):
         # timing report
         time_table = np.array(self.time_table)
         mean_time_s = np.sum(time_table) / self.processed_frame * 1.0
+        mean_time_without_init_s = np.sum(time_table[1:]) / (self.processed_frame-1) * 1.0
         if not self.silence:
-            print("Consuming time per frame        (s):", f"{mean_time_s:.3f}")
+            print("Consuming time per frame        (s):", f"{mean_time_without_init_s:.3f}")
             print("Calculated over %d frames" % self.processed_frame)
         np.save(
             os.path.join(self.run_path, "time_table.npy"), time_table
@@ -686,7 +686,7 @@ class SLAMDataset(Dataset):
                     "Average Rotational Error [deg/m]": avg_rot,
                     "Absoulte Trajectory Error [m]": ate_trans,
                     "Absoulte Rotational Error [deg]": ate_rot,
-                    "Consuming time per frame [s]": mean_time_s,
+                    "Consuming time per frame [s]": mean_time_without_init_s,
                 }
                 wandb.log(wandb_log_content)
 
@@ -736,7 +736,7 @@ class SLAMDataset(Dataset):
                     csv_columns[1]: avg_rot,
                     csv_columns[2]: ate_trans,
                     csv_columns[3]: ate_rot,
-                    csv_columns[4]: mean_time_s,
+                    csv_columns[4]: mean_time_without_init_s,
                     csv_columns[5]: int(self.processed_frame),
                 }
             ]
@@ -746,7 +746,7 @@ class SLAMDataset(Dataset):
                     csv_columns[1]: avg_rot_slam,
                     csv_columns[2]: ate_trans_slam,
                     csv_columns[3]: ate_rot_slam,
-                    csv_columns[4]: mean_time_s,
+                    csv_columns[4]: mean_time_without_init_s,
                     csv_columns[5]: int(self.processed_frame),
                 }
                 pose_eval.append(slam_eval_dict)
@@ -801,7 +801,7 @@ class SLAMDataset(Dataset):
 
         return pose_eval
 
-    def write_merged_point_cloud(self, down_vox_m=None):
+    def write_merged_point_cloud(self, down_vox_m=None, use_gt_pose=False, out_file_name="merged_point_cloud"):
 
         print("Begin to replay the dataset ...")
 
@@ -815,8 +815,10 @@ class SLAMDataset(Dataset):
         for frame_id in tqdm(
             range(self.total_pc_count)
         ):  # frame id as the idx of the frame in the data folder without skipping
-            
-            self.read_frame(frame_id)
+            if self.config.use_dataloader:
+                self.read_frame_with_loader(frame_id)
+            else:
+                self.read_frame(frame_id)
 
             if self.config.kitti_correction_on:
                 self.cur_point_cloud_torch = intrinsic_correct(
@@ -824,22 +826,28 @@ class SLAMDataset(Dataset):
                 )
 
             if self.config.deskew and frame_id < self.total_pc_count-1:
-                if self.config.track_on:
-                    tran_in_frame = (
-                        np.linalg.inv(self.odom_poses[frame_id + 1])
-                        @ self.odom_poses[frame_id]
-                    )
-                elif self.gt_pose_provided:
+                if use_gt_pose and self.gt_pose_provided:
                     tran_in_frame = (
                         np.linalg.inv(self.gt_poses[frame_id + 1])
                         @ self.gt_poses[frame_id]
                     )
+                else:
+                    if self.config.track_on:
+                        tran_in_frame = (
+                            np.linalg.inv(self.odom_poses[frame_id + 1])
+                            @ self.odom_poses[frame_id]
+                        )
+                    elif self.gt_pose_provided:
+                        tran_in_frame = (
+                            np.linalg.inv(self.gt_poses[frame_id + 1])
+                            @ self.gt_poses[frame_id]
+                        )
                 self.cur_point_cloud_torch = deskewing(
                     self.cur_point_cloud_torch,
                     self.cur_point_ts_torch,
                     torch.tensor(
                         tran_in_frame, device=self.device, dtype=torch.float64
-                    ),
+                    )
                 )  # T_last<-cur
 
             if down_vox_m is None:
@@ -856,23 +864,28 @@ class SLAMDataset(Dataset):
                 self.config.min_range,
                 self.config.max_range,
             )
-
-            if self.config.pgo_on:
-                cur_pose_torch = torch.tensor(
-                    self.pgo_poses[frame_id],
-                    device=self.device,
-                    dtype=torch.float64,
-                )
-            elif self.config.track_on:
-                cur_pose_torch = torch.tensor(
-                    self.odom_poses[frame_id],
-                    device=self.device,
-                    dtype=torch.float64,
-                )
-            elif self.gt_pose_provided:
+            # get pose
+            if use_gt_pose and self.gt_pose_provided:
                 cur_pose_torch = torch.tensor(
                     self.gt_poses[frame_id], device=self.device, dtype=torch.float64
                 )
+            else:
+                if self.config.pgo_on:
+                    cur_pose_torch = torch.tensor(
+                        self.pgo_poses[frame_id],
+                        device=self.device,
+                        dtype=torch.float64,
+                    )
+                elif self.config.track_on:
+                    cur_pose_torch = torch.tensor(
+                        self.odom_poses[frame_id],
+                        device=self.device,
+                        dtype=torch.float64,
+                    )
+                elif self.gt_pose_provided:
+                    cur_pose_torch = torch.tensor(
+                        self.gt_poses[frame_id], device=self.device, dtype=torch.float64
+                    )
             frame_down_torch[:, :3] = transform_torch(
                 frame_down_torch[:, :3], cur_pose_torch
             )
@@ -908,7 +921,7 @@ class SLAMDataset(Dataset):
         if self.run_path is not None:
             print("Output merged point cloud map")
             o3d.t.io.write_point_cloud(
-                os.path.join(self.run_path, "map", "merged_point_cloud.ply"), map_out_o3d
+                os.path.join(self.run_path, "map", out_file_name+".ply"), map_out_o3d
             )
 
 
@@ -918,21 +931,17 @@ def read_point_cloud(
 
     # read point cloud from either (*.ply, *.pcd, *.las) or (kitti *.bin) format
     if ".bin" in filename:
-        is_nclt_bin = False # FIXME
         # we also read the intensity channel here
-        if is_nclt_bin:
-            # for NCLT, it's a bit different from KITTI format, check: http://robots.engin.umich.edu/nclt/python/read_vel_sync.py
-            points = load_nclt_bin(filename)
-        else:
-            data_loaded = np.fromfile(filename, dtype=np.float32)
-            # print(data_loaded)
-            # for KITTI, bin_channel_count = 4
-            # for Boreas, bin_channel_count = 6 # (x,y,z,i,r,ts)
-            points = data_loaded.reshape((-1, bin_channel_count))
+        data_loaded = np.fromfile(filename, dtype=np.float32)
+        # print(data_loaded)
+        # We only support the KITTI format bin file here, bin_channel_count = 4
+        # If you want to use other bin files, try specific data loaders
+        # such as 
+        # python pin_slam.py boreas -d
+        # python pin_slam.py nclt -d
+        points = data_loaded.reshape((-1, bin_channel_count))
         # print(points)
         ts = None
-        if bin_channel_count == 6:
-            ts = points[:, -1]
 
     elif ".ply" in filename:
         pc_load = o3d.t.io.read_point_cloud(filename)
@@ -963,7 +972,7 @@ def read_point_cloud(
         ts = None
     elif ".las" in filename:  # use laspy
         import laspy
-
+        # install laspy by pip3 install laspy
         with laspy.open(filename) as fh:
             las = fh.read()
             x = las.points.X * las.header.scale[0] + las.header.offset[0]
@@ -974,12 +983,11 @@ def read_point_cloud(
                 intensity = np.array(las.points.intensity).reshape(-1, 1)
                 # print(intensity)
                 points = np.hstack((points, intensity))
-            ts = None  # TODO, also read the point-wise timestamp for las point cloud
+            ts = None
     else:
         sys.exit(
             "The format of the imported point cloud is wrong (support only *pcd, *ply, *las and *bin)"
         )
-
     # print("Loaded ", np.shape(points)[0], " points")
 
     return points, ts  # as np
@@ -1220,26 +1228,3 @@ def write_traj_as_o3d(poses_np, path):
         o3d.io.write_point_cloud(path, o3d_pcd)
 
     return o3d_pcd
-
-def load_nclt_bin(file_path: str):
-    def _convert(x_s, y_s, z_s):
-        # Copied from http://robots.engin.umich.edu/nclt/python/read_vel_sync.py
-        scaling = 0.005
-        offset = -100.0
-
-        x = x_s * scaling + offset
-        y = y_s * scaling + offset
-        z = z_s * scaling + offset
-        return x, y, z
-
-    binary = np.fromfile(file_path, dtype=np.int16)
-    x = np.ascontiguousarray(binary[::4])
-    y = np.ascontiguousarray(binary[1::4])
-    z = np.ascontiguousarray(binary[2::4])
-    x = x.astype(np.float32).reshape(-1, 1)
-    y = y.astype(np.float32).reshape(-1, 1)
-    z = z.astype(np.float32).reshape(-1, 1)
-    x, y, z = _convert(x, y, z)
-    # Flip to have z pointing up
-    points = np.concatenate([x, -y, -z], axis=1)
-    return points.astype(np.float64)

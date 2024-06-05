@@ -45,21 +45,22 @@ from utils.visualizer import MapVisualizer
 
 parser = argparse.ArgumentParser()
 parser.add_argument('config_path', type=str, nargs='?', default='config/lidar_slam/run.yaml', help='[Optional] Path to *.yaml config file, if not set, default config would be used')
-parser.add_argument('dataset_name', type=str, nargs='?', help='[Optional] Name of a specific dataset, example: kitti, mulran, or rosbag (when -k is set)')
-parser.add_argument('sequence_name', type=str, nargs='?', help='[Optional] Name of a specific data sequence or the rostopic for point cloud (when -k is set)')
+parser.add_argument('dataset_name', type=str, nargs='?', help='[Optional] Name of a specific dataset, example: kitti, mulran, or rosbag (when -d is set)')
+parser.add_argument('sequence_name', type=str, nargs='?', help='[Optional] Name of a specific data sequence or the rostopic for point cloud (when -d is set)')
 parser.add_argument('--seed', type=int, default=42, help='Set the random seed (default 42)')
 parser.add_argument('--input_path', '-i', type=str, default=None, help='Path to the point cloud input directory (this will override the pc_path in config file)')
 parser.add_argument('--output_path', '-o', type=str, default=None, help='Path to the result output directory (this will override the output_root in config file)')
 parser.add_argument('--range', nargs=3, type=int, metavar=('START', 'END', 'STEP'), default=None, help='Specify the start, end and step of the processed frame, for example: --range 10 1000 1')
-parser.add_argument('--kiss_loader', '-k', action='store_true', help='Use KISS-ICP data loader (you can use the rosbag, pcap, mcap dataloaders and datasets supported by KISS-ICP)')
+parser.add_argument('--data_loader_on', '-d', action='store_true', help='Use specific data loader (you can use the rosbag, pcap, mcap dataloaders and some typical supported datasets)')
 parser.add_argument('--visualize', '-v', action='store_true', help='Turn on the visualizer')
 parser.add_argument('--cpu_only', '-c', action='store_true', help='Run only on CPU')
 parser.add_argument('--log_on', '-l', action='store_true', help='Turn on the logs printing')
 parser.add_argument('--wandb_on', '-w', action='store_true', help='Turn on the weight & bias logging')
 parser.add_argument('--save_map', '-s', action='store_true', help='Save the PIN map after SLAM')
 parser.add_argument('--save_mesh', '-m', action='store_true', help='Save the reconstructed mesh after SLAM')
+parser.add_argument('--save_merged_pc', '-p', action='store_true', help='Save the merged point cloud after SLAM')
 
-args = parser.parse_args()
+args, unknown = parser.parse_known_args()
 
 def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=None):
 
@@ -75,13 +76,14 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
     else: # from args
         argv = sys.argv
         config.load(args.config_path)
-        config.use_kiss_dataloader = args.kiss_loader
+        config.use_dataloader = args.data_loader_on
         config.seed = args.seed
         config.silence = not args.log_on
         config.wandb_vis_on = args.wandb_on
         config.o3d_vis_on = args.visualize
         config.save_map = args.save_map
         config.save_mesh = args.save_mesh
+        config.save_merged_pc = args.save_merged_pc
         if args.range is not None:
             config.begin_frame, config.end_frame, config.step_frame = args.range
         if args.cpu_only:
@@ -134,6 +136,10 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
 
     last_frame = dataset.total_pc_count-1
     loop_reg_failed_count = 0
+
+    # save merged point cloud map from gt pose as a reference map
+    if config.save_merged_pc and dataset.gt_pose_provided:
+        dataset.write_merged_point_cloud(use_gt_pose=True, out_file_name='merged_gt_pc')
         
     # for each frame
     for frame_id in tqdm(range(dataset.total_pc_count)): # frame id as the processed frame, possible skipping done in data loader
@@ -141,7 +147,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
         # I. Load data and preprocessing
         T0 = get_time()
 
-        if config.use_kiss_dataloader:
+        if config.use_dataloader:
             dataset.read_frame_with_loader(frame_id)
         else:
             dataset.read_frame(frame_id)

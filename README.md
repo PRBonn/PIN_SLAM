@@ -3,6 +3,7 @@
   <h1 align="center">📍PIN-SLAM: LiDAR SLAM Using a Point-Based Implicit Neural Representation for Achieving Global Map Consistency</h1>
 
   <p align="center">
+    <a href="https://github.com/PRBonn/PIN_SLAM/releases"><img src="https://img.shields.io/github/v/release/PRBonn/PIN_SLAM?label=version" /></a>
     <a href="https://github.com/PRBonn/PIN_SLAM#run-pin-slam"><img src="https://img.shields.io/badge/python-3670A0?style=flat-square&logo=python&logoColor=ffdd54" /></a>
     <a href="https://github.com/PRBonn/PIN_SLAM#installation"><img src="https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black" /></a>
     <a href="https://arxiv.org/pdf/2401.09101v1.pdf"><img src="https://img.shields.io/badge/Paper-pdf-<COLOR>.svg?style=flat-square" /></a>
@@ -114,6 +115,7 @@ PIN-SLAM can run at the sensor frame rate on a moderate GPU.
 
 * Windows/MacOS with CPU-only mode
 
+
 ### 1. Set up conda environment
 
 ```
@@ -137,8 +139,10 @@ pip3 install open3d==0.17 scikit-image gtsam wandb tqdm rich roma natsort pyquat
 
 If you would like to use some specific data loader or use PIN-SLAM with ROS, you can additionally install:
 ```
-pip3 install kiss-icp laspy rospkg 
+pip3 install laspy ouster-sdk rospkg 
 ```
+
+----
 
 ## Run PIN-SLAM
 
@@ -227,18 +231,26 @@ python3 pin_slam.py ./config/lidar_slam/run_ncd.yaml ncd 01 -vsm
 python3 pin_slam.py ./config/rgbd_slam/run_replica.yaml replica room0 -vsm
 ```
 
-We also support loading data from rosbag, mcap or pcap using KISS-ICP data loaders. You need to set the flag `-k` to use such data loaders. For example:
+We also support loading data from rosbag, mcap or pcap using specific data loaders (originally from [KISS-ICP](https://github.com/PRBonn/kiss-icp)). You need to set the flag `-d` to use such data loaders. For example:
 ```
 # Run on a rosbag or a folder of rosbags with certain point cloud topic
-python3 pin_slam.py ./config/lidar_slam/run.yaml rosbag point_cloud_topic_name -i /path/to/the/rosbag -vsmk
+python3 pin_slam.py ./config/lidar_slam/run.yaml rosbag point_cloud_topic_name -i /path/to/the/rosbag -vsmd
 
 # If there's only one topic for point cloud in the rosbag, you can omit it
-python3 pin_slam.py ./config/lidar_slam/run.yaml rosbag -i /path/to/the/rosbag -vsmk
+python3 pin_slam.py ./config/lidar_slam/run.yaml rosbag -i /path/to/the/rosbag -vsmd
+```
+
+The data loaders for some specific datasets are also available. For example, you can run on Replica RGB-D dataset without preprocessing the data by:
+```
+# Download data
+sh scripts/download_replica.sh
+# Run PIN-SLAM
+python3 pin_slam.py ./config/rgbd_slam/run_replica.yaml replica room0 -i data/Replica -vsmd 
 ```
 
 The SLAM results and logs will be output in the `output_root` folder set in the config file or specified by the `-o OUTPUT_PATH` flag. 
 
-You may check [here](https://github.com/PRBonn/PIN_SLAM/blob/main/eval/README.md) for the results that can be obtained with this repository on a couple of popular datasets. 
+For evaluation, you may check [here](https://github.com/PRBonn/PIN_SLAM/blob/main/eval/README.md) for the results that can be obtained with this repository on a couple of popular datasets. 
 
 The training logs can be monitored via [Weights & Bias](wandb.ai) online if you set the flag `-w`. If it's your first time using Weights & Bias, you will be requested to register and log in to your wandb account. You can also set the flag `-l` to turn on the log printing in the terminal.
 
@@ -296,9 +308,9 @@ python3 vis_pin_map.py path/to/your/result/folder [marching_cubes_resolution_m] 
 <details>
   <summary>[Details (click to expand)]</summary>
 
-The bounding box of `(cropped)_map_file.ply` will be used as the bounding box for mesh reconstruction. `mesh_min_nn` controls the trade-off between completeness and accuracy. The smaller number (for example `6`) will lead to a more complete mesh with more guessed artifacts. The larger number (for example `15`) will lead to a less complete but more accurate mesh.
+The bounding box of `(cropped)_map_file.ply` will be used as the bounding box for mesh reconstruction. This file should be stored in the `map` subfolder of the result folder. You may directly use the original `neural_points.ply` or crop the neural points in software such as CloudCompare. The argument `mesh_min_nn` controls the trade-off between completeness and accuracy. The smaller number (for example `6`) will lead to a more complete mesh with more guessed artifacts. The larger number (for example `15`) will lead to a less complete but more accurate mesh. The reconstructed mesh would be saved as `output_mesh_file.ply` in the `mesh` subfolder of the result folder.
 
-For example, for the case of the sanity test, run:
+For example, for the case of the sanity test described above, run:
 
 ```
 python3 vis_pin_map.py ./experiments/sanity_test_*  0.2 neural_points.ply mesh_20cm.ply 8

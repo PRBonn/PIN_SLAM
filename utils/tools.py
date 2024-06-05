@@ -21,6 +21,7 @@ import open3d as o3d
 import roma
 import torch
 import torch.nn as nn
+from tqdm import tqdm
 import wandb
 from matplotlib import pyplot as plt
 from matplotlib.cm import viridis
@@ -304,6 +305,20 @@ def get_time():
         torch.cuda.synchronize()
     return time.time()
 
+def track_progress():
+    progress_bar = tqdm(desc="Processing", total=0, unit="calls")
+
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            result = func(*args, **kwargs)
+            wrapper.calls += 1
+            progress_bar.update(1)
+            progress_bar.set_description("Processing point cloud frame")
+            return result
+        wrapper.calls = 0
+        return wrapper
+    return decorator
+
 
 def load_from_json(filename: Path):
     """Load a dictionary from a JSON filename.
@@ -567,7 +582,7 @@ def voxel_down_sample_min_value_torch(
 def split_chunks(
     pc: o3d.geometry.PointCloud(),
     aabb: o3d.geometry.AxisAlignedBoundingBox(),
-    chunk_m: float = 100.0,
+    chunk_m: float = 100.0
 ):
 
     if not pc.has_points():
@@ -655,7 +670,8 @@ def deskewing(
     max_ts = torch.max(ts)
     ts = (ts - min_ts) / (max_ts - min_ts)
 
-    ts -= ts_mid_pose
+    # this is related to: https://github.com/PRBonn/kiss-icp/issues/299
+    ts -= ts_mid_pose 
 
     rotmat_slerp = roma.rotmat_slerp(
         torch.eye(3).to(points), pose[:3, :3].to(points), ts
@@ -664,9 +680,7 @@ def deskewing(
     tran_lerp = ts[:, None] * pose[:3, 3].to(points)
 
     points_deskewd = points
-    points_deskewd[:, :3] = (rotmat_slerp @ points[:, :3].unsqueeze(-1)).squeeze(
-        -1
-    ) + tran_lerp
+    points_deskewd[:, :3] = (rotmat_slerp @ points[:, :3].unsqueeze(-1)).squeeze(-1) + tran_lerp
 
     return points_deskewd
 

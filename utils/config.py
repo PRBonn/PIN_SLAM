@@ -25,7 +25,7 @@ class Config:
         self.label_path: str = "" # input point-wise label path, for semantic mapping (optional)
 
         # for uisng kiss-icp data loader
-        self.use_kiss_dataloader: bool = False # use the dataloader providied by kiss-icp or not
+        self.use_dataloader: bool = False # use the dataloader providied by kiss-icp or not
         self.data_loader_name: str = "generic"
         self.data_loader_seq: str = ""
 
@@ -52,7 +52,6 @@ class Config:
 
         # motion undistortion
         self.deskew: bool = False
-        self.valid_ts_in_points: bool = True
         self.lidar_type_guess: str = "velodyne"
 
         # preprocess
@@ -286,6 +285,7 @@ class Config:
         self.save_mesh: bool = False # save the reconstructed mesh map or not
 
         # ROS related 
+        self.run_with_ros: bool = False
         self.publish_np_map: bool = True # only for Rviz visualization, publish neural point map
         self.publish_np_map_down_rate_list = [11, 23, 37, 53, 71, 89, 97, 113, 131, 151] # prime number list, downsampling for boosting neural point map pubishing speed 
         self.republish_raw_input: bool = False # publish the raw input point cloud or not
@@ -299,7 +299,7 @@ class Config:
         if "setting" in config_args:
             self.name = config_args["setting"].get("name", "pin_slam")
             
-            self.use_kiss_dataloader = config_args["setting"].get("use_kiss_icp_dataloader", False)
+            self.use_dataloader = config_args["setting"].get("use_kiss_icp_dataloader", False)
 
             self.output_root = config_args["setting"].get("output_root", "./experiments")
             self.pc_path = config_args["setting"].get("pc_path", "") 
@@ -337,7 +337,6 @@ class Config:
             self.stop_frame_thre = config_args["setting"].get("stop_frame_thre", self.stop_frame_thre)
 
             self.deskew = config_args["setting"].get("deskew", self.deskew) # apply motion undistortion or not
-            self.valid_ts_in_points = config_args["setting"].get("valid_ts", self.valid_ts_in_points)
             if self.step_frame > 1:
                 self.deskew = False
 

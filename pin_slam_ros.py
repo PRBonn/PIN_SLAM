@@ -38,6 +38,7 @@ from utils.tools import (
     save_implicit_map,
     setup_experiment,
     split_chunks,
+    track_progress,
     transform_torch,
 )
 from utils.tracker import Tracker
@@ -50,6 +51,9 @@ from utils.tracker import Tracker
 class PINSLAMer:
     def __init__(self, config_path, point_cloud_topic):
 
+        # to use this function, you need to install rospkg:
+        # pip3 install rospkg
+
         rospy.init_node("pin_slam")
         print("[bold green]PIN-SLAM starts[/bold green]","📍" )
 
@@ -59,6 +63,7 @@ class PINSLAMer:
                                             
         self.config = Config()
         self.config.load(config_path)
+        self.config.run_with_ros = True
         argv = ["pin_slam_ros.py", config_path, point_cloud_topic]
         self.run_path = setup_experiment(self.config, argv)
         
@@ -125,6 +130,7 @@ class PINSLAMer:
 
         # for each frame
         rospy.Subscriber(point_cloud_topic, PointCloud2, self.frame_callback)
+        print('Waiting for the point cloud rostopic: '+ point_cloud_topic)
 
     def save_slam_result_service_callback(self, request):
         # Do something when the service is called
@@ -151,8 +157,11 @@ class PINSLAMer:
 
         return EmptyResponse()
 
-
+    @track_progress()
     def frame_callback(self, msg):
+
+        if self.dataset.processed_frame == 0:
+            print("Begin ...")
         
         # I. Load data and preprocessing
         T0 = get_time()
@@ -460,17 +469,14 @@ class PINSLAMer:
                         self.loop_reg_failed_count += 1
 
         return False
-   
                     
 if __name__ == "__main__":
 
-    config_path = rospy.get_param('~config_path', "./config/lidar_slam/run_ros_general.yaml")
+    config_path = rospy.get_param('~config_path', "./config/lidar_slam/run.yaml")
     point_cloud_topic = rospy.get_param('~point_cloud_topic', "/os_cloud_node/points")
 
-    # If you would like to directly run the python script without including it in a ROS package
-    # python pin_slam_ros_node.py [path_to_your_config_file] [point_cloud_topic]
-    print("If you would like to directly run the python script without including it in a ROS package\n\
-           python pin_slam_ros_node.py (path_to_your_config_file) (point_cloud_topic)")
+    print("If you would like to directly run the python script without including it in a ROS package:\n\
+           python pin_slam_ros.py (path_to_your_config_file) (point_cloud_topic)")
 
     if len(sys.argv) > 1:
         config_path = sys.argv[1]

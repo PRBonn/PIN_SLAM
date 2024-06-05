@@ -23,3 +23,6 @@ pgo:
 optimizer: # mapper
   batch_size: 10000
   adaptive_iters: True
+eval:
+  wandb_vis_on: False # log to wandb or not
+  silence_log: True

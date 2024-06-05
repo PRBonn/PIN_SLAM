@@ -44,8 +44,7 @@ optimizer:
   ba_freq_frame: 20
   lr_pose_ba: 1e-3
 eval:
-  o3d_vis_on: False # visualize the mapping or not
-  mesh_freq_frame: 100 # reconstruct the mesh every x frames
+  mesh_freq_frame: 50 # reconstruct the mesh every x frames
   mesh_min_nn: 9
   sensor_cad_path: ./cad/camera.ply
   skip_top_voxel: 5

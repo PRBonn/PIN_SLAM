@@ -151,7 +151,7 @@ class DataSampler:
                 - (repeated_dist[:surface_sample_count] / self.config.max_range)
                 * self.config.dist_weight_scale
             )  # [0.6, 1.4]
-        # TODO: also add lower weight for surface samples with large incidence angle
+        # TODO: also try add lower weight for surface samples with large incidence angle
 
         # behind surface weight drop-off because we have less uncertainty behind the surface
         if self.config.behind_dropoff_on:
