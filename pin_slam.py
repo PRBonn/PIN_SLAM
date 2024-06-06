@@ -139,7 +139,8 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
 
     # save merged point cloud map from gt pose as a reference map
     if config.save_merged_pc and dataset.gt_pose_provided:
-        dataset.write_merged_point_cloud(use_gt_pose=True, out_file_name='merged_gt_pc')
+        dataset.write_merged_point_cloud(use_gt_pose=True, out_file_name='merged_gt_pc', 
+        frame_step=5, merged_downsample=True)
         
     # for each frame
     for frame_id in tqdm(range(dataset.total_pc_count)): # frame id as the processed frame, possible skipping done in data loader

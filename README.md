@@ -134,12 +134,7 @@ The commands depend on your CUDA version. You may check the instructions [here](
 ### 3. Install other dependency
 
 ```
-pip3 install open3d==0.17 scikit-image gtsam wandb tqdm rich roma natsort pyquaternion pypose evo
-```
-
-If you would like to use some specific data loader or use PIN-SLAM with ROS, you can additionally install:
-```
-pip3 install laspy ouster-sdk rospkg 
+pip3 install -r requirements.txt
 ```
 
 ----
@@ -240,10 +235,11 @@ python3 pin_slam.py ./config/lidar_slam/run.yaml rosbag point_cloud_topic_name -
 python3 pin_slam.py ./config/lidar_slam/run.yaml rosbag -i /path/to/the/rosbag -vsmd
 ```
 
-The data loaders for some specific datasets are also available. For example, you can run on Replica RGB-D dataset without preprocessing the data by:
+The data loaders for [some specific datasets](https://github.com/PRBonn/PIN_SLAM/tree/main/dataset/dataloaders) are also available. For example, you can run on Replica RGB-D dataset without preprocessing the data by:
 ```
 # Download data
 sh scripts/download_replica.sh
+
 # Run PIN-SLAM
 python3 pin_slam.py ./config/rgbd_slam/run_replica.yaml replica room0 -i data/Replica -vsmd 
 ```

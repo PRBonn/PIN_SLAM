@@ -655,12 +655,6 @@ class SLAMDataset(Dataset):
             os.path.join(self.run_path, "time_table.npy"), time_table
         )  # save detailed time table
 
-        plot_timing_detail(
-            time_table,
-            os.path.join(self.run_path, "time_details.png"),
-            self.config.pgo_on,
-        )
-
         pose_eval = None
 
         # pose estimation evaluation report
@@ -760,6 +754,12 @@ class SLAMDataset(Dataset):
             except IOError:
                 print("I/O error")
 
+            plot_timing_detail(
+                time_table,
+                os.path.join(self.run_path, "time_details.png"),
+                self.config.pgo_on,
+            )
+
             # if self.config.o3d_vis_on:  # x service issue for remote server
             output_traj_plot_path_2d = os.path.join(self.run_path, "traj_plot_2d.png")
             output_traj_plot_path_3d = os.path.join(self.run_path, "traj_plot_3d.png")
@@ -801,7 +801,11 @@ class SLAMDataset(Dataset):
 
         return pose_eval
 
-    def write_merged_point_cloud(self, down_vox_m=None, use_gt_pose=False, out_file_name="merged_point_cloud"):
+    def write_merged_point_cloud(self, down_vox_m=None, 
+                                use_gt_pose=False, 
+                                out_file_name="merged_point_cloud",
+                                frame_step = 1,
+                                merged_downsample = False):
 
         print("Begin to replay the dataset ...")
 
@@ -813,7 +817,7 @@ class SLAMDataset(Dataset):
         map_color_np = np.empty((0, 3))
 
         for frame_id in tqdm(
-            range(self.total_pc_count)
+            range(0, self.total_pc_count, frame_step)
         ):  # frame id as the idx of the frame in the data folder without skipping
             if self.config.use_dataloader:
                 self.read_frame_with_loader(frame_id)
@@ -917,6 +921,10 @@ class SLAMDataset(Dataset):
 
         # print("Estimate normal")
         # map_out_o3d.estimate_normals(max_nn=20)
+        
+        # downsample again
+        if merged_downsample:
+            map_out_o3d = map_out_o3d.voxel_down_sample(voxel_size=down_vox_m)
 
         if self.run_path is not None:
             print("Output merged point cloud map")

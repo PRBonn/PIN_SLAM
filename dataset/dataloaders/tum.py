@@ -2,6 +2,7 @@
 #
 # Copyright (c) 2022 Ignacio Vizzo, Tiziano Guadagnino, Benedikt Mersch, Cyrill
 # Stachniss.
+# Copyright (c) 2024 Yue Pan
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -25,72 +26,129 @@ import os
 from pathlib import Path
 
 import numpy as np
-from pyquaternion import Quaternion
-
 
 class TUMDataset:
-    def __init__(self, data_dir: Path, *_, **__):
+    def __init__(self, data_dir: Path, sequence: str, *_, **__):
         try:
             self.o3d = importlib.import_module("open3d")
         except ModuleNotFoundError as err:
             print(f'open3d is not installed on your system, run "pip install open3d"')
             exit(1)
 
-        self.data_dir = Path(data_dir)
-        self.sequence_id = os.path.basename(data_dir)
+        sequence_dir = os.path.join(data_dir, sequence)
 
-        # Load depth frames
-        self.depth_frames = np.loadtxt(fname=self.data_dir / "depth.txt", dtype=str)
+        self.rgb_frames, self.depth_frames, self.gt_poses = self.loadtum(sequence_dir)
 
-        # rgb single frame
-        rgb_path = os.path.join(self.data_dir, "rgb", os.listdir(self.data_dir / "rgb")[0])
-        self.rgb_default_frame = self.o3d.io.read_image(rgb_path)
+        self.intrinsic = self.o3d.camera.PinholeCameraIntrinsic()
+        H, W = 480, 640
 
-        # Load GT poses
-        gt_list = np.loadtxt(fname=self.data_dir / "groundtruth.txt", dtype=str)
-        self.gt_poses = self.load_poses(gt_list)
+        if "freiburg1" in sequence:
+            fx, fy, cx, cy = 517.3, 516.5, 318.6, 255.3
+        elif "freiburg2" in sequence:
+            fx, fy, cx, cy = 520.9, 521.0, 325.1, 249.7
+        elif "freiburg3" in sequence:
+            fx, fy, cx, cy = 535.4, 539.2, 320.1, 247.6
+        else: # default
+            fx, fy, cx, cy = 525.0, 525.0, 319.5, 239.5
+
+        self.intrinsic.set_intrinsics(height=H,
+                                     width=W,
+                                     fx=fx,
+                                     fy=fy,
+                                     cx=cx,
+                                     cy=cy)
+        
+        self.down_sample_on = False
+        self.rand_down_rate = 0.1
 
     def __len__(self):
         return len(self.depth_frames)
 
-    def load_poses(self, gt_list):
-        indices = np.unique(
-            np.abs(
-                (
-                    np.subtract.outer(
-                        gt_list[:, 0].astype(np.float64),
-                        self.depth_frames[:, 0].astype(np.float64),
-                    )
-                )
-            ).argmin(0)
-        )
-        xyz = gt_list[indices][:, 1:4]
+    def loadtum(self, datapath, frame_rate=-1):
+        """ read video data in tum-rgbd format """
+        if os.path.isfile(os.path.join(datapath, 'groundtruth.txt')):
+            pose_list = os.path.join(datapath, 'groundtruth.txt')
 
-        rotations = np.array(
-            [
-                Quaternion(x=x, y=y, z=z, w=w).rotation_matrix
-                for x, y, z, w in gt_list[indices][:, 4:]
-            ]
-        )
-        num_poses = rotations.shape[0]
-        poses = np.eye(4, dtype=np.float64).reshape(1, 4, 4).repeat(num_poses, axis=0)
-        poses[:, :3, :3] = rotations
-        poses[:, :3, 3] = xyz
-        return poses
+        image_list = os.path.join(datapath, 'rgb.txt')
+        depth_list = os.path.join(datapath, 'depth.txt')
 
-    def get_frames_timestamps(self):
-        return self.depth_frames[:, 0]
+        def parse_list(filepath, skiprows=0):
+            """ read list data """
+            data = np.loadtxt(filepath, delimiter=' ',
+                                dtype=np.unicode_, skiprows=skiprows)
+            return data
+
+        def associate_frames(tstamp_image, tstamp_depth, tstamp_pose, max_dt=0.08):
+            """ pair images, depths, and poses """
+            associations = []
+            for i, t in enumerate(tstamp_image):
+                if tstamp_pose is None:
+                    j = np.argmin(np.abs(tstamp_depth - t))
+                    if (np.abs(tstamp_depth[j] - t) < max_dt):
+                        associations.append((i, j))
+                else:
+                    j = np.argmin(np.abs(tstamp_depth - t))
+                    k = np.argmin(np.abs(tstamp_pose - t))
+
+                    if (np.abs(tstamp_depth[j] - t) < max_dt) and \
+                            (np.abs(tstamp_pose[k] - t) < max_dt):
+                        associations.append((i, j, k))
+            return associations
+        
+        def pose_matrix_from_quaternion(pvec):
+            """ convert 4x4 pose matrix to (t, q) """
+            from scipy.spatial.transform import Rotation
+            pose = np.eye(4)
+            pose[:3, :3] = Rotation.from_quat(pvec[3:]).as_matrix() # rotation
+            pose[:3, 3] = pvec[:3] # translation
+            return pose
+
+        image_data = parse_list(image_list)
+        depth_data = parse_list(depth_list)
+        pose_data = parse_list(pose_list, skiprows=1)
+        pose_vecs = pose_data[:, 1:].astype(np.float64)
+
+        tstamp_image = image_data[:, 0].astype(np.float64)
+        tstamp_depth = depth_data[:, 0].astype(np.float64)
+        tstamp_pose = pose_data[:, 0].astype(np.float64)
+        associations = associate_frames(
+            tstamp_image, tstamp_depth, tstamp_pose)
+
+        indicies = [0]
+        for i in range(1, len(associations)):
+            t0 = tstamp_image[associations[indicies[-1]][0]]
+            t1 = tstamp_image[associations[i][0]]
+            if t1 - t0 > 1.0 / frame_rate:
+                indicies += [i]
+
+        images, poses, depths = [], [], []
+        for ix in indicies:
+            (i, j, k) = associations[ix]
+            images += [os.path.join(datapath, image_data[i, 1])]
+            depths += [os.path.join(datapath, depth_data[j, 1])]
+            c2w = pose_matrix_from_quaternion(pose_vecs[k])
+            poses += [c2w]
+
+        poses = np.array(poses)
+
+        return images, depths, poses
 
     def __getitem__(self, idx):
-        depth_id = self.depth_frames[idx][-1]
-        depth_raw = self.o3d.io.read_image(str(self.data_dir / depth_id))
-        rgbd_image = self.o3d.geometry.RGBDImage.create_from_tum_format(
-            self.rgb_default_frame, depth_raw
-        )
+        
+        im_color = self.o3d.io.read_image(self.rgb_frames[idx])
+        im_depth = self.o3d.io.read_image(self.depth_frames[idx]) 
+        rgbd_image = self.o3d.geometry.RGBDImage.create_from_tum_format(im_color,
+            im_depth, convert_rgb_to_intensity=False)
+
         pcd = self.o3d.geometry.PointCloud.create_from_rgbd_image(
             rgbd_image,
-            self.o3d.camera.PinholeCameraIntrinsic(
-                self.o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault
-            ),
+            self.intrinsic
         )
-        return np.array(pcd.points, dtype=np.float64)
+        if self.down_sample_on:
+            pcd = pcd.random_down_sample(sampling_ratio=self.rand_down_rate)
+
+        points_xyz = np.array(pcd.points, dtype=np.float64)
+        points_rgb = np.array(pcd.colors, dtype=np.float64)
+        points_xyzrgb = np.hstack((points_xyz, points_rgb))
+
+        return points_xyzrgb 
