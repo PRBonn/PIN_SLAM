@@ -4,12 +4,18 @@ import sensor_msgs.point_cloud2 as pc2
 import os
 import argparse
 import numpy as np
+import open3d as o3d
 
 from module import ply
 
 def rosbag2ply(args):
 
     os.makedirs(args.output_folder, 0o755, exist_ok=True)
+
+    if args.output_pcd:
+        output_folder_pcd = args.output_folder+"_pcd"
+        os.makedirs(output_folder_pcd, 0o755, exist_ok=True)
+
     
     begin_flag = False
 
@@ -48,6 +54,12 @@ def rosbag2ply(args):
             else:
                 print('ply.write_ply() failed')
 
+            if args.output_pcd:
+                pcd = o3d.geometry.PointCloud()
+                pcd.points = o3d.utility.Vector3dVector(array[:, :3])
+                pcd_file_path = os.path.join(output_folder_pcd, str(t)+".pcd")
+                o3d.io.write_point_cloud(pcd_file_path, pcd)
+
 
 if __name__ == "__main__":
 
@@ -55,6 +67,7 @@ if __name__ == "__main__":
     parser.add_argument('-i','--input_bag', help="path to the input rosbag")
     parser.add_argument('-o','--output_folder', help="path for output foler")
     parser.add_argument('-t','--topic', help="name of the point cloud topic used in the rosbag", default="/hesai/pandar_points")
+    parser.add_argument('-p','--output_pcd', action='store_true', help='Also output the pcd file')
     args = parser.parse_args()
     print("usage: python3 rosbag2ply.py -i [path to input rosbag] -o [path to point cloud output folder] -t [name of point cloud rostopic]")
     

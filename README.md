@@ -6,7 +6,7 @@
     <a href="https://github.com/PRBonn/PIN_SLAM/releases"><img src="https://img.shields.io/github/v/release/PRBonn/PIN_SLAM?label=version" /></a>
     <a href="https://github.com/PRBonn/PIN_SLAM#run-pin-slam"><img src="https://img.shields.io/badge/python-3670A0?style=flat-square&logo=python&logoColor=ffdd54" /></a>
     <a href="https://github.com/PRBonn/PIN_SLAM#installation"><img src="https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black" /></a>
-    <a href="https://arxiv.org/pdf/2401.09101v1.pdf"><img src="https://img.shields.io/badge/Paper-pdf-<COLOR>.svg?style=flat-square" /></a>
+    <a href="https://www.ipb.uni-bonn.de/wp-content/papercite-data/pdf/pan2024tro.pdf"><img src="https://img.shields.io/badge/Paper-pdf-<COLOR>.svg?style=flat-square" /></a>
     <a href="https://github.com/PRBonn/PIN_SLAM/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" /></a>
   </p>
   
@@ -24,7 +24,7 @@
     <a href="https://www.ipb.uni-bonn.de/people/cyrill-stachniss/"><strong>Cyrill Stachniss</strong></a>
   </p>
   <p align="center"><a href="https://www.ipb.uni-bonn.de"><strong>University of Bonn</strong></a>
-  <h3 align="center"><a href="https://arxiv.org/pdf/2401.09101v1.pdf">Preprint</a> | Video</a></h3>
+  <h3 align="center"><a href="https://www.ipb.uni-bonn.de/wp-content/papercite-data/pdf/pan2024tro.pdf">Paper</a> | Video</a></h3>
   <div align="center"></div>
 </p>
 
@@ -65,6 +65,9 @@
     </li>
     <li>
       <a href="#visualizer-instructions">Visualizer instructions</a>
+    </li>
+    <li>
+      <a href="#citation">Citation</a>
     </li>
     <li>
       <a href="#contact">Contact</a>
@@ -275,7 +278,7 @@ After playing the ROS bag or launching the sensor you can then visualize the res
 rviz -d ./config/pin_slam_ros.rviz 
 ```
 
-You may use the ROS service `save_results` and `save_mesh` to save the results and mesh in the `output_root` folder.
+You may use the ROS service `save_results` and `save_mesh` to save the results and mesh (at a default resolution) in the `output_root` folder.
 
 ```
 rosservice call /pin_slam/save_results
@@ -351,6 +354,25 @@ We provide a PIN-SLAM visualizer based on [lidar-visualizer](https://github.com/
 |  +/-   |                  increase/decrease point size                                              |
 
 </details>
+
+## Citation
+
+If you use PIN-SLAM for any academic work, please cite our original [paper](https://www.ipb.uni-bonn.de/wp-content/papercite-data/pdf/pan2024tro.pdf).
+
+```
+@article{pan2024tro,
+author = {Y. Pan and X. Zhong and L. Wiesmann and T. Posewsky and J. Behley and C. Stachniss},
+title = {{PIN-SLAM: LiDAR SLAM Using a Point-Based Implicit Neural Representation for Achieving Global Map Consistency}},
+journal = IEEE Transactions on Robotics (TRO),
+year = {2024},
+volume = {},
+number = {},
+pages = {},
+codeurl = {https://github.com/PRBonn/PIN_SLAM},
+}
+```
+
+
 
 ## Contact
 If you have any questions, please contact:
