@@ -15,3 +15,7 @@ local machine. If you want to see the results of these experiments you can click
 - [Newer College Dataset (random seed 42)](https://nbviewer.org/github/YuePanEdward/PIN_evaluation/blob/main/eval_ncd.ipynb)
 - [Newer College Dataset 2021 extension (random seed 42)](https://nbviewer.org/github/YuePanEdward/PIN_evaluation/blob/main/eval_ncd_128.ipynb)
 - [Replica RGB-D Dataset (random seed 42)](https://nbviewer.org/github/YuePanEdward/PIN_evaluation/blob/main/eval_replica.ipynb)
+
+## Public benchmark evaluation
+ - [KITTI Odometry Dataset](https://www.cvlibs.net/datasets/kitti/eval_odometry.php)
+ - [VBR SLAM Benchmark](https://rvp-group.net/slam-benchmark.html)
