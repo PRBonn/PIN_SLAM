@@ -272,7 +272,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
         # IV: Mapping and bundle adjustment
         # if lose track, we will not update the map and data pool (don't let the wrong pose to corrupt the map)
         # if the robot stop, also don't process this frame, since there's no new oberservations
-        if not dataset.lose_track and not dataset.stop_status:
+        if frame_id < 5 or (not dataset.lose_track and not dataset.stop_status):
             mapper.process_frame(dataset.cur_point_cloud_torch, dataset.cur_sem_labels_torch,
                                  dataset.cur_pose_torch, frame_id, (config.dynamic_filter_on and frame_id > 0))
         else:

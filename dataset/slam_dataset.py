@@ -1121,13 +1121,19 @@ def read_tum_format_poses(filename: str):
     return poses, timestamps
 
 
-def write_kitti_format_poses(filename: str, poses_np: np.ndarray):
+def write_kitti_format_poses(filename: str, poses_np: np.ndarray, direct_use_filename = False):
     poses_out = poses_np[:, :3, :]
     poses_out_kitti = poses_out.reshape(poses_out.shape[0], -1)
-    
-    np.savetxt(fname=f"{filename}_kitti.txt", X=poses_out_kitti)
 
-def write_tum_format_poses(filename: str, poses_np: np.ndarray, timestamps=None, frame_s = 0.1):
+    if direct_use_filename:
+        fname = filename
+    else:
+        fname = f"{filename}_kitti.txt"
+    
+    np.savetxt(fname=fname, X=poses_out_kitti)
+
+def write_tum_format_poses(filename: str, poses_np: np.ndarray, timestamps=None, frame_s = 0.1, 
+                           with_header = False, direct_use_filename = False):
     from pyquaternion import Quaternion
 
     frame_count = poses_np.shape[0]
@@ -1141,7 +1147,17 @@ def write_tum_format_poses(filename: str, poses_np: np.ndarray, timestamps=None,
             ts = float(timestamps[i])
         tum_out[i] = np.array([ts, tx, ty, tz, qx, qy, qz, qw])
 
-    np.savetxt(fname=f"{filename}_tum.txt", X=tum_out, fmt="%.4f")
+    if with_header:
+        header = "timestamp tx ty tz qx qy qz qw"
+    else:
+        header = ''
+        
+    if direct_use_filename:
+        fname = filename
+    else:
+        fname = f"{filename}_tum.txt"
+
+    np.savetxt(fname=fname, X=tum_out, fmt="%.4f", header=header)
 
 def apply_kitti_format_calib(poses_np: np.ndarray, calib_T_cl: np.ndarray):
     """Converts from Velodyne to Camera Frame (# T_camera<-lidar)"""

@@ -251,7 +251,7 @@ The SLAM results and logs will be output in the `output_root` folder set in the 
 
 For evaluation, you may check [here](https://github.com/PRBonn/PIN_SLAM/blob/main/eval/README.md) for the results that can be obtained with this repository on a couple of popular datasets. 
 
-The training logs can be monitored via [Weights & Bias](wandb.ai) online if you set the flag `-w`. If it's your first time using Weights & Bias, you will be requested to register and log in to your wandb account. You can also set the flag `-l` to turn on the log printing in the terminal.
+The training logs can be monitored via Weights & Bias online if you set the flag `-w`. If it's your first time using Weights & Bias, you will be requested to register and log in to your wandb account. You can also set the flag `-l` to turn on the log printing in the terminal.
 
 </details>
 
@@ -357,7 +357,7 @@ We provide a PIN-SLAM visualizer based on [lidar-visualizer](https://github.com/
 
 ## Citation
 
-If you use PIN-SLAM for any academic work, please cite our original [paper](https://www.ipb.uni-bonn.de/wp-content/papercite-data/pdf/pan2024tro.pdf).
+If you use PIN-SLAM for any academic work, please cite our original [paper](https://ieeexplore.ieee.org/document/10582536).
 
 ```
 @article{pan2024tro,
@@ -365,9 +365,6 @@ author = {Y. Pan and X. Zhong and L. Wiesmann and T. Posewsky and J. Behley and 
 title = {{PIN-SLAM: LiDAR SLAM Using a Point-Based Implicit Neural Representation for Achieving Global Map Consistency}},
 journal = IEEE Transactions on Robotics (TRO),
 year = {2024},
-volume = {},
-number = {},
-pages = {},
 codeurl = {https://github.com/PRBonn/PIN_SLAM},
 }
 ```
