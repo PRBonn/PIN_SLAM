@@ -7,6 +7,7 @@ import argparse
 import os
 import sys
 
+import rerun as rr
 import numpy as np
 import open3d as o3d
 import torch
@@ -55,6 +56,7 @@ parser.add_argument('--data_loader_on', '-d', action='store_true', help='Use spe
 parser.add_argument('--visualize', '-v', action='store_true', help='Turn on the visualizer')
 parser.add_argument('--cpu_only', '-c', action='store_true', help='Run only on CPU')
 parser.add_argument('--log_on', '-l', action='store_true', help='Turn on the logs printing')
+parser.add_argument('--rerun_on', '-r', action='store_true', help='Turn on the rerun logging')
 parser.add_argument('--wandb_on', '-w', action='store_true', help='Turn on the weight & bias logging')
 parser.add_argument('--save_map', '-s', action='store_true', help='Save the PIN map after SLAM')
 parser.add_argument('--save_mesh', '-m', action='store_true', help='Save the reconstructed mesh after SLAM')
@@ -80,6 +82,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
         config.seed = args.seed
         config.silence = not args.log_on
         config.wandb_vis_on = args.wandb_on
+        config.rerun_vis_on = args.rerun_on
         config.o3d_vis_on = args.visualize
         config.save_map = args.save_map
         config.save_mesh = args.save_mesh
@@ -100,6 +103,9 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
     # non-blocking visualizer
     if config.o3d_vis_on:
         o3d_vis = MapVisualizer(config)
+
+    if config.rerun_vis_on:
+        rr.init("pin_slam_rerun_viewer", spawn=True)
 
     # initialize the mlp decoder
     geo_mlp = Decoder(config, config.geo_mlp_hidden_dim, config.geo_mlp_level, 1)
@@ -250,10 +256,10 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
                         # update the neural points and poses
                         pose_diff_torch = torch.tensor(pgm.get_pose_diff(), device=config.device, dtype=config.dtype)
                         dataset.cur_pose_torch = torch.tensor(pgm.cur_pose, device=config.device, dtype=config.dtype)
-                        neural_points.adjust_map(pose_diff_torch) # transform neural points (position and orientation) along with associated frame poses
+                        neural_points.adjust_map(pose_diff_torch) # transform neural points (position and orientation) along with associated frame poses # time consuming part
                         neural_points.recreate_hash(dataset.cur_pose_torch[:3,3], None, (not config.pgo_merge_map), config.rehash_with_time, frame_id) # recreate hash from current time
                         mapper.transform_data_pool(pose_diff_torch) # transform global pool
-                        dataset.update_poses_after_pgo(pgm.cur_pose, pgm.pgo_poses)
+                        dataset.update_poses_after_pgo(pgm.pgo_poses)
                         pgm.last_loop_idx = frame_id
                         pgm.min_loop_idx = min(pgm.min_loop_idx, loop_id)
                         loop_reg_failed_count = 0
@@ -374,6 +380,14 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
             loop_edges = pgm.loop_edges_vis if config.pgo_on else None
             o3d_vis.update_traj(dataset.cur_pose_ref, odom_poses, gt_poses, pgo_poses, loop_edges)
             o3d_vis.update(dataset.cur_frame_o3d, dataset.cur_pose_ref, cur_sdf_slice, cur_mesh, neural_pcd, pool_pcd)
+
+            if config.rerun_vis_on:
+                if neural_pcd is not None:
+                    rr.log("world/neural_points", rr.Points3D(neural_pcd.points, colors=neural_pcd.colors, radii=0.05))
+                if dataset.cur_frame_o3d is not None:
+                    rr.log("world/input_scan", rr.Points3D(dataset.cur_frame_o3d.points, colors=dataset.cur_frame_o3d.colors, radii=0.03))
+                if cur_mesh is not None:
+                    rr.log("world/mesh_map", rr.Mesh3D(vertex_positions=cur_mesh.vertices, triangle_indices=cur_mesh.triangles, vertex_normals=cur_mesh.vertex_normals, vertex_colors=cur_mesh.vertex_colors))
             
             T8 = get_time()
 

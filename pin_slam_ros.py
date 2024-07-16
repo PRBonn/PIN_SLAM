@@ -457,7 +457,7 @@ class PINSLAMer:
                         self.neural_points.adjust_map(pose_diff_torch)
                         self.neural_points.recreate_hash(self.dataset.cur_pose_torch[:3,3], None, (not self.config.pgo_merge_map), self.config.rehash_with_time, cur_frame_id) # recreate hash from current time
                         self.mapper.transform_data_pool(pose_diff_torch) # transform global pool
-                        self.dataset.update_poses_after_pgo(self.pgm.cur_pose, self.pgm.pgo_poses)
+                        self.dataset.update_poses_after_pgo(self.pgm.pgo_poses)
                         self.pgm.last_loop_idx = cur_frame_id
                         self.pgm.min_loop_idx = min(self.pgm.min_loop_idx, loop_id)
                         self.loop_reg_failed_count = 0

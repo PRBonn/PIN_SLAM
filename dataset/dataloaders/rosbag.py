@@ -72,9 +72,6 @@ class RosbagDataset:
         self.msgs = self.bag.messages(connections=connections)
         self.timestamps = []
 
-        # Visualization Options
-        self.use_global_visualizer = True
-
     def __del__(self):
         if hasattr(self, "bag"):
             self.bag.close()

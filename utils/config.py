@@ -241,7 +241,7 @@ class Config:
         # pose graph optimization
         self.pgo_on: bool = False
         self.pgo_freq: int = 30 # frame interval for detecting loop closure and conducting pose graph optimization after a successful loop correction 
-        self.pgo_with_lm: bool = True # use lm or dogleg optimizer
+        self.pgo_with_isam: bool = True # use isam incremental optimization or lm batch optimization
         self.pgo_max_iter: int = 50 # maximum number of iterations
         self.pgo_with_pose_prior: bool = False # use the pose prior or not during the pgo
         self.pgo_tran_std: float = 0.04 # m 
@@ -253,6 +253,7 @@ class Config:
 
         # eval
         self.wandb_vis_on: bool = False # monitor the training on weight and bias or not
+        self.rerun_vis_on: bool = False # visualize the process using rerun visualizer or not
         self.silence: bool = True # print log in the terminal or not
         self.o3d_vis_on: bool = False # visualize the mesh in-the-fly using o3d visualzier or not [press space to pasue/resume]
         self.o3d_vis_raw: bool = False # visualize the raw point cloud or the weight source point cloud

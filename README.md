@@ -238,7 +238,12 @@ python3 pin_slam.py ./config/lidar_slam/run.yaml rosbag point_cloud_topic_name -
 python3 pin_slam.py ./config/lidar_slam/run.yaml rosbag -i /path/to/the/rosbag -vsmd
 ```
 
-The data loaders for [some specific datasets](https://github.com/PRBonn/PIN_SLAM/tree/main/dataset/dataloaders) are also available. For example, you can run on Replica RGB-D dataset without preprocessing the data by:
+The data loaders for [some specific datasets](https://github.com/PRBonn/PIN_SLAM/tree/main/dataset/dataloaders) are also available.
+```
+Available dataloaders: ['apollo', 'boreas', 'generic', 'helipr', 'kitti', 'kitti_raw', 'mcap', 'mulran', 'ncd', 'nclt', 'neuralrgbd', 'nuscenes', 'ouster', 'paris_luco', 'replica', 'rosbag', 'tum']
+```
+
+For example, you can run on Replica RGB-D dataset without preprocessing the data by:
 ```
 # Download data
 sh scripts/download_replica.sh
@@ -251,7 +256,7 @@ The SLAM results and logs will be output in the `output_root` folder set in the 
 
 For evaluation, you may check [here](https://github.com/PRBonn/PIN_SLAM/blob/main/eval/README.md) for the results that can be obtained with this repository on a couple of popular datasets. 
 
-The training logs can be monitored via Weights & Bias online if you set the flag `-w`. If it's your first time using Weights & Bias, you will be requested to register and log in to your wandb account. You can also set the flag `-l` to turn on the log printing in the terminal.
+The training logs can be monitored via Weights & Bias online if you set the flag `-w`. If it's your first time using [Weights & Bias](https://wandb.ai/site), you will be requested to register and log in to your wandb account. You can also set the flag `-l` to turn on the log printing in the terminal and set the flag `-r` to turn on the visualization logging by [rerun](https://github.com/rerun-io/rerun).
 
 </details>
 

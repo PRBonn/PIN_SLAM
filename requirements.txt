@@ -1,14 +1,15 @@
 evo==1.28.0
+gnupg==2.3.1 
 gtsam==4.2
 laspy==2.5.3
 natsort==8.1.0
 open3d==0.17.0
+pycryptodomex==3.20.0
 pypose==0.6.8
 pyquaternion==0.9.9
+rerun-sdk==0.17.0
 rich==12.5.1
 roma==1.5.0
 rospkg==1.5.1
 scikit-image==0.21.0
 wandb==0.17.0
-pycryptodomex==3.20.0
-gnupg==2.3.1 

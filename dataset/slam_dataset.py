@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 from typing import List
 
+import datetime as dt
 import matplotlib.cm as cm
 import numpy as np
 import open3d as o3d
@@ -181,9 +182,18 @@ class SLAMDataset(Dataset):
 
         points, point_ts = point_cloud2.read_point_cloud(msg)
 
-        if point_ts is None:
+        if point_ts is not None:
+            min_timestamp = np.min(point_ts)
+            max_timestamp = np.max(point_ts)
+            if min_timestamp == max_timestamp:
+                point_ts = None
+            else:
+                # normalized to 0-1
+                point_ts = (point_ts - min_timestamp) / (max_timestamp - min_timestamp) 
+
+        if point_ts is None and not self.config.silence:
             print(
-                "The point cloud message does not contain the time stamp field"
+                "The point cloud message does not contain the valid time stamp field"
             )
 
         self.cur_point_cloud_torch = torch.tensor(
@@ -193,7 +203,7 @@ class SLAMDataset(Dataset):
         if self.config.deskew:
             self.get_point_ts(point_ts)
 
-    # read frame with specific data loader (borrow from kiss-icp: https://github.com/PRBonn/kiss-icp)
+    # read frame with specific data loader (partially borrow from kiss-icp: https://github.com/PRBonn/kiss-icp)
     def read_frame_with_loader(self, frame_id):
 
         self.set_ref_pose(frame_id)
@@ -206,11 +216,11 @@ class SLAMDataset(Dataset):
             points, point_ts = data
         else:
             points = data
+        
         self.cur_point_cloud_torch = torch.tensor(points, device=self.device, dtype=self.dtype)
 
         if self.config.deskew: 
             self.get_point_ts(point_ts)
-
 
     def read_frame(self, frame_id):
 
@@ -254,7 +264,8 @@ class SLAMDataset(Dataset):
         # print(self.cur_point_ts_torch)
 
     # point-wise timestamp is now only used for motion undistortion (deskewing)
-    def get_point_ts(self, point_ts=None):
+    def get_point_ts(self, point_ts=None): 
+        # point_ts is already the normalized timestamp in a scan frame # [0,1]
         if self.config.deskew:
             if point_ts is not None and min(point_ts) < 1.0: # not all 1
                 if not self.silence:
@@ -344,7 +355,7 @@ class SLAMDataset(Dataset):
             # pose initial guess tensor
             self.cur_pose_guess_torch = torch.tensor(
                 cur_pose_init_guess, dtype=torch.float64, device=self.device
-            )
+            )   
 
         if self.config.adaptive_range_on:
             pc_max_bound, _ = torch.max(self.cur_point_cloud_torch[:, :3], dim=0)
@@ -519,10 +530,10 @@ class SLAMDataset(Dataset):
             self.write_results() # record before the failure point
             sys.exit("Lose track for a long time, system failed") 
 
-    def update_poses_after_pgo(self, pgo_cur_pose, pgo_poses):
-        self.cur_pose_ref = pgo_cur_pose
-        self.last_pose_ref = pgo_cur_pose  # update for next frame
+    def update_poses_after_pgo(self, pgo_poses):
         self.pgo_poses[:self.processed_frame+1] = pgo_poses  # update pgo pose
+        self.cur_pose_ref = self.pgo_poses[self.processed_frame]
+        self.last_pose_ref = self.cur_pose_ref  # update for next frame
 
     def update_o3d_map(self):
 

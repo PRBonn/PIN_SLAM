@@ -10,6 +10,7 @@ from numpy.linalg import inv
 from rich import print
 
 from utils.config import Config
+from utils.tools import get_time
 
 
 class PoseGraphManager:
@@ -43,10 +44,10 @@ class PoseGraphManager:
         self.robust_loop_cov = gtsam.noiseModel.Robust(mEst, self.loop_cov)
         self.robust_odom_cov = gtsam.noiseModel.Robust(mEst, self.odom_cov)
 
-        self.graph_factors = (
-            gtsam.NonlinearFactorGraph()
-        )  # edges # with pose and pose covariance
-        self.graph_initials = gtsam.Values()  # initial guess # as pose
+        self.isam = gtsam.ISAM2()
+
+        self.graph_factors = gtsam.NonlinearFactorGraph() # edges # with pose and pose covariance
+        self.graph_initials = gtsam.Values()  # initial guess of the nodes 
 
         self.cur_pose = None
         self.curr_node_idx = None
@@ -168,49 +169,51 @@ class PoseGraphManager:
             )
         )  # NOTE: add robust kernel
 
-        cur_error = self.graph_factors.error(self.graph_initials)
-        valid_error_thre = (
-            self.last_error
-            + (cur_id - self.last_loop_idx) * self.config.pgo_error_thre_frame
-        )
-        if reject_outlier and cur_error > valid_error_thre:
-            if not self.silence:
-                print(
-                    "[bold yellow]A loop edge rejected due to too large error[/bold yellow]"
-                )
-            self.graph_factors.remove(self.graph_factors.size() - 1)
-            return False
+        if reject_outlier and not self.config.pgo_with_isam:
+            cur_error = self.graph_factors.error(self.graph_initials)
+            valid_error_thre = (
+                self.last_error
+                + (cur_id - self.last_loop_idx) * self.config.pgo_error_thre_frame
+            )
+            if reject_outlier and cur_error > valid_error_thre:
+                if not self.silence:
+                    print(
+                        "[bold yellow]A loop edge rejected due to too large error[/bold yellow]"
+                    )
+                self.graph_factors.remove(self.graph_factors.size() - 1)
+                return False
+            
         return True
 
     def optimize_pose_graph(self):
 
-        if self.config.pgo_with_lm:
+        if self.config.pgo_with_isam:
+            self.isam.update(self.graph_factors, self.graph_initials)
+
+            T_0 = get_time()
+            self.graph_optimized = self.isam.calculateEstimate()
+            T_1 = get_time()
+
+        else:
             opt_param = gtsam.LevenbergMarquardtParams()
             opt_param.setMaxIterations(self.config.pgo_max_iter)
             opt = gtsam.LevenbergMarquardtOptimizer(
                 self.graph_factors, self.graph_initials, opt_param
             )
-        else:  # pgo with dogleg
-            opt_param = gtsam.DoglegParams()
-            opt_param.setMaxIterations(self.config.pgo_max_iter)
-            opt = gtsam.DoglegOptimizer(
-                self.graph_factors, self.graph_initials, opt_param
-            )
 
-        error_before = self.graph_factors.error(self.graph_initials)
+            T_0 = get_time()
+            self.graph_optimized = opt.optimizeSafely()
+            T_1 = get_time()
 
-        self.graph_optimized = opt.optimizeSafely()
-
-        # Calculate marginal covariances for all variables
-        # marginals = gtsam.Marginals(self.graph_factors, self.graph_optimized)
-        # try to even visualize the covariance
-        # cov = get_node_cov(marginals, 50)
-        # print(cov)
-
-        error_after = self.graph_factors.error(self.graph_optimized)
-        if not self.silence:
-            print("[bold red]PGO done[/bold red]")
-            print("error %f --> %f:" % (error_before, error_after))
+            error_before = self.graph_factors.error(self.graph_initials)
+            error_after = self.graph_factors.error(self.graph_optimized)
+            self.last_error = error_after
+            if not self.silence:
+                print("[bold red]PGO done[/bold red]")
+                print("error %f --> %f:" % (error_before, error_after))
+        
+        # if not self.silence:
+        #     print("time for factor graph optimization (ms)", (T_1-T_0)*1e3)
 
         self.graph_initials = self.graph_optimized  # update the initial guess
 
@@ -222,7 +225,11 @@ class PoseGraphManager:
         self.cur_pose = self.pgo_poses[self.curr_node_idx]
 
         self.pgo_count += 1
-        self.last_error = error_after
+
+        if self.config.pgo_with_isam:
+            # reset
+            self.graph_factors = gtsam.NonlinearFactorGraph()
+            self.graph_initials.clear()
 
     # write the pose graph as the g2o format
     def write_g2o(self, out_file):
