@@ -571,7 +571,7 @@ class Mapper:
         )
 
         color_map = cm.get_cmap("seismic")
-        colors = color_map(pool_label_np)[:, :3].astype(np.float64)
+        colors = color_map(1.0 - pool_label_np)[:, :3].astype(np.float64) # change to blue (+) ---> red (-)
 
         data_pool_pc_o3d.colors = o3d.utility.Vector3dVector(colors)
 

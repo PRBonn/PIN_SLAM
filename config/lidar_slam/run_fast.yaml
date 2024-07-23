@@ -1,0 +1,28 @@
+setting: 
+  name: "test_fast"
+  output_root: "./experiments"
+process:
+  max_range_m: 100.0
+  vox_down_m: 0.1
+sampler:
+  surface_sample_range_m: 0.35 
+neuralpoints:
+  voxel_size_m: 0.6
+continual:
+  batch_size_new_sample: 800
+  pool_capacity: 1e7
+  pool_filter_freq: 10
+tracker:
+  source_vox_down_m: 1.5
+  iter_n: 15
+  term_deg: 0.1
+pgo:
+  pgo_freq_frame: 50
+  context_cosdist: 0.25
+  virtual_side_count: 0
+optimizer: # mappers 
+  batch_size: 4000
+  adaptive_iters: True
+eval:
+  mesh_freq_frame: 50 # reconstruct the mesh every x frames
+  mesh_min_nn: 9
