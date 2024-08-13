@@ -367,10 +367,10 @@ If you use PIN-SLAM for any academic work, please cite our original [paper](http
 ```
 @article{pan2024tro,
 author = {Y. Pan and X. Zhong and L. Wiesmann and T. Posewsky and J. Behley and C. Stachniss},
-title = {{PIN-SLAM: LiDAR SLAM Using a Point-Based Implicit Neural Representation for Achieving Global Map Consistency}},
-journal = IEEE Transactions on Robotics (TRO),
+title = {PIN-SLAM: LiDAR SLAM Using a Point-Based Implicit Neural Representation for Achieving Global Map Consistency},
+journal = {IEEE Transactions on Robotics (TRO)},
 year = {2024},
-codeurl = {https://github.com/PRBonn/PIN_SLAM},
+codeurl = {https://github.com/PRBonn/PIN_SLAM}
 }
 ```
 
