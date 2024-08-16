@@ -18,6 +18,7 @@ from typing import List
 
 import numpy as np
 import open3d as o3d
+from rich import print
 import roma
 import torch
 import torch.nn as nn

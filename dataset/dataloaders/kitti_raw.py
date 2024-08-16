@@ -27,6 +27,8 @@ from pathlib import Path
 
 import numpy as np
 
+# https://www.cvlibs.net/datasets/kitti/setup.php
+
 __raw_to_odometry_mapping__ = {
     "00": "2011_10_03/2011_10_03_drive_0027_sync/",
     "01": "2011_10_03/2011_10_03_drive_0042_sync/",
@@ -39,7 +41,6 @@ __raw_to_odometry_mapping__ = {
     "09": "2011_09_30/2011_09_30_drive_0033_sync/",
     "10": "2011_09_30/2011_09_30_drive_0034_sync/",
 }
-
 
 class KITTIRawDataset:
     def __init__(self, data_dir: Path, sequence: str, *_, **__):
@@ -67,7 +68,9 @@ class KITTIRawDataset:
         return len(self.scan_files)
 
     def __getitem__(self, idx):
-        return self.read_point_cloud(self.scan_files[idx])
+        points, point_ts = self.read_point_cloud(self.scan_files[idx])
+        frame_data = {"points": points, "point_ts": point_ts}
+        return frame_data
 
     def read_point_cloud(self, scan_file: str):
         points = np.fromfile(scan_file, dtype=np.float32).reshape((-1, 4))[:, :3].astype(np.float64)
@@ -90,6 +93,7 @@ class KITTIRawDataset:
         T_imu_velo = np.linalg.inv(T_velo_imu)
         return T_velo_imu @ poses @ T_imu_velo
 
+    # velodyne lidar
     @staticmethod
     def get_timestamps(points):
         x = points[:, 0]

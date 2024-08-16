@@ -59,7 +59,9 @@ class NCLTDataset:
         return len(self.scan_files)
 
     def __getitem__(self, idx):
-        return self.read_point_cloud(os.path.join(self.scans_dir, self.scan_files[idx]))
+        points = self.read_point_cloud(os.path.join(self.scans_dir, self.scan_files[idx]))
+        frame_data = {"points": points}
+        return frame_data
 
     def read_point_cloud(self, file_path: str):
         def _convert(x_s, y_s, z_s):

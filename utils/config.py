@@ -62,7 +62,7 @@ class Config:
 
         # filter for z coordinates (unit: m)
         self.min_z: float = -5.0  
-        self.max_z: float = 60.0
+        self.max_z: float = 80.0
 
         self.rand_downsample: bool = False  # apply random or voxel downsampling to input original point clcoud
         self.vox_down_m: float = 0.05 # the voxel size if using voxel downsampling (unit: m)
@@ -76,7 +76,7 @@ class Config:
         self.filter_moving_object: bool = True
 
         # color (intensity) related 
-        self.color_map_on: bool = True # colorized mapping default on
+        self.color_map_on: bool = True # colorized mapping default on (if False, then we only visualize the colorized point cloud but do not use them for mapping or localization)
         self.color_on: bool = False
         self.color_channel: int = 0 # For RGB, channel=3, For Lidar with intensity, channel=1
 
@@ -220,6 +220,7 @@ class Config:
         self.reg_term_thre_deg: float = 0.01 # iteration termination criteria for rotation 
         self.reg_term_thre_m: float = 0.001  # iteration termination criteria for translation
         self.eigenvalue_check: bool = True # use eigen value of Hessian matrix for degenaracy check
+        self.final_residual_ratio_thre: float = 0.6
 
         # loop closure detection
         self.global_loop_on: bool = True # global loop detection using context descriptor
@@ -447,6 +448,7 @@ class Config:
             self.reg_term_thre_deg = float(config_args["tracker"].get("term_deg", self.reg_term_thre_deg))
             self.reg_term_thre_m = float(config_args["tracker"].get("term_m", self.reg_term_thre_m))
             self.eigenvalue_check = config_args["tracker"].get("eigenvalue_check", self.eigenvalue_check)
+            self.final_residual_ratio_thre = float(config_args["tracker"].get("final_residual_ratio_thre", self.final_residual_ratio_thre))
 
         # pgo
         if self.track_on:

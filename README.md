@@ -24,7 +24,7 @@
     <a href="https://www.ipb.uni-bonn.de/people/cyrill-stachniss/"><strong>Cyrill Stachniss</strong></a>
   </p>
   <p align="center"><a href="https://www.ipb.uni-bonn.de"><strong>University of Bonn</strong></a>
-  <h3 align="center"><a href="https://www.ipb.uni-bonn.de/wp-content/papercite-data/pdf/pan2024tro.pdf">Paper</a> | Video</a></h3>
+  <h3 align="center"><a href="https://www.ipb.uni-bonn.de/wp-content/papercite-data/pdf/pan2024tro.pdf">Paper</a> | <a href="https://doi.org/10.1109/TRO.2024.3422055/mm1">Video</a></h3>
   <div align="center"></div>
 </p>
 
@@ -229,7 +229,7 @@ python3 pin_slam.py ./config/lidar_slam/run_ncd.yaml ncd 01 -vsm
 python3 pin_slam.py ./config/rgbd_slam/run_replica.yaml replica room0 -vsm
 ```
 
-We also support loading data from rosbag, mcap or pcap using specific data loaders (originally from [KISS-ICP](https://github.com/PRBonn/kiss-icp)). You need to set the flag `-d` to use such data loaders. For example:
+We also support loading data from rosbag, mcap or pcap (ros2) using specific data loaders (originally from [KISS-ICP](https://github.com/PRBonn/kiss-icp)). You need to set the flag `-d` to use such data loaders. For example:
 ```
 # Run on a rosbag or a folder of rosbags with certain point cloud topic
 python3 pin_slam.py ./config/lidar_slam/run.yaml rosbag point_cloud_topic_name -i /path/to/the/rosbag -vsmd
@@ -238,9 +238,9 @@ python3 pin_slam.py ./config/lidar_slam/run.yaml rosbag point_cloud_topic_name -
 python3 pin_slam.py ./config/lidar_slam/run.yaml rosbag -i /path/to/the/rosbag -vsmd
 ```
 
-The data loaders for [some specific datasets](https://github.com/PRBonn/PIN_SLAM/tree/main/dataset/dataloaders) are also available.
+The data loaders for [some specific datasets](https://github.com/PRBonn/PIN_SLAM/tree/main/dataset/dataloaders) are also available. You need to set the flag `-d` to use such data loaders.
 ```
-Available dataloaders: ['apollo', 'boreas', 'generic', 'helipr', 'kitti', 'kitti_raw', 'mcap', 'mulran', 'ncd', 'nclt', 'neuralrgbd', 'nuscenes', 'ouster', 'paris_luco', 'replica', 'rosbag', 'tum']
+Available dataloaders: ['apollo', 'boreas', 'generic', 'helipr', 'kitti', 'kitti360', 'kitti_raw', 'mcap', 'mulran', 'ncd', 'nclt', 'neuralrgbd', 'nuscenes', 'ouster', 'replica', 'rosbag', 'tum']
 ```
 
 For example, you can run on Replica RGB-D dataset without preprocessing the data by:
@@ -275,6 +275,8 @@ For example:
 
 ```
 python3 pin_slam_ros.py ./config/lidar_slam/run.yaml /os_cloud_node/points
+
+python3 pin_slam_ros.py ./config/lidar_slam/run.yaml /velodyne_points
 ```
 
 After playing the ROS bag or launching the sensor you can then visualize the results in Rviz by:
@@ -367,10 +369,10 @@ If you use PIN-SLAM for any academic work, please cite our original [paper](http
 ```
 @article{pan2024tro,
 author = {Y. Pan and X. Zhong and L. Wiesmann and T. Posewsky and J. Behley and C. Stachniss},
-title = {{PIN-SLAM: LiDAR SLAM Using a Point-Based Implicit Neural Representation for Achieving Global Map Consistency}},
-journal = IEEE Transactions on Robotics (TRO),
+title = {PIN-SLAM: LiDAR SLAM Using a Point-Based Implicit Neural Representation for Achieving Global Map Consistency},
+journal = {IEEE Transactions on Robotics (TRO)},
 year = {2024},
-codeurl = {https://github.com/PRBonn/PIN_SLAM},
+codeurl = {https://github.com/PRBonn/PIN_SLAM}
 }
 ```
 

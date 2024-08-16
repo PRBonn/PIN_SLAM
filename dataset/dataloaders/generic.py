@@ -2,6 +2,7 @@
 #
 # Copyright (c) 2022 Ignacio Vizzo, Tiziano Guadagnino, Benedikt Mersch, Cyrill
 # Stachniss.
+# 2024 Yue Pan
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -58,7 +59,9 @@ class GenericDataset:
         return len(self.scan_files)
 
     def __getitem__(self, idx):
-        return self.read_point_cloud(self.scan_files[idx])
+        points = self.read_point_cloud(self.scan_files[idx])
+        frame_data = {"points": points}
+        return frame_data
 
     def read_point_cloud(self, file_path: str):
         points = self._read_point_cloud(file_path)

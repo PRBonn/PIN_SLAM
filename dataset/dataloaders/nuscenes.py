@@ -2,6 +2,7 @@
 #
 # Copyright (c) 2022 Ignacio Vizzo, Tiziano Guadagnino, Benedikt Mersch, Cyrill
 # Stachniss.
+# 2024 Yue Pan
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -76,7 +77,22 @@ class NuScenesDataset:
         return len(self.lidar_tokens)
 
     def __getitem__(self, idx):
-        return self.read_point_cloud(self.lidar_tokens[idx])
+
+        points = self.read_point_cloud(self.lidar_tokens[idx])
+        point_ts = self.get_timestamps(points)
+        frame_data = {"points": points, "point_ts": point_ts}
+        # add imgs (TODO)
+
+        return frame_data
+    
+    # velodyne lidar
+    @staticmethod
+    def get_timestamps(points):
+        x = points[:, 0]
+        y = points[:, 1]
+        yaw = -np.arctan2(y, x)
+        timestamps = 0.5 * (yaw / np.pi + 1.0)
+        return timestamps
 
     def read_point_cloud(self, token: str):
         filename = self.nusc.get("sample_data", token)["filename"]

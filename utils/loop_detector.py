@@ -4,6 +4,7 @@
 # Copyright (c) 2024 Yue Pan, all rights reserved
 
 import math
+import os
 
 import numpy as np
 import torch
@@ -153,14 +154,18 @@ class NeuralPointMapContextManager:
 
     # main function for global loop detection
     def detect_global_loop(
-        self, cur_pgo_poses, dist_thre, loop_candidate_mask, neural_points
+        self, cur_pgo_poses, dist_thre, loop_candidate_mask, neural_points, dist_filter = True
     ):
         # TODO: use torch tensor
-        dist_to_past = np.linalg.norm(
-            cur_pgo_poses[:, :3, 3] - cur_pgo_poses[self.curr_node_idx, :3, 3], axis=1
-        )
-        dist_search_mask = dist_to_past < dist_thre
-        global_loop_candidate_idx = np.where(loop_candidate_mask & dist_search_mask)[0]
+        if dist_filter:
+            dist_to_past = np.linalg.norm(
+                cur_pgo_poses[:, :3, 3] - cur_pgo_poses[self.curr_node_idx, :3, 3], axis=1
+            )
+            dist_search_mask = dist_to_past < dist_thre
+            global_loop_candidate_idx = np.where(loop_candidate_mask & dist_search_mask)[0]
+        else:
+            global_loop_candidate_idx = np.where(loop_candidate_mask)[0]
+
         if global_loop_candidate_idx.shape[0] > 0:  # candidate exist
             context_pc = (
                 neural_points.local_neural_points.detach()
@@ -332,6 +337,32 @@ class NeuralPointMapContextManager:
             # loop detected!, transformation in numpy (should be  T_l<-c)
         else:
             return None, None, None
+        
+    # TODO
+    def save_context_dict(self, final_poses, run_path):
+
+        context_dict = {"contexts": self.contexts, 
+                        "ringkeys": self.ringkeys, 
+                        "contexts_feature": self.contexts_feature, 
+                        "ringkeys_feature": self.ringkeys_feature,
+                        "poses": final_poses}
+        
+        model_save_path = os.path.join(run_path, "model", "context_dict.pth")  # end with .pth
+
+        torch.save(context_dict, model_save_path)
+
+        print("save the context dictionary to", model_save_path)
+
+    def load_context_dict(self, dict_path):
+
+        loaded_dict = torch.load(dict_path)
+        self.contexts = loaded_dict["contexts"]
+        self.ringkeys = loaded_dict["ringkeys"]
+        
+        recorded_poses_in_map = loaded_dict["poses"]
+
+        return recorded_poses_in_map
+
 
 # only for debugging
 class GTLoopManager:

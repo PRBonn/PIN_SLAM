@@ -58,8 +58,23 @@ class TUMDataset:
                                      cx=cx,
                                      cy=cy)
         
+        self.K_mat = np.eye(3)
+        self.K_mat[0,0]=fx
+        self.K_mat[1,1]=fy
+        self.K_mat[0,2]=cx
+        self.K_mat[1,2]=cy
+
+        self.K_mats = {"cam": self.K_mat}
+
+        self.T_l_c = np.eye(4)
+        self.T_c_l = np.linalg.inv(self.T_l_c)
+
+        self.T_c_l_mats = {"cam": self.T_c_l}
+        
         self.down_sample_on = False
         self.rand_down_rate = 0.1
+
+        self.load_img = False
 
     def __len__(self):
         return len(self.depth_frames)
@@ -151,4 +166,11 @@ class TUMDataset:
         points_rgb = np.array(pcd.colors, dtype=np.float64)
         points_xyzrgb = np.hstack((points_xyz, points_rgb))
 
-        return points_xyzrgb 
+        frame_data = {"points": points_xyzrgb}
+
+        if self.load_img:
+            rgb_image = np.array(rgb_image)
+            rgb_image_dict = {"cam": rgb_image}
+            frame_data["img"] = rgb_image_dict
+
+        return frame_data 

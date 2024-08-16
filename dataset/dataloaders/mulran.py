@@ -2,6 +2,7 @@
 #
 # Copyright (c) 2022 Ignacio Vizzo, Tiziano Guadagnino, Benedikt Mersch, Cyrill
 # Stachniss.
+# 2024 Yue Pan
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -41,7 +42,9 @@ class MulranDataset:
         return len(self.scan_files)
 
     def __getitem__(self, idx):
-        return self.read_point_cloud(self.scan_files[idx])
+        points, point_ts = self.read_point_cloud(self.scan_files[idx])
+        frame_data = {"points": points, "point_ts": point_ts}
+        return frame_data
 
     def read_point_cloud(self, file_path: str):
         points = np.fromfile(file_path, dtype=np.float32).reshape((-1, 4))[:, :3]

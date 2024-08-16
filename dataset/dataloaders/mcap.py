@@ -56,7 +56,9 @@ class McapDataloader:
 
     def __getitem__(self, idx):
         msg = next(self.msgs).ros_msg
-        return self.read_point_cloud(msg)
+        points, point_ts = self.read_point_cloud(msg)
+        frame_data = {"points": points, "point_ts": point_ts}
+        return frame_data
 
     def __len__(self):
         return self.n_scans

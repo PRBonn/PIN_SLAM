@@ -2,6 +2,7 @@
 #
 # Copyright (c) 2022 Ignacio Vizzo, Tiziano Guadagnino, Benedikt Mersch, Cyrill
 # Stachniss.
+# 2024 Yue Pan
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -49,7 +50,11 @@ class ApolloDataset:
         return len(self.scan_files)
 
     def __getitem__(self, idx):
-        return self.get_scan(self.scan_files[idx])
+        points = self.get_scan(self.scan_files[idx])
+        point_ts = self.get_timestamps(points)
+        frame_data = {"points": points, "point_ts": point_ts}
+        
+        return frame_data
 
     def get_scan(self, scan_file: str):
         points = np.asarray(self.o3d.io.read_point_cloud(scan_file).points, dtype=np.float64)
@@ -69,3 +74,12 @@ class ApolloDataset:
         # Convert from global coordinate poses to local poses
         first_pose = poses[0, :, :]
         return np.linalg.inv(first_pose) @ poses
+    
+    # velodyne lidar
+    @staticmethod
+    def get_timestamps(points):
+        x = points[:, 0]
+        y = points[:, 1]
+        yaw = -np.arctan2(y, x)
+        timestamps = 0.5 * (yaw / np.pi + 1.0)
+        return timestamps

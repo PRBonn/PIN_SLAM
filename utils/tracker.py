@@ -37,6 +37,8 @@ class Tracker:
         self.dtype = config.dtype
         # NOTE: use torch.float64 for all the transformations and poses
 
+        self.reg_local_map = True # for localization mode, set to False
+
         self.sdf_scale = config.logistic_gaussian_ratio * config.sigma_sigmoid_m
 
     # already under the scaled coordinate system
@@ -76,7 +78,7 @@ class Tracker:
         term_thre_m = self.config.reg_term_thre_m
 
         max_valid_final_sdf_residual_cm = (
-            self.config.surface_sample_range_m * 0.5 * 100.0
+            self.config.surface_sample_range_m * self.config.final_residual_ratio_thre * 100.0
         )
         min_valid_ratio = 0.2
         if loop_reg:
@@ -366,7 +368,7 @@ class Tracker:
 
         T0 = get_time()
 
-        colors_on = colors is not None
+        colors_on = colors is not None and self.config.color_on
         photo_loss_on = self.config.photometric_loss_on and colors_on
         (
             sdf_pred,
@@ -384,7 +386,7 @@ class Tracker:
             True,
             colors_on,
             photo_loss_on,
-            query_locally=True,
+            query_locally=self.reg_local_map,
             mask_min_nn_count=self.config.track_mask_query_nn_k,
         )  # fixme
 
@@ -481,7 +483,7 @@ class Tracker:
             colors = colors[valid_idx, : self.config.color_channel]  # fix channel
             color_pred = color_pred[valid_idx, : self.config.color_channel]
 
-            if self.config.color_channel == 3:
+            if self.config.color_channel == 3 and self.config.color_on:
                 colors = color_to_intensity(colors)
                 color_pred = color_to_intensity(color_pred)
 
@@ -490,7 +492,7 @@ class Tracker:
             ):  # if color already in loss, we do not need the color weight
                 color_grad = color_grad[valid_idx, : self.config.color_channel]
 
-                if self.config.color_channel == 3:
+                if self.config.color_channel == 3 and self.config.color_on:
                     color_grad = color_to_intensity(color_grad)
 
             elif self.config.consist_wieght_on:  # color (intensity) consistency weight

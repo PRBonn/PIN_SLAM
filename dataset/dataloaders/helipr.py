@@ -100,7 +100,8 @@ class HeLiPRDataset:
         data = self.get_data(idx)
         points = self.read_point_cloud(data)
         timestamps = self.read_timestamps(data)
-        return points, timestamps
+        frame_data = {"points": points, "point_ts": timestamps}
+        return frame_data
 
     def read_poses(self, pose_file: str):
         gt = np.loadtxt(pose_file, delimiter=" ")

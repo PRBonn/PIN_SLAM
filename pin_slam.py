@@ -30,7 +30,6 @@ from utils.pgo import PoseGraphManager
 from utils.tools import (
     freeze_decoders,
     get_time,
-    load_decoder,
     save_implicit_map,
     setup_experiment,
     split_chunks,
@@ -112,18 +111,38 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
     sem_mlp = Decoder(config, config.sem_mlp_hidden_dim, config.sem_mlp_level, config.sem_class_count + 1) if config.semantic_on else None
     color_mlp = Decoder(config, config.color_mlp_hidden_dim, config.color_mlp_level, config.color_channel) if config.color_on else None
 
-    # initialize the feature octree
-    neural_points = NeuralPoints(config)
+    # initialize the neural points
+    neural_points: NeuralPoints = NeuralPoints(config)
 
+    # loop closure detector
+    lcd_npmc = NeuralPointMapContextManager(config) # npmc: neural point map context
+
+    mapping_on = True
     # Load the decoder model
-    if config.load_model: # not used
-        load_decoder(config, geo_mlp, sem_mlp, color_mlp)
+    # for the localization with pre-built map mode, set load_model as True and provide the model path in the config file
+    if config.load_model:
+        loaded_model = torch.load(config.model_path)
+        neural_points = loaded_model["neural_points"]
+        geo_mlp.load_state_dict(loaded_model["geo_decoder"])
+        if 'sem_decoder' in loaded_model.keys():
+            sem_mlp.load_state_dict(loaded_model["sem_decoder"])
+        if 'color_decoder' in loaded_model.keys():
+            color_mlp.load_state_dict(loaded_model["color_decoder"])
+        freeze_decoders(geo_mlp, sem_mlp, color_mlp, config)
+        
+        print("PIN Map loaded")  
+        neural_points.recreate_hash(torch.zeros(3).to(config.device), None, True, False)
+        mapping_on = False # localization mode
+        neural_points.temporal_local_map_on = False # don't use travel distance for filtering
+        config.pgo_on = False
 
     # dataset
     dataset = SLAMDataset(config)
 
     # odometry tracker
     tracker = Tracker(config, neural_points, geo_mlp, sem_mlp, color_mlp)
+    if config.load_model and not mapping_on: 
+        tracker.reg_local_map = False
 
     # mapper
     mapper = Mapper(config, dataset, neural_points, geo_mlp, sem_mlp, color_mlp)
@@ -137,19 +156,18 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
     init_pose = dataset.gt_poses[0] if dataset.gt_pose_provided else np.eye(4)  
     pgm.add_pose_prior(0, init_pose, fixed=True)
 
-    # loop closure detector
-    lcd_npmc = NeuralPointMapContextManager(config) # npmc: neural point map context
-
     last_frame = dataset.total_pc_count-1
     loop_reg_failed_count = 0
 
     # save merged point cloud map from gt pose as a reference map
     if config.save_merged_pc and dataset.gt_pose_provided:
+        print("Load and merge the map point cloud with the reference (GT) poses ... ...")
         dataset.write_merged_point_cloud(use_gt_pose=True, out_file_name='merged_gt_pc', 
         frame_step=5, merged_downsample=True)
         
     # for each frame
-    for frame_id in tqdm(range(dataset.total_pc_count)): # frame id as the processed frame, possible skipping done in data loader
+    # frame id as the processed frame, possible skipping done in data loader
+    for frame_id in tqdm(range(dataset.total_pc_count)): 
 
         # I. Load data and preprocessing
         T0 = get_time()
@@ -218,8 +236,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
                 # detect candidate local loop, find the nearest history pose and activate certain local map
                 loop_candidate_mask = ((travel_dist[-1] - travel_dist) > (config.min_loop_travel_dist_ratio*config.local_map_radius)) # should not be too close
                 loop_id = None
-                if np.any(loop_candidate_mask): # have at least one candidate
-                    # firstly try to detect the local loop by checking the distance
+                if np.any(loop_candidate_mask): # have at least one candidate. firstly try to detect the local loop by checking the distance
                     loop_id, loop_dist, loop_transform = detect_local_loop(dataset.pgo_poses[:frame_id+1], loop_candidate_mask, pgm.drift_radius, frame_id, loop_reg_failed_count, config.local_loop_dist_thre, config.local_loop_dist_thre*3.0, config.silence)
                     if loop_id is None and config.global_loop_on: # global loop detection (large drift)
                         loop_id, loop_cos_dist, loop_transform, local_map_context_loop = lcd_npmc.detect_global_loop(dataset.pgo_poses[:frame_id+1], pgm.drift_radius*config.loop_dist_drift_ratio_thre, loop_candidate_mask, neural_points) # latency has been considered here     
@@ -231,8 +248,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
                     neural_points.recreate_hash(pose_init_torch[:3,3], None, True, True, loop_id) # recreate hash and local map at the loop candidate frame for registration, this is the reason why we'd better to keep the duplicated neural points until the end
                     loop_reg_source_point = dataset.cur_source_points.clone()
                     pose_refine_torch, loop_cov_mat, weight_pcd, reg_valid_flag = tracker.tracking(loop_reg_source_point, pose_init_torch, loop_reg=True, vis_result=config.o3d_vis_on)
-                    # visualize the loop closure and loop registration
-                    if config.o3d_vis_on and o3d_vis.debug_mode > 1:
+                    if config.o3d_vis_on and o3d_vis.debug_mode > 1: # visualize the loop closure and loop registration (when the vis debug mode is on)
                         points_torch_init = transform_torch(loop_reg_source_point, pose_init_torch) # apply transformation
                         points_o3d_init = o3d.geometry.PointCloud()
                         points_o3d_init.points = o3d.utility.Vector3dVector(points_torch_init.detach().cpu().numpy().astype(np.float64))
@@ -278,36 +294,33 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
         # IV: Mapping and bundle adjustment
         # if lose track, we will not update the map and data pool (don't let the wrong pose to corrupt the map)
         # if the robot stop, also don't process this frame, since there's no new oberservations
-        if frame_id < 5 or (not dataset.lose_track and not dataset.stop_status):
+        if mapping_on and (frame_id < 5 or (not dataset.lose_track and not dataset.stop_status)):
             mapper.process_frame(dataset.cur_point_cloud_torch, dataset.cur_sem_labels_torch,
-                                 dataset.cur_pose_torch, frame_id, (config.dynamic_filter_on and frame_id > 0))
+                                dataset.cur_pose_torch, frame_id, (config.dynamic_filter_on and frame_id > 0))
         else:
             mapper.determine_used_pose()
             neural_points.reset_local_map(dataset.cur_pose_torch[:3,3], None, frame_id) # not efficient for large map
-                                
+                                    
         T5 = get_time()
 
-        # for the first frame, we need more iterations to do the initialization (warm-up)
-        cur_iter_num = config.iters * config.init_iter_ratio if frame_id == 0 else config.iters
-        if dataset.stop_status:
-            cur_iter_num = max(1, cur_iter_num-10)
-        if frame_id == config.freeze_after_frame: # freeze the decoder after certain frame 
-            freeze_decoders(geo_mlp, sem_mlp, color_mlp, config)
+        if mapping_on:
+            # for the first frame, we need more iterations to do the initialization (warm-up)
+            cur_iter_num = config.iters * config.init_iter_ratio if frame_id == 0 else config.iters
+            if dataset.stop_status:
+                cur_iter_num = max(1, cur_iter_num-10)
+            if frame_id == config.freeze_after_frame: # freeze the decoder after certain frame 
+                freeze_decoders(geo_mlp, sem_mlp, color_mlp, config)
 
-        # conduct local bundle adjustment (with lower frequency)
-        if config.track_on and config.ba_freq_frame > 0 and (frame_id+1) % config.ba_freq_frame == 0:
-            mapper.bundle_adjustment(config.ba_iters, config.ba_frame)
-        
-        # mapping with fixed poses (every frame)
-        if frame_id % config.mapping_freq_frame == 0:
-            mapper.mapping(cur_iter_num)
-        
+            # conduct local bundle adjustment (with lower frequency)
+            if config.track_on and config.ba_freq_frame > 0 and (frame_id+1) % config.ba_freq_frame == 0:
+                mapper.bundle_adjustment(config.ba_iters, config.ba_frame)
+            
+            # mapping with fixed poses (every frame)
+            if frame_id % config.mapping_freq_frame == 0:
+                mapper.mapping(cur_iter_num)
+            
         T6 = get_time()
-
-        # regular saving logs
-        if config.log_freq_frame > 0 and (frame_id+1) % config.log_freq_frame == 0:
-            dataset.write_results_log()
-
+        
         if not config.silence:
             print("time for frame reading          (ms):", (T1-T0)*1e3)
             print("time for frame preprocessing    (ms):", (T2-T1)*1e3)
@@ -317,6 +330,10 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
                 print("time for loop detection and PGO (ms):", (T4-T3)*1e3)
             print("time for mapping preparation    (ms):", (T5-T4)*1e3)
             print("time for training               (ms):", (T6-T5)*1e3)
+
+        # regular saving logs
+        if config.log_freq_frame > 0 and (frame_id+1) % config.log_freq_frame == 0:
+            dataset.write_results_log()
 
         # V: Mesh reconstruction and visualization
         cur_mesh = None
@@ -353,7 +370,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
                     # figure out how to do it efficiently
                     if not o3d_vis.vis_global: # only build the local mesh
                         # cur_mesh = mesher.recon_aabb_mesh(dataset.cur_bbx, o3d_vis.mc_res_m, mesh_path, True, config.semantic_on, config.color_on, filter_isolated_mesh=True, mesh_min_nn=o3d_vis.mesh_min_nn)
-                        chunks_aabb = split_chunks(global_neural_pcd_down, dataset.cur_bbx, o3d_vis.mc_res_m*100) # reconstruct in chunks
+                        chunks_aabb = split_chunks(global_neural_pcd_down, dataset.cur_bbx, o3d_vis.mc_res_m * 100) # reconstruct in chunks
                         cur_mesh = mesher.recon_aabb_collections_mesh(chunks_aabb, o3d_vis.mc_res_m, mesh_path, True, config.semantic_on, config.color_on, filter_isolated_mesh=True, mesh_min_nn=o3d_vis.mesh_min_nn)    
                     else:
                         aabb = global_neural_pcd_down.get_axis_aligned_bounding_box()
@@ -413,7 +430,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
         pgm.write_loops(os.path.join(run_path, "loop_log.txt"))
         if config.o3d_vis_on:
             pgm.plot_loops(os.path.join(run_path, "loop_plot.png"), vis_now=False)  
-
+    
     neural_points.recreate_hash(None, None, False, False) # merge the final neural point map
     neural_points.prune_map(config.max_prune_certainty, 0) # prune uncertain points for the final output     
     neural_pcd = neural_points.get_neural_points_o3d(query_global=True, color_mode = 0)
@@ -428,6 +445,8 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
     neural_points.clear_temp() # clear temp data for output
     if config.save_map:
         save_implicit_map(run_path, neural_points, geo_mlp, color_mlp, sem_mlp)
+        # lcd_npmc.save_context_dict(mapper.used_poses, run_path)
+
     if config.save_merged_pc:
         dataset.write_merged_point_cloud() # replay: save merged point cloud map
 
@@ -441,5 +460,4 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
     return pose_eval_results
 
 if __name__ == "__main__":
-
     run_pin_slam()

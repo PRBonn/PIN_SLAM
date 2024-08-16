@@ -159,6 +159,13 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
+data
 data/
+experiments
 experiments/
 .vscode/
+
+bak
+TODO.md
+NOTE.md
+notebook_exp

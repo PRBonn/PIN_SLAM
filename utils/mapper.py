@@ -252,9 +252,16 @@ class Mapper:
         if self.config.prune_map_on and ((frame_id + 1) % self.config.prune_freq_frame == 0):
             if self.neural_points.prune_map(self.config.max_prune_certainty):
                 self.neural_points.recreate_hash(None, None, True, True, frame_id)
-        self.neural_points.update(
+        
+        # update map and judge how much new observations are gained
+        self.cur_new_point_ratio = self.neural_points.update(
             update_points, frame_origin_torch, frame_orientation_torch, frame_id
         )
+
+        # if not much new information we do not need to do much mapping
+        # if not self.config.silence:
+        #     print("New observation ratio:", self.cur_new_point_ratio) 
+
         # local map is also updated here
 
         if not self.silence:

@@ -2,6 +2,7 @@
 #
 # Copyright (c) 2022 Ignacio Vizzo, Tiziano Guadagnino, Benedikt Mersch, Cyrill
 # Stachniss.
+# 2024 Yue Pan
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -83,7 +84,11 @@ class RosbagDataset:
         connection, timestamp, rawdata = next(self.msgs)
         self.timestamps.append(self.to_sec(timestamp))
         msg = self.bag.deserialize(rawdata, connection.msgtype)
-        return self.read_point_cloud(msg)
+
+        points, point_ts = self.read_point_cloud(msg)
+        frame_data = {"points": points, "point_ts": point_ts}
+
+        return frame_data
 
     @staticmethod
     def to_sec(nsec: int):

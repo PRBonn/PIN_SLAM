@@ -35,6 +35,7 @@ class NewerCollegeDataset:
             self.PyntCloud = importlib.import_module("pyntcloud").PyntCloud
         except ModuleNotFoundError:
             print(f'Newer College requires pnytccloud: "pip install pyntcloud"')
+        # can also use open3d
 
         self.data_source = os.path.join(data_dir, "")
         self.scan_folder = os.path.join(self.data_source, "raw_format/ouster_scan")
@@ -53,13 +54,14 @@ class NewerCollegeDataset:
 
     def __getitem__(self, idx):
         file_path = os.path.join(self.scan_folder, self.scan_files[idx])
-        return self.getitem(file_path)
+        points, point_ts = self.getitem(file_path)
+        frame_data = {"points": points, "point_ts": point_ts}
+        return frame_data
 
     def getitem(self, scan_file: str):
         points = self.PyntCloud.from_file(scan_file).points[["x", "y", "z"]].to_numpy()
         timestamps = self.get_timestamps()
         if points.shape[0] != timestamps.shape[0]:
-            # MuRan has some broken point clouds, just fallback to no timestamps
             return points.astype(np.float64), np.ones(points.shape[0])
         return points.astype(np.float64), timestamps
 

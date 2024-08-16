@@ -53,19 +53,40 @@ class NeuralRGBDDataset:
         focal_file = open(focal_file_path, "r")
         focal_length = float(focal_file.readline())
 
+        self.fx = focal_length
+        self.fy = focal_length
+        self.cx = (W-1)/2.0
+        self.cy = (H-1)/2.0
+
+        self.K_mat = np.eye(3)
+        self.K_mat[0,0]=self.fx
+        self.K_mat[1,1]=self.fy
+        self.K_mat[0,2]=self.cx
+        self.K_mat[1,2]=self.cy
+
+        self.K_mats = {"cam": self.K_mat}
+
         self.intrinsic = self.o3d.camera.PinholeCameraIntrinsic()
         self.intrinsic.set_intrinsics(height=H,
                                       width=W,
-                                      fx=focal_length,
-                                      fy=focal_length,
-                                      cx=(W-1)/2.0,
-                                      cy=(H-1)/2.0)
+                                      fx=self.fx,
+                                      fy=self.fy,
+                                      cx=self.cx,
+                                      cy=self.cy)
+
         self.extrinsic = np.array([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
+
+        self.T_l_c = self.extrinsic.astype(np.float64)
+        self.T_c_l = np.linalg.inv(self.T_l_c)
+
+        self.T_c_l_mats = {"cam": self.T_c_l}
 
         self.depth_scale = 1000.0
         self.max_depth_m = 10.0
         self.down_sample_on = False
         self.rand_down_rate = 0.1
+
+        self.load_img = False
 
     def __len__(self):
         return len(self.depth_frames)
@@ -107,5 +128,11 @@ class NeuralRGBDDataset:
         points_xyz = np.array(pcd.points, dtype=np.float64)
         points_rgb = np.array(pcd.colors, dtype=np.float64)
         points_xyzrgb = np.hstack((points_xyz, points_rgb))
+        frame_data = {"points": points_xyzrgb}
 
-        return points_xyzrgb 
+        if self.load_img:
+            rgb_image = np.array(rgb_image)
+            rgb_image_dict = {"cam": rgb_image}
+            frame_data["img"] = rgb_image_dict
+
+        return frame_data

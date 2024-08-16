@@ -53,7 +53,6 @@ class SLAMDataset(Dataset):
         
         self.loader = None
         if config.use_dataloader: 
-
             self.loader = dataset_factory(
                 dataloader=config.data_loader_name, # a specific dataset or data format
                 data_dir=Path(config.pc_path),
@@ -71,6 +70,12 @@ class SLAMDataset(Dataset):
                 self.gt_pose_provided = False
             if hasattr(self.loader, 'calibration'):
                 self.calib["Tr"][:3, :4] = self.loader.calibration["Tr"].reshape(3, 4)
+            if hasattr(self.loader, "K_mats"): # as dictionary
+                self.K_mats = self.loader.K_mats
+                self.cam_names = list(self.K_mats.keys())
+            if hasattr(self.loader, "T_c_l_mats"):
+                self.T_c_l_mats = self.loader.T_c_l_mats # as dictionary
+
         else: # original pin-slam generic loader
             # point cloud files
             if config.pc_path != "":
@@ -209,14 +214,28 @@ class SLAMDataset(Dataset):
         self.set_ref_pose(frame_id)
 
         frame_id_in_folder = self.config.begin_frame + frame_id * self.config.step_frame
-        data = self.loader[frame_id_in_folder]
-    
+        frame_data = self.loader[frame_id_in_folder]
+
+        points = None
         point_ts = None
-        if isinstance(data, tuple):
-            points, point_ts = data
-        else:
-            points = data
-        
+        img_dict = None
+
+        if isinstance(frame_data, dict):
+            dict_keys = list(frame_data.keys())
+            if not self.silence:
+                print("Available data source:", dict_keys)
+            if "points" in dict_keys: # TODO: support multiple LiDAR
+                points = frame_data["points"] # may also contain intensity or color
+            if "point_ts" in dict_keys:
+                point_ts = frame_data["point_ts"]
+            if "img" in dict_keys: # support multiple cameras
+                img_dict: dict = frame_data["img"]
+                cam_list = list(img_dict.keys())
+                self.cur_cam_img = {}
+                # TO ADD
+            if "imus" in dict_keys:
+                self.cur_frame_imus = frame_data["imus"]
+         
         self.cur_point_cloud_torch = torch.tensor(points, device=self.device, dtype=self.dtype)
 
         if self.config.deskew: 
@@ -666,6 +685,12 @@ class SLAMDataset(Dataset):
             os.path.join(self.run_path, "time_table.npy"), time_table
         )  # save detailed time table
 
+        plot_timing_detail(
+            time_table,
+            os.path.join(self.run_path, "time_details.png"),
+            self.config.pgo_on,
+        )
+
         pose_eval = None
 
         # pose estimation evaluation report
@@ -764,12 +789,6 @@ class SLAMDataset(Dataset):
                         writer.writerow(data)
             except IOError:
                 print("I/O error")
-
-            plot_timing_detail(
-                time_table,
-                os.path.join(self.run_path, "time_details.png"),
-                self.config.pgo_on,
-            )
 
             # if self.config.o3d_vis_on:  # x service issue for remote server
             output_traj_plot_path_2d = os.path.join(self.run_path, "traj_plot_2d.png")

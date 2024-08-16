@@ -147,7 +147,9 @@ class OusterDataloader:
         xyz = self._xyz_lut(scan)[sel_flag]
         timestamps = timestamps[sel_flag]
 
-        return xyz, timestamps
+        frame_data = {"points": xyz, "point_ts": timestamps}
+
+        return frame_data
 
     def get_frames_timestamps(self):
         return self._timestamps
