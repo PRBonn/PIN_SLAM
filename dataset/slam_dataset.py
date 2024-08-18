@@ -75,7 +75,9 @@ class SLAMDataset(Dataset):
                 self.cam_names = list(self.K_mats.keys())
             if hasattr(self.loader, "T_c_l_mats"):
                 self.T_c_l_mats = self.loader.T_c_l_mats # as dictionary
-
+            if config.color_channel == 3:
+                self.loader.load_img = True
+            
         else: # original pin-slam generic loader
             # point cloud files
             if config.pc_path != "":
@@ -567,7 +569,7 @@ class SLAMDataset(Dataset):
 
         # visualize or not
         # uncomment to visualize the dynamic mask
-        if self.config.dynamic_filter_on and self.static_mask is not None:
+        if (self.config.dynamic_filter_on) and (self.static_mask is not None) and (not self.stop_status):
             static_mask = self.static_mask.detach().cpu().numpy()
             frame_colors_np = np.ones_like(frame_points_np) * 0.7
             frame_colors_np[~static_mask, 1:] = 0.0

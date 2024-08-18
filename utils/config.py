@@ -82,8 +82,9 @@ class Config:
 
         # map-based dynamic filtering (observations in certain freespace are dynamic)
         self.dynamic_filter_on: bool = False
-        self.dynamic_certainty_thre: float = 0.5
-        self.dynamic_sdf_ratio_thre: float = 1.5
+        self.dynamic_certainty_thre: float = 1.0 
+        self.dynamic_sdf_ratio_thre: float = 0.5 # type1 dynamic
+        self.dynamic_min_grad_norm_thre: float = 0.25 # type2 dynamic
 
         # neural points
         self.voxel_size_m: float = 0.3 # we use the voxel hashing structure to maintain the neural points, the voxel size is set as this value      
@@ -353,11 +354,13 @@ class Config:
                 self.rand_down_r = config_args["process"].get("rand_down_r", self.rand_down_r)
             else:
                 self.vox_down_m = config_args["process"].get("vox_down_m", self.max_range*1e-3)
-            self.dynamic_filter_on = config_args["process"].get("dynamic_filter_on", self.dynamic_filter_on)
-            self.dynamic_sdf_ratio_thre = config_args["process"].get("dynamic_sdf_ratio_thre", self.dynamic_sdf_ratio_thre)
-            self.dynamic_certainty_thre = config_args["process"].get("dynamic_certainty_thre", self.dynamic_certainty_thre)
             self.adaptive_range_on = config_args["process"].get("adaptive_range_on", self.adaptive_range_on)
 
+            self.dynamic_filter_on = config_args["process"].get("dynamic_filter_on", self.dynamic_filter_on)
+            self.dynamic_certainty_thre = config_args["process"].get("dynamic_certainty_thre", self.dynamic_certainty_thre)
+            self.dynamic_sdf_ratio_thre = config_args["process"].get("dynamic_sdf_ratio_thre", self.dynamic_sdf_ratio_thre)
+            self.dynamic_min_grad_norm_thre = config_args["process"].get("dynamic_min_grad_norm_thre", self.dynamic_min_grad_norm_thre)
+            
         # sampler
         if "sampler" in config_args:
             self.surface_sample_range_m = config_args["sampler"].get("surface_sample_range_m", self.vox_down_m * 3.0) 

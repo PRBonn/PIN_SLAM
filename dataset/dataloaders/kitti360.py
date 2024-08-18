@@ -48,7 +48,8 @@ class KITTI360Dataset:
 
         seq_str = f"2013_05_28_drive_{str(sequence).zfill(4)}_sync/"
 
-        self.use_only_colorized_points = True
+        self.load_img: bool = False
+        self.use_only_colorized_points: bool = True
 
         lidar_folder = "data_3d_raw"
         img_folder = "data_2d_raw"
@@ -106,6 +107,11 @@ class KITTI360Dataset:
     def __getitem__(self, idx):
 
         points, point_ts = self.read_point_cloud(self.scan_files[idx])
+
+        if not self.load_img:
+            frame_data = {"points": points, "point_ts": point_ts}
+            return frame_data
+            
         # now we use only the left cam
         img = self.read_img(self.img0_files[idx])
         cam_name = "cam_left_rect"

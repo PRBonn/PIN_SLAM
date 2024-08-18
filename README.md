@@ -196,7 +196,7 @@ python3 pin_slam.py -i /path/to/your/point/cloud/folder -vsm
 ```
 
 <details>
-  <summary>[Details (click to expand)]</summary>
+  <summary>[More Usage (click to expand)]</summary>
 
 Follow the instructions on how to run PIN-SLAM by typing:
 ```

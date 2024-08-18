@@ -50,7 +50,8 @@ class KITTIOdometryDataset:
         else:
             self.sem_available = False
 
-        self.use_only_colorized_points = True
+        self.load_img: bool = False
+        self.use_only_colorized_points: bool = True
 
         # cam 2 (color)
         self.img2_dir = os.path.join(self.kitti_sequence_dir, "image_2/")
@@ -91,7 +92,7 @@ class KITTIOdometryDataset:
         points = self.scans(idx)
         point_ts = self.get_timestamps(points)
 
-        if self.image_available:
+        if self.image_available and self.load_img:
             img = self.read_img(self.img2_files[idx])
             img_dict = {self.left_cam_name: img}
 
@@ -133,7 +134,6 @@ class KITTIOdometryDataset:
     def read_img(self, img_file: str):
         img = self.cv2.imread(img_file)
         img = self.cv2.cvtColor(img, self.cv2.COLOR_BGR2RGB)
-       
         return img
     
     # velodyne lidar

@@ -1,29 +1,34 @@
 setting:
-  name: "test_kitti_color"
+  name: "test_kitti_mos"
+  # you may test it with kitti_tracking data sequences: 
+  # wget https://www.ipb.uni-bonn.de/html/projects/kitti-tracking/post-processed/kitti-tracking.zip
+  # you can use the same dynamic filtering parameter settings on other datasets
   output_root: "./experiments"
-  # in the kitti data folder, the `image_2` folder is required
-  # please use kitti dataloader with -d flag
-  # this config also support kitti360 dataset
+  pc_path: "./data/kitti/sequences/00/velodyne"
+  pose_path: "./data/kitti/poses/00.txt"
+  calib_path: "./data/kitti/sequences/00/calib.txt"
   kitti_correct: True
   correct_deg: 0.195
-  color_channel: 3
-  color_map_on: True
 process:
   min_range_m: 3.0
   max_range_m: 80.0
   vox_down_m: 0.08
   min_z_m: -3.5
+  dynamic_filter_on: True
+  dynamic_certainty_thre: 1.0
+  dynamic_sdf_ratio_thre: 0.5
+  dynamic_min_grad_norm_thre: 0.25
 sampler:
   surface_sample_range_m: 0.25 
-  surface_sample_n: 4
+  surface_sample_n: 3
   free_sample_begin_ratio: 0.3
   free_sample_end_dist_m: 1.0
-  free_front_sample_n: 2
+  free_front_sample_n: 4 # large value here for more free-space supervision
 neuralpoints:
   voxel_size_m: 0.4
   feature_dim: 8 
   query_nn_k: 6
-  search_alpha: 0.2
+  search_alpha: 0.5
   weighted_first: False
 decoder:
   freeze_after_frame: 40
@@ -51,5 +56,5 @@ eval:
   o3d_vis_on: False # visualize the mapping or not
   silence_log: True # output the logs or not
   sensor_cad_path: ./cad/kitti_car.ply
-  mesh_freq_frame: 20 # reconstruct the mesh every x frames
+  mesh_freq_frame: 50 # reconstruct the mesh every x frames
   mesh_min_nn: 9

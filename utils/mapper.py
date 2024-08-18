@@ -95,7 +95,7 @@ class Mapper:
         self.weight_pool = torch.empty((0), device=self.device, dtype=self.dtype)
         self.time_pool = torch.empty((0), device=self.device, dtype=torch.int)
 
-    def dynamic_filter(self, points_torch, type_2_on: bool = False):
+    def dynamic_filter(self, points_torch, type_2_on: bool = True):
 
         if type_2_on:
             points_torch.requires_grad_(True)
@@ -128,8 +128,8 @@ class Mapper:
         # Strategy 2 [not used]
         # dynamic objects's sdf are often underestimated or unstable (already used for source point cloud)
         if type_2_on:
-            min_grad_norm = 0.3
-            certainty_thre = 0.5
+            min_grad_norm = self.config.dynamic_min_grad_norm_thre
+            certainty_thre = self.config.dynamic_certainty_thre
             static_mask_2 = (grad_norm > min_grad_norm) | (certainty < certainty_thre)
             static_mask = static_mask & static_mask_2
 
