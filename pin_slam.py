@@ -160,10 +160,10 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
     loop_reg_failed_count = 0
 
     # save merged point cloud map from gt pose as a reference map
-    if config.save_merged_pc and dataset.gt_pose_provided:
-        print("Load and merge the map point cloud with the reference (GT) poses ... ...")
-        dataset.write_merged_point_cloud(use_gt_pose=True, out_file_name='merged_gt_pc', 
-        frame_step=5, merged_downsample=True)
+    # if config.save_merged_pc and dataset.gt_pose_provided:
+    #     print("Load and merge the map point cloud with the reference (GT) poses ... ...")
+    #     dataset.write_merged_point_cloud(use_gt_pose=True, out_file_name='merged_gt_pc', 
+    #     frame_step=5, merged_downsample=True)
         
     # for each frame
     # frame id as the processed frame, possible skipping done in data loader
@@ -431,8 +431,9 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
         if config.o3d_vis_on:
             pgm.plot_loops(os.path.join(run_path, "loop_plot.png"), vis_now=False)  
     
-    neural_points.recreate_hash(None, None, False, False) # merge the final neural point map
-    neural_points.prune_map(config.max_prune_certainty, 0) # prune uncertain points for the final output     
+    neural_points.prune_map(config.max_prune_certainty, 0, True) # prune uncertain points for the final output    
+    neural_points.recreate_hash(None, None, False, False) # merge the final neural point map 
+
     neural_pcd = neural_points.get_neural_points_o3d(query_global=True, color_mode = 0)
     if config.save_map:
         o3d.io.write_point_cloud(os.path.join(run_path, "map", "neural_points.ply"), neural_pcd) # write the neural point cloud

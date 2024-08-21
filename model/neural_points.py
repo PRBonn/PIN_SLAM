@@ -58,7 +58,7 @@ class NeuralPoints(nn.Module):
 
         self.buffer_size = config.buffer_size
 
-        self.temporal_local_map_on = True
+        self.temporal_local_map_on = True # false for the pure localization mode
         self.local_map_radius = self.config.local_map_radius
         self.diff_travel_dist_local = (
             self.config.local_map_radius * self.config.local_map_travel_dist_ratio
@@ -73,7 +73,7 @@ class NeuralPoints(nn.Module):
         self.cur_ts = 0  # current frame No. or the current timestamp
         self.max_ts = 0
 
-        self.travel_dist = None  # for determine the local map, update from the dataset class for each frame
+        self.travel_dist = None  # for determine the local map, update from the dataset class for each frame # this is not saved
         self.est_poses = None
         self.after_pgo = False
 
@@ -309,26 +309,28 @@ class NeuralPoints(nn.Module):
             vec_points = self.neural_points[hash_idx] - sample_points
             dist2 = torch.sum(vec_points**2, dim=-1)
 
-            # the voxel is not occupied before or the case when hash collision happens
-            # delta_t = (cur_ts - self.point_ts_create[hash_idx]) # use time diff
-            delta_travel_dist = (
-                self.travel_dist[cur_ts]
-                - self.travel_dist[self.point_ts_update[hash_idx]]
-            )  # use travel dist diff
+            update_mask = (hash_idx == -1) | (dist2 > 3 * cur_resolution**2)
 
-            # the last time mask is necessary (but better change to the accumulated distance or the pose uncertainty), done
-            update_mask = (
-                (hash_idx == -1)
-                | (dist2 > 3 * cur_resolution**2)
-                | (delta_travel_dist > self.diff_travel_dist_local)
-            )
+            if self.temporal_local_map_on: # only done for the slam mode
+                # the voxel is not occupied before or the case when hash collision happens
+                # delta_t = (cur_ts - self.point_ts_create[hash_idx]) # use time diff
+                delta_travel_dist = (
+                    self.travel_dist[cur_ts]
+                    - self.travel_dist[self.point_ts_update[hash_idx]]
+                )  # use travel dist diff
+
+                # the last time mask is necessary
+                update_mask = update_mask | (delta_travel_dist > self.diff_travel_dist_local)
         else:
             update_mask = torch.ones(
                 hash_idx.shape, dtype=torch.bool, device=self.device
             )
 
         added_pt = sample_points[update_mask]
+
         new_point_count = added_pt.shape[0]
+
+        new_point_ratio = new_point_count / sample_points.shape[0]
 
         cur_pt_idx = self.buffer_pt_index[hash]
         # allocate new neural points
@@ -384,6 +386,8 @@ class NeuralPoints(nn.Module):
             sensor_position, sensor_orientation, cur_ts
         )  # no need to recreate hash
 
+        return new_point_ratio
+
     def reset_local_map(
         self,
         sensor_position: torch.Tensor,
@@ -393,32 +397,37 @@ class NeuralPoints(nn.Module):
         diff_ts_local: int = 50,
     ):
     # TODO: not very efficient, optimize the code
-    
+
         self.cur_ts = cur_ts
         self.max_ts = max(self.max_ts, cur_ts)
 
-        if self.config.use_mid_ts:
-            point_ts_used = (
-                (self.point_ts_create + self.point_ts_update) / 2
-            ).int()
-        else:
-            point_ts_used = self.point_ts_create
+        if self.temporal_local_map_on:
+            if self.config.use_mid_ts:
+                point_ts_used = (
+                    (self.point_ts_create + self.point_ts_update) / 2
+                ).int()
+            else:
+                point_ts_used = self.point_ts_create
 
-        if use_travel_dist: # self.travel_dist as torch tensor
-            delta_travel_dist = torch.abs(
-                self.travel_dist[cur_ts] - self.travel_dist[point_ts_used]
-            )
-            time_mask = (delta_travel_dist < self.diff_travel_dist_local)
-        else:  # use delta_t
-            delta_t = torch.abs(cur_ts - point_ts_used)
-            time_mask = (delta_t < diff_ts_local) 
+            if use_travel_dist: # self.travel_dist as torch tensor
+                delta_travel_dist = torch.abs(
+                    self.travel_dist[cur_ts] - self.travel_dist[point_ts_used]
+                )
+                time_mask = (delta_travel_dist < self.diff_travel_dist_local)
+            else:  # use delta_t
+                delta_t = torch.abs(cur_ts - point_ts_used)
+                time_mask = (delta_t < diff_ts_local) 
         
+        else:
+            time_mask = torch.ones(self.count(), dtype=torch.bool, device=self.device)
+
         # speed up by calulating distance only with the t filtered points
         masked_vec2sensor = self.neural_points[time_mask] - sensor_position
         masked_dist2sensor = torch.sum(masked_vec2sensor**2, dim=-1)  # dist square
 
         dist_mask = (masked_dist2sensor < self.local_map_radius**2)
         time_mask_idx = torch.nonzero(time_mask).squeeze() # True index
+
         local_mask_idx = time_mask_idx[dist_mask] # True index
 
         local_mask = torch.full((time_mask.shape), False, dtype=torch.bool, device=self.device)
@@ -555,6 +564,8 @@ class NeuralPoints(nn.Module):
 
         N, K = valid_mask.shape  # K = nn_k here
 
+        # print(self.local_point_certainties)
+
         if query_locally:
             certainty = self.local_point_certainties[idx]  # [N, K]
             neighb_vector = (
@@ -674,18 +685,22 @@ class NeuralPoints(nn.Module):
         )
 
     # prune inactive uncertain neural points
-    def prune_map(self, prune_certainty_thre, min_prune_count = 500):
+    def prune_map(self, prune_certainty_thre, min_prune_count = 500, global_prune = False):
 
-        diff_travel_dist = torch.abs(
-            self.travel_dist[self.cur_ts] - self.travel_dist[self.point_ts_update]
-        )
-        inactive_mask = diff_travel_dist > self.diff_travel_dist_local
+        certainty_mask = self.point_certainties < prune_certainty_thre
 
-        prune_mask = inactive_mask & (
-            self.point_certainties < prune_certainty_thre
-        )  # True for prune
+        if global_prune:
+            prune_mask = certainty_mask
+        else:
+            diff_travel_dist = torch.abs(
+                self.travel_dist[self.cur_ts] - self.travel_dist[self.point_ts_update]
+            )
+            inactive_mask = diff_travel_dist > self.diff_travel_dist_local
+            prune_mask = inactive_mask & certainty_mask
+        # True for prune
 
         prune_count = torch.sum(prune_mask).item()
+
         if prune_count > min_prune_count:
             if not self.silence:
                 print("# Prune neural points: ", prune_count)
@@ -961,6 +976,7 @@ class NeuralPoints(nn.Module):
 # Borrow from Louis's LocNDF
 # https://github.com/PRBonn/LocNDF
 class PositionalEncoder(nn.Module):
+
     # out_dim = in_dimnesionality * (2 * bands + 1)
     def __init__(self, config: Config):
         super().__init__()

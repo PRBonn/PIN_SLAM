@@ -274,9 +274,9 @@ class PINSLAMer:
             self.pgm.plot_loops(os.path.join(self.run_path, "loop_plot.png"), vis_now=False)      
 
         if terminate:
-            self.neural_points.recreate_hash(None, None, False, False) # merge the final neural point map
             self.neural_points.prune_map(self.config.max_prune_certainty, 0) # prune uncertain points for the final output 
-
+            self.neural_points.recreate_hash(None, None, False, False) # merge the final neural point map
+            
         if self.config.save_map:
             neural_pcd = self.neural_points.get_neural_points_o3d(query_global=True, color_mode=0)
             o3d.io.write_point_cloud(os.path.join(self.run_path, "map", "neural_points.ply"), neural_pcd)

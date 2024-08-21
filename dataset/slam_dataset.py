@@ -211,9 +211,10 @@ class SLAMDataset(Dataset):
             self.get_point_ts(point_ts)
 
     # read frame with specific data loader (partially borrow from kiss-icp: https://github.com/PRBonn/kiss-icp)
-    def read_frame_with_loader(self, frame_id):
-
-        self.set_ref_pose(frame_id)
+    def read_frame_with_loader(self, frame_id, init_pose: bool = True):
+        
+        if init_pose:
+            self.set_ref_pose(frame_id)
 
         frame_id_in_folder = self.config.begin_frame + frame_id * self.config.step_frame
         frame_data = self.loader[frame_id_in_folder]
@@ -243,9 +244,10 @@ class SLAMDataset(Dataset):
         if self.config.deskew: 
             self.get_point_ts(point_ts)
 
-    def read_frame(self, frame_id):
-
-        self.set_ref_pose(frame_id)
+    def read_frame(self, frame_id, init_pose: bool = True):
+        
+        if init_pose:
+            self.set_ref_pose(frame_id)
         
         point_ts = None
 
@@ -852,9 +854,9 @@ class SLAMDataset(Dataset):
             range(0, self.total_pc_count, frame_step)
         ):  # frame id as the idx of the frame in the data folder without skipping
             if self.config.use_dataloader:
-                self.read_frame_with_loader(frame_id)
+                self.read_frame_with_loader(frame_id, False)
             else:
-                self.read_frame(frame_id)
+                self.read_frame(frame_id, False)
 
             if self.config.kitti_correction_on:
                 self.cur_point_cloud_torch = intrinsic_correct(
