@@ -132,7 +132,7 @@ conda activate pin
 conda install pytorch==2.0.0 torchvision==0.15.0 torchaudio==2.0.0 pytorch-cuda=11.7 -c pytorch -c nvidia 
 ```
 
-The commands depend on your CUDA version. You may check the instructions [here](https://pytorch.org/get-started/previous-versions/).
+The commands depend on your CUDA version (check it by `nvcc --version`). You may check the instructions [here](https://pytorch.org/get-started/previous-versions/).
 
 ### 3. Install other dependency
 
@@ -173,6 +173,11 @@ You can visualize the SLAM process in PIN-SLAM visualizer and check the results 
 Use `run_demo_sem.yaml` if you want to conduct metric-semantic SLAM using semantic segmentation labels:
 ```
 python3 pin_slam.py ./config/lidar_slam/run_demo_sem.yaml -vsm
+```
+
+Use `run_kitti_color.yaml` if you want to test PIN-SLAM with the colorized point cloud using also the RGB images:
+```
+python3 pin_slam.py ./config/lidar_slam/run_kitti_color.yaml kitti 00 -i ./data/kitti_example -vsmd
 ```
 
 If you are running on a server without an X service (you may first try `export DISPLAY=:0`), then you can turn off the visualization `-v` flag:
@@ -256,7 +261,7 @@ The SLAM results and logs will be output in the `output_root` folder set in the 
 
 For evaluation, you may check [here](https://github.com/PRBonn/PIN_SLAM/blob/main/eval/README.md) for the results that can be obtained with this repository on a couple of popular datasets. 
 
-The training logs can be monitored via Weights & Bias online if you set the flag `-w`. If it's your first time using [Weights & Bias](https://wandb.ai/site), you will be requested to register and log in to your wandb account. You can also set the flag `-l` to turn on the log printing in the terminal and set the flag `-r` to turn on the visualization logging by [rerun](https://github.com/rerun-io/rerun).
+The training logs can be monitored via Weights & Bias online if you set the flag `-w`. If it's your first time using [Weights & Bias](https://wandb.ai/site), you will be requested to register and log in to your wandb account. You can also set the flag `-l` to turn on the log printing in the terminal and set the flag `-r` to turn on the visualization logging by [rerun](https://github.com/rerun-io/rerun). If you want to get the dense merged point cloud map using the estimated poses of PIN-SLAM, you can set the flag `-p`.
 
 </details>
 

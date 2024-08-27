@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import time
+import warnings
 from datetime import datetime
 from pathlib import Path
 from typing import List
@@ -39,6 +40,8 @@ def setup_experiment(config: Config, argv=None, debug_mode: bool = False):
     os.environ["NUMEXPR_MAX_THREADS"] = str(multiprocessing.cpu_count())
     os.environ["CUDA_VISIBLE_DEVICES"] = str(config.gpu_id)
     ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")  # begining timestamp
+
+    warnings.filterwarnings("ignore", category=FutureWarning) 
 
     run_name = config.name + "_" + ts  # modified to a name that is easier to index
 

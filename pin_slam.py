@@ -329,7 +329,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
             if config.pgo_on:
                 print("time for loop detection and PGO (ms):", (T4-T3)*1e3)
             print("time for mapping preparation    (ms):", (T5-T4)*1e3)
-            print("time for training               (ms):", (T6-T5)*1e3)
+            print("time for mapping                (ms):", (T6-T5)*1e3)
 
         # regular saving logs
         if config.log_freq_frame > 0 and (frame_id+1) % config.log_freq_frame == 0:
@@ -392,7 +392,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
                     else:
                         cur_sdf_slice = cur_sdf_slice_h
                                 
-            pool_pcd = mapper.get_data_pool_o3d(down_rate=17, only_cur_data=o3d_vis.vis_only_cur_samples) if o3d_vis.render_data_pool else None # down rate should be a prime number
+            pool_pcd = mapper.get_data_pool_o3d(down_rate=23, only_cur_data=o3d_vis.vis_only_cur_samples) if o3d_vis.render_data_pool else None # down rate should be a prime number
             odom_poses, gt_poses, pgo_poses = dataset.get_poses_np_for_vis()
             loop_edges = pgm.loop_edges_vis if config.pgo_on else None
             o3d_vis.update_traj(dataset.cur_pose_ref, odom_poses, gt_poses, pgo_poses, loop_edges)

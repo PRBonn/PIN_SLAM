@@ -15,10 +15,10 @@ process:
   min_z_m: -3.5
 sampler:
   surface_sample_range_m: 0.25 
-  surface_sample_n: 4
+  surface_sample_n: 3
   free_sample_begin_ratio: 0.3
   free_sample_end_dist_m: 1.0
-  free_front_sample_n: 2
+  free_front_sample_n: 4 # 2
 neuralpoints:
   voxel_size_m: 0.4
   feature_dim: 8 
@@ -35,7 +35,7 @@ loss:
   ekional_loss_on: True
   weight_e: 0.5
 continual:
-  batch_size_new_sample: 1000
+  batch_size_new_sample: 4000
   pool_capacity: 2e7
 tracker:
   source_vox_down_m: 0.6

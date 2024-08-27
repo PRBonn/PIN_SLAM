@@ -50,10 +50,8 @@ class NeuralPoints(nn.Module):
 
         self.device = config.device
         self.dtype = config.dtype
-        self.idx_dtype = (
-            torch.int64
-        )  # torch.int64/32 does not have much speed difference
-
+        self.idx_dtype = torch.int64
+        
         self.resolution = config.voxel_size_m
 
         self.buffer_size = config.buffer_size

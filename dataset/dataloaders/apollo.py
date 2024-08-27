@@ -2,7 +2,6 @@
 #
 # Copyright (c) 2022 Ignacio Vizzo, Tiziano Guadagnino, Benedikt Mersch, Cyrill
 # Stachniss.
-# 2024 Yue Pan
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -29,19 +28,12 @@ from pathlib import Path
 
 import natsort
 import numpy as np
+import open3d as o3d
 from pyquaternion import Quaternion
 
 
 class ApolloDataset:
     def __init__(self, data_dir: Path, *_, **__):
-        try:
-            self.o3d = importlib.import_module("open3d")
-        except ModuleNotFoundError:
-            print(
-                'pcd files requires open3d and is not installed on your system run "pip install open3d"'
-            )
-            sys.exit(1)
-
         self.scan_files = natsort.natsorted(glob.glob(f"{data_dir}/pcds/*.pcd"))
         self.gt_poses = self.read_poses(f"{data_dir}/poses/gt_poses.txt")
         self.sequence_id = os.path.basename(data_dir)
@@ -57,7 +49,7 @@ class ApolloDataset:
         return frame_data
 
     def get_scan(self, scan_file: str):
-        points = np.asarray(self.o3d.io.read_point_cloud(scan_file).points, dtype=np.float64)
+        points = np.asarray(o3d.io.read_point_cloud(scan_file).points, dtype=np.float64)
         return points.astype(np.float64)
 
     @staticmethod

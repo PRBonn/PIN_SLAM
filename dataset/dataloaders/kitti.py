@@ -85,6 +85,8 @@ class KITTIOdometryDataset:
         # Load GT Poses (if available)
         if int(sequence) < 11:
             self.poses_fn = os.path.join(data_dir, f"poses/{self.sequence_id}.txt")
+            if not os.path.exists(self.poses_fn):
+                self.poses_fn = os.path.join(self.kitti_sequence_dir, f"poses.txt")
             self.gt_poses = self.load_poses(self.poses_fn)
 
     def __getitem__(self, idx):
@@ -226,8 +228,8 @@ class KITTIOdometryDataset:
         points_proj = np.matmul(K_mat[:3,:3].reshape([1,3,3]), points)
         depth = points_proj[:,2,:]
         depth[depth==0] = -1e-6
-        u = np.round(points_proj[:,0,:]/np.abs(depth)).astype(np.int32)
-        v = np.round(points_proj[:,1,:]/np.abs(depth)).astype(np.int32)
+        u = np.round(points_proj[:,0,:]/np.abs(depth)).astype(int)
+        v = np.round(points_proj[:,1,:]/np.abs(depth)).astype(int)
 
         if ndim==2:
             u = u[0]; v=v[0]; depth=depth[0]
