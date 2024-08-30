@@ -961,10 +961,9 @@ class SLAMDataset(Dataset):
             map_out_o3d = map_out_o3d.voxel_down_sample(voxel_size=down_vox_m)
 
         if self.run_path is not None:
-            print("Output merged point cloud map")
-            o3d.t.io.write_point_cloud(
-                os.path.join(self.run_path, "map", out_file_name+".ply"), map_out_o3d
-            )
+            save_path = os.path.join(self.run_path, "map", out_file_name+".ply")
+            o3d.t.io.write_point_cloud(save_path, map_out_o3d)
+            print(f"save the merged raw point cloud map to {save_path}")
 
 
 def read_point_cloud(

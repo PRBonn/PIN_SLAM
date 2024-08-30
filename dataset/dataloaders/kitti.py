@@ -107,6 +107,7 @@ class KITTIOdometryDataset:
                 with_rgb_mask = (points_rgb[:, 3] == 0)
                 points = points[with_rgb_mask]
                 points_rgb = points_rgb[with_rgb_mask]
+                point_ts = point_ts[with_rgb_mask]
 
             # we skip the intensity here for now (and also the color mask)
             points = np.hstack((points[:,:3], points_rgb[:,:3]))
