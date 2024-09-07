@@ -297,23 +297,24 @@ class SLAMDataset(Dataset):
                     point_ts, device=self.device, dtype=self.dtype
                 )
             else: # point_ts not available, guess the ts
-                if (
-                    self.cur_point_cloud_torch.shape[0] == 64 * 1024
-                ):  # for Ouster 64-beam LiDAR
+                point_count = self.cur_point_cloud_torch.shape[0]
+                if point_count == 64 * 1024:
+                     # for Ouster 64-beam LiDAR
                     if not self.silence:
                         print("Ouster-64 point cloud deskewed")
                     self.cur_point_ts_torch = (
-                        (torch.floor(torch.arange(64 * 1024) / 64) / 1024)
+                        (torch.floor(torch.arange(point_count) / 64) / 1024)
                         .reshape(-1, 1)
                         .to(self.cur_point_cloud_torch)
                     )
                 elif (
-                    self.cur_point_cloud_torch.shape[0] == 128 * 1024
+                    point_count == 128 * 1024 or point_count == 128 * 2048
                 ):  # for Ouster 128-beam LiDAR
                     if not self.silence:
                         print("Ouster-128 point cloud deskewed")
+                    hres = point_count / 128
                     self.cur_point_ts_torch = (
-                        (torch.floor(torch.arange(128 * 1024) / 128) / 1024)
+                        (torch.floor(torch.arange(point_count) / 128) / hres)
                         .reshape(-1, 1)
                         .to(self.cur_point_cloud_torch)
                     )

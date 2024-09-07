@@ -474,9 +474,6 @@ class Tracker:
         )
 
         w_certainty = 1.0
-        # if certainty is not None: # not used
-        #     certainty_thre = 50.0
-        #     w_certainty = torch.clamp(certainty / certainty_thre, max=1.).unsqueeze(1)
 
         w_color = 1.0
         if colors_on:  # how do you know the channel number
@@ -739,7 +736,7 @@ def implicit_color_reg(
 # then each points transformation can be interpolated using the control poses
 # we estimate poses of the control points
 # we also need to enforce the conherent smoothness of the control poses
-# and solve the non-linear optimization problem (TODO, not implementation)
+# and solve the non-linear optimization problem (TODO, not implemented yet)
 def ct_registration_step(
     self,
     points: torch.Tensor,
