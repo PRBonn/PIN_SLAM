@@ -422,6 +422,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
         dataset.processed_frame += 1
     
     # VI. Save results
+    pose_eval_results = None
     if config.track_on:
         pose_eval_results = dataset.write_results()
     if config.pgo_on and pgm.pgo_count>0:

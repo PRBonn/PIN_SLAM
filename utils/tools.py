@@ -41,6 +41,7 @@ def setup_experiment(config: Config, argv=None, debug_mode: bool = False):
     os.environ["CUDA_VISIBLE_DEVICES"] = str(config.gpu_id)
     ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")  # begining timestamp
 
+    o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Error)
     warnings.filterwarnings("ignore", category=FutureWarning) 
 
     run_name = config.name + "_" + ts  # modified to a name that is easier to index
