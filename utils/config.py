@@ -229,7 +229,8 @@ class Config:
         self.loop_with_feature: bool = False # encode neural point feature in the context
         self.min_loop_travel_dist_ratio: float = 4.0 # accumulated travel distance should be larger than this ratio * local map radius to be considered as an valid candidate
         self.local_map_context_latency: int = 5 # only used for local map context, wait for local_map_context_latency before descriptor generation for enough training of the new observations
-        self.loop_local_map_time_window: int = 100 # unit: frame
+        self.loop_local_map_by_travel_dist: bool = False # determine the local map for context description according to travel distance difference or frame (time) difference
+        self.loop_local_map_time_window: int = 100 # unit: frame, only be valid when self.loop_local_map_by_travel_dist = False
         self.local_loop_dist_thre: float = 2.0 # unit: m, find local loop within this distance
         self.context_shape = [20, 60] # ring, sector count for the descriptor
         self.npmc_max_dist: float = 60.0  # max distance for the neural point map context descriptor

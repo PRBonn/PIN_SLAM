@@ -217,7 +217,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
                     local_map_frame_id = frame_id-config.local_map_context_latency
                     local_map_pose = torch.tensor(dataset.pgo_poses[local_map_frame_id], device=config.device, dtype=torch.float64)
                     if config.local_map_context_latency > 0:
-                        neural_points.reset_local_map(local_map_pose[:3,3], None, local_map_frame_id, False, config.loop_local_map_time_window)
+                        neural_points.reset_local_map(local_map_pose[:3,3], None, local_map_frame_id, config.loop_local_map_by_travel_dist, config.loop_local_map_time_window)
                     context_pc_local = transform_torch(neural_points.local_neural_points.detach(), torch.linalg.inv(local_map_pose)) # transformed back into the local frame
                     neural_points_feature = neural_points.local_geo_features[:-1].detach() if config.loop_with_feature else None
                     lcd_npmc.add_node(local_map_frame_id, context_pc_local, neural_points_feature)

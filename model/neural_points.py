@@ -415,9 +415,12 @@ class NeuralPoints(nn.Module):
             else:  # use delta_t
                 delta_t = torch.abs(cur_ts - point_ts_used)
                 time_mask = (delta_t < diff_ts_local) 
+
+            if torch.sum(time_mask) < 100: # not enough neural points in the temporal window, we set all true to avoid error
+                time_mask = torch.ones(self.count(), dtype=torch.bool, device=self.device) # all true
         
         else:
-            time_mask = torch.ones(self.count(), dtype=torch.bool, device=self.device)
+            time_mask = torch.ones(self.count(), dtype=torch.bool, device=self.device) # all true
 
         # speed up by calulating distance only with the t filtered points
         masked_vec2sensor = self.neural_points[time_mask] - sensor_position

@@ -52,6 +52,8 @@ def setup_experiment(config: Config, argv=None, debug_mode: bool = False):
     if not cuda_available:
         print("No CUDA device available, use CPU instead")
         config.device = "cpu"
+    else:
+        torch.cuda.empty_cache()
 
     if not debug_mode:
         access = 0o755
