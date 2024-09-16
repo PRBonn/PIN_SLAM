@@ -38,7 +38,6 @@ from utils.config import Config
 def setup_experiment(config: Config, argv=None, debug_mode: bool = False):
 
     os.environ["NUMEXPR_MAX_THREADS"] = str(multiprocessing.cpu_count())
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(config.gpu_id)
     ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")  # begining timestamp
 
     o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Error)
