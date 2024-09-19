@@ -135,6 +135,7 @@ class Config:
 
         # MLP decoder
         self.mlp_bias_on: bool = True
+        self.mlp_leaky_relu: bool = False
         self.geo_mlp_level: int = 1
         self.geo_mlp_hidden_dim: int = 64
         self.sem_mlp_level: int = 1

@@ -24,14 +24,10 @@ class Decoder(nn.Module):
         super().__init__()
 
         self.out_dim = out_dim
-
+        self.use_leaky_relu = config.mlp_leaky_relu
         bias_on = config.mlp_bias_on
 
-        self.use_leaky_relu = False
-
-        self.num_bands = config.pos_encoding_band
-        self.dimensionality = config.pos_input_dim
-
+        # default not used
         if config.use_gaussian_pe:
             position_dim = config.pos_input_dim + 2 * config.pos_encoding_band
         else:
@@ -40,6 +36,7 @@ class Decoder(nn.Module):
         feature_dim = config.feature_dim
         input_layer_count = feature_dim + position_dim
 
+        # default not used
         if is_time_conditioned:
             input_layer_count += 1
 
@@ -54,22 +51,19 @@ class Decoder(nn.Module):
         self.layers = nn.ModuleList(layers)
         self.lout = nn.Linear(hidden_dim, out_dim, bias_on)
 
+        self.sdf_scale = 1.0
         if config.main_loss_type == "bce":
             self.sdf_scale = config.logistic_gaussian_ratio * config.sigma_sigmoid_m
-        else:  # l1, l2 or zhong loss
-            self.sdf_scale = 1.0
 
         self.to(config.device)
         # torch.cuda.empty_cache()
 
-    def forward(self, feature):
-        # If we use BCEwithLogits loss, do not need to do sigmoid mannually
-        output = self.sdf(feature)
-        return output
-
-    # predict the sdf (opposite sign to the actual sdf)
-    # unit is already m
-    def sdf(self, features):
+    def mlp(self, features):
+        # linear (feature_dim -> hidden_dim)
+        # relu
+        # linear (hidden_dim -> hidden_dim)
+        # relu
+        # linear (hidden_dim -> 1)
         for k, l in enumerate(self.layers):
             if k == 0:
                 if self.use_leaky_relu:
@@ -81,38 +75,20 @@ class Decoder(nn.Module):
                     h = F.leaky_relu(l(h))
                 else:
                     h = F.relu(l(h))
-
-        out = self.lout(h).squeeze(1)
-        out *= self.sdf_scale
-        # linear (feature_dim -> hidden_dim)
-        # relu
-        # linear (hidden_dim -> hidden_dim)
-        # relu
-        # linear (hidden_dim -> 1)
-
+        out = self.lout(h)
         return out
 
+    # predict the sdf (opposite sign to the actual sdf)
+    # unit is already m
+    def sdf(self, features):
+        out = self.mlp(features).squeeze(1) * self.sdf_scale
+        return out
+    
     def time_conditionded_sdf(self, features, ts):
-
-        # print(ts.shape)
         nn_k = features.shape[1]
         ts_nn_k = ts.repeat(nn_k).view(-1, nn_k, 1)
         time_conditioned_feature = torch.cat((features, ts_nn_k), dim=-1)
-
-        for k, l in enumerate(self.layers):
-            if k == 0:
-                h = F.relu(l(time_conditioned_feature))
-            else:
-                h = F.relu(l(h))
-
-        out = self.lout(h).squeeze(1)
-        out *= self.sdf_scale
-        # linear (feature_dim + 1 -> hidden_dim)
-        # relu
-        # linear (hidden_dim -> hidden_dim)
-        # relu
-        # linear (hidden_dim -> 1)
-
+        out = self.sdf(time_conditioned_feature)
         return out
 
     # predict the occupancy probability
@@ -122,19 +98,7 @@ class Decoder(nn.Module):
 
     # predict the probabilty of each semantic label
     def sem_label_prob(self, features):
-        for k, l in enumerate(self.layers):
-            if k == 0:
-                if self.use_leaky_relu:
-                    h = F.leaky_relu(l(features))
-                else:
-                    h = F.relu(l(features))
-            else:
-                if self.use_leaky_relu:
-                    h = F.leaky_relu(l(h))
-                else:
-                    h = F.relu(l(h))
-
-        out = F.log_softmax(self.lout(h), dim=-1)
+        out = F.log_softmax(self.mlp(features), dim=-1)
         return out
 
     def sem_label(self, features):
@@ -142,19 +106,5 @@ class Decoder(nn.Module):
         return out
 
     def regress_color(self, features):
-        for k, l in enumerate(self.layers):
-            if k == 0:
-                if self.use_leaky_relu:
-                    h = F.leaky_relu(l(features))
-                else:
-                    h = F.relu(l(features))
-            else:
-                if self.use_leaky_relu:
-                    h = F.leaky_relu(l(h))
-                else:
-                    h = F.relu(l(h))
-
-        out = torch.clamp(self.lout(h), 0.0, 1.0)
-        # out = torch.sigmoid(self.lout(h))
-        # print(out)
+        out = torch.clamp(self.mlp(features), 0.0, 1.0)
         return out
