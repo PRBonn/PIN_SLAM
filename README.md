@@ -245,7 +245,7 @@ python3 pin_slam.py ./config/lidar_slam/run.yaml rosbag -i /path/to/the/rosbag -
 
 The data loaders for [some specific datasets](https://github.com/PRBonn/PIN_SLAM/tree/main/dataset/dataloaders) are also available. You need to set the flag `-d` to use such data loaders.
 ```
-Available dataloaders: ['apollo', 'boreas', 'generic', 'helipr', 'kitti', 'kitti360', 'kitti_raw', 'mcap', 'mulran', 'ncd', 'nclt', 'neuralrgbd', 'nuscenes', 'ouster', 'replica', 'rosbag', 'tum']
+Available dataloaders: ['apollo', 'boreas', 'generic', 'helipr', 'kitti', 'kitti360', 'kitti_mot', 'kitti_raw', 'mcap', 'mulran', 'ncd', 'nclt', 'neuralrgbd', 'nuscenes', 'ouster', 'replica', 'rosbag', 'tum']
 ```
 
 For example, you can run on Replica RGB-D dataset without preprocessing the data by:
@@ -255,6 +255,11 @@ sh scripts/download_replica.sh
 
 # Run PIN-SLAM
 python3 pin_slam.py ./config/rgbd_slam/run_replica.yaml replica room0 -i data/Replica -vsmd 
+```
+
+For example, you can run on [KITTI-MOT dataset](https://www.cvlibs.net/datasets/kitti/eval_tracking.php) to test SLAM in dynamic scenes with online moving object segementation (MOS) by:
+```
+python pin_slam.py ./config/lidar_slam/run_kitti_mos.yaml kitti_mot 00 -i data/kitti_mot -vsmd --deskew
 ```
 
 The SLAM results and logs will be output in the `output_root` folder set in the config file or specified by the `-o OUTPUT_PATH` flag. 
