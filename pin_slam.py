@@ -61,6 +61,7 @@ parser.add_argument('--wandb_on', '-w', action='store_true', help='Turn on the w
 parser.add_argument('--save_map', '-s', action='store_true', help='Save the PIN map after SLAM')
 parser.add_argument('--save_mesh', '-m', action='store_true', help='Save the reconstructed mesh after SLAM')
 parser.add_argument('--save_merged_pc', '-p', action='store_true', help='Save the merged point cloud after SLAM')
+parser.add_argument('--deskew', action='store_true', help='Try to deskew the LiDAR scans')
 
 args, unknown = parser.parse_known_args()
 
@@ -87,6 +88,8 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
         config.save_map = args.save_map
         config.save_mesh = args.save_mesh
         config.save_merged_pc = args.save_merged_pc
+        if not config.deskew and args.deskew: # set to True if not set in the config file but set upon running
+            config.deskew = True
         if args.range is not None:
             config.begin_frame, config.end_frame, config.step_frame = args.range
         if args.cpu_only:

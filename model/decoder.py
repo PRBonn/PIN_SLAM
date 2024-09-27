@@ -34,7 +34,7 @@ class Decoder(nn.Module):
             position_dim = config.pos_input_dim * (2 * config.pos_encoding_band + 1)
 
         feature_dim = config.feature_dim
-        input_layer_count = feature_dim + position_dim
+        input_dim = feature_dim + position_dim
 
         # default not used
         if is_time_conditioned:
@@ -45,7 +45,7 @@ class Decoder(nn.Module):
         layers = []
         for i in range(hidden_level):
             if i == 0:
-                layers.append(nn.Linear(input_layer_count, hidden_dim, bias_on))
+                layers.append(nn.Linear(input_dim, hidden_dim, bias_on))
             else:
                 layers.append(nn.Linear(hidden_dim, hidden_dim, bias_on))
         self.layers = nn.ModuleList(layers)
@@ -105,6 +105,10 @@ class Decoder(nn.Module):
         out = torch.argmax(self.sem_label_prob(features), dim=1)
         return out
 
+    # def regress_color(self, features):
+    #     out = torch.clamp(self.mlp(features), 0.0, 1.0)
+    #     return out
+
     def regress_color(self, features):
-        out = torch.clamp(self.mlp(features), 0.0, 1.0)
+        out = torch.sigmoid(self.mlp(features)) # sigmoid map to [0,1]
         return out

@@ -24,8 +24,8 @@ class Config:
         self.calib_path: str = ""  # input calib file (to sensor frame), optional
         self.label_path: str = "" # input point-wise label path, for semantic mapping (optional)
 
-        # for uisng kiss-icp data loader
-        self.use_dataloader: bool = False # use the dataloader providied by kiss-icp or not
+        # for uisng specific data loader
+        self.use_dataloader: bool = False
         self.data_loader_name: str = "generic"
         self.data_loader_seq: str = ""
 
@@ -123,7 +123,7 @@ class Config:
         self.surface_sample_n: int = 3
         self.free_sample_begin_ratio: float = 0.3 # minimum ray distance ratio in front of the surface 
         self.free_sample_end_dist_m: float = 1.0 # maximum distance behind the surface (unit: m)
-        self.free_front_n: int = 2
+        self.free_front_n: int = 2 # NOTE: increase this value to remove dynamic objects in the map
         self.free_behind_n: int = 1
 
         # training data pool related (for replay)
@@ -142,6 +142,10 @@ class Config:
         self.sem_mlp_hidden_dim: int = 64
         self.color_mlp_level: int = 1
         self.color_mlp_hidden_dim: int = 64
+        # NOTE: For achieving better reconstruction results, you can increase the size of the MLPs,
+        # or the feature dim of the neural point latent feature,
+        # or the iteration number for mapping
+        # or decrease the voxel size (resolution) for neural points
         self.freeze_after_frame: int = 40  # if the decoder model is not loaded, it would be trained and freezed after such frame number
 
         # positional encoding related [not used]

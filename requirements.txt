@@ -7,7 +7,7 @@ open3d==0.17.0
 pycryptodomex==3.20.0
 pypose==0.6.8
 pyquaternion==0.9.9
-rerun-sdk==0.17.0
+rerun-sdk
 rich==12.5.1
 roma==1.5.0
 rospkg==1.5.1
