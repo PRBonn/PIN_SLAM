@@ -113,6 +113,10 @@ def setup_seed(seed):
     random.seed(seed)
     o3d.utility.random.seed(seed)
 
+def remove_gpu_cache():
+    cuda_available = torch.cuda.is_available()
+    if cuda_available:
+        torch.cuda.empty_cache()
 
 def setup_optimizer(
     config: Config,

@@ -35,6 +35,7 @@ from utils.tools import (
     setup_experiment,
     split_chunks,
     transform_torch,
+    remove_gpu_cache
 )
 from utils.tracker import Tracker
 from utils.visualizer import MapVisualizer
@@ -175,6 +176,8 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
 
         # I. Load data and preprocessing
         T0 = get_time()
+
+        remove_gpu_cache()
 
         if config.use_dataloader:
             dataset.read_frame_with_loader(frame_id)
