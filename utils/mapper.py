@@ -935,11 +935,10 @@ class Mapper:
         self.ba_done_flag = True
 
     # short-hand function
-    def sdf(self, x, get_std=False):
-        geo_feature, _, weight_knn, _, _ = self.neural_points.query_feature(x)
-        sdf_pred = self.geo_mlp.sdf(
-            geo_feature
-        )  # predict the scaled sdf with the feature # [N, K, 1]
+    def sdf(self, x, get_std=False, min_nn_count=1, accumulate_stability=False):
+        geo_feature, _, weight_knn, nn_count, _ = self.neural_points.query_feature(x, training_mode=accumulate_stability)
+        sdf_pred = self.geo_mlp.sdf(geo_feature)    
+        # predict the scaled sdf with the feature # [N, K, 1]
         sdf_std = None
         if not self.config.weighted_first:
             sdf_pred_mean = torch.sum(sdf_pred * weight_knn, dim=1)  # N
@@ -949,7 +948,40 @@ class Mapper:
                 )
                 sdf_std = torch.sqrt(sdf_var).squeeze(1)
             sdf_pred = sdf_pred_mean.squeeze(1)
-        return sdf_pred, sdf_std
+
+        valid_mask = (nn_count >= min_nn_count)
+
+        return sdf_pred, sdf_std, valid_mask
+
+    # short-hand function
+    def sdf_batch(self, x, bs, get_std=False, min_nn_count=1, accumulate_stability=False):
+
+        count = x.shape[0]
+        iter_n = math.ceil(count / bs)
+
+        sdf_pred = torch.zeros(sample_count, dtype=self.dtype, device=self.device)
+
+        if get_std:
+            sdf_std = torch.zeros(sample_count, dtype=self.dtype, device=self.device)
+        else:
+            sdf_std = None
+
+        valid_mask = torch.ones(sample_count, dtype=bool, device=self.device)
+        
+        with torch.no_grad():  # eval step
+            for n in tqdm(range(iter_n), disable=self.silence):
+                head = n * bs
+                tail = min((n + 1) * bs, count)
+                batch_x = x[head:tail, :]
+                batch_size = batch_x.shape[0]
+                batch_sdf, batch_sdf_std, batch_valid_mask = self.sdf(batch_x, get_std, min_nn_count, accumulate_stability)
+                
+                sdf_pred[head:tail] = batch_sdf
+                if batch_sdf_std is not None and sdf_std is not None:
+                    sdf_std[head:tail] = batch_sdf_std
+                valid_mask[head:tail] = batch_valid_mask
+
+        return sdf_pred, sdf_std, valid_mask
 
     # get numerical gradient (smoother than analytical one) with a fixed step
     def get_numerical_gradient(self, x, sdf_x=None, eps=0.02, two_side=True):

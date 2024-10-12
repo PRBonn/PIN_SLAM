@@ -109,7 +109,7 @@ class NeuralPointMapContextManager:
         virtual_positions = frame_pose[:3, 3].float() + lat_tran  # N, 3
 
         # filter the virtual poses using the sdf (negatives are not used)
-        # sdf_at_virtual_poses, _ = self.mapper.sdf(virtual_positions)
+        # sdf_at_virtual_poses = self.mapper.sdf(virtual_positions)[0]
         # sdf_at_virtual_poses = sdf_at_virtual_poses.detach()
         # sdf_valid_mask = sdf_at_virtual_poses > self.virtual_sdf_thre
         # virtual_positions = virtual_positions[sdf_valid_mask]
