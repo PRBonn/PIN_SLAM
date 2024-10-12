@@ -968,18 +968,15 @@ class Mapper:
 
         valid_mask = torch.ones(count, dtype=bool, device=self.device)
         
-        with torch.no_grad():  # eval step
-            for n in tqdm(range(iter_n), disable=self.silence):
-                head = n * bs
-                tail = min((n + 1) * bs, count)
-                batch_x = x[head:tail, :]
-                batch_size = batch_x.shape[0]
-                batch_sdf, batch_sdf_std, batch_valid_mask = self.sdf(batch_x, get_std, min_nn_count, accumulate_stability)
-                
-                sdf_pred[head:tail] = batch_sdf
-                if batch_sdf_std is not None and sdf_std is not None:
-                    sdf_std[head:tail] = batch_sdf_std
-                valid_mask[head:tail] = batch_valid_mask
+        for n in tqdm(range(iter_n), disable=self.silence):
+            head = n * bs
+            tail = min((n + 1) * bs, count)
+            batch_x = x[head:tail, :]
+            batch_sdf, batch_sdf_std, batch_valid_mask = self.sdf(batch_x, get_std, min_nn_count, accumulate_stability)
+            sdf_pred[head:tail] = batch_sdf
+            if batch_sdf_std is not None and sdf_std is not None:
+                sdf_std[head:tail] = batch_sdf_std
+            valid_mask[head:tail] = batch_valid_mask
 
         return sdf_pred, sdf_std, valid_mask
 
