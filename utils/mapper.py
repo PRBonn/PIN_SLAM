@@ -959,14 +959,14 @@ class Mapper:
         count = x.shape[0]
         iter_n = math.ceil(count / bs)
 
-        sdf_pred = torch.zeros(sample_count, dtype=self.dtype, device=self.device)
+        sdf_pred = torch.zeros(count, dtype=self.dtype, device=self.device)
 
         if get_std:
-            sdf_std = torch.zeros(sample_count, dtype=self.dtype, device=self.device)
+            sdf_std = torch.zeros(count, dtype=self.dtype, device=self.device)
         else:
             sdf_std = None
 
-        valid_mask = torch.ones(sample_count, dtype=bool, device=self.device)
+        valid_mask = torch.ones(count, dtype=bool, device=self.device)
         
         with torch.no_grad():  # eval step
             for n in tqdm(range(iter_n), disable=self.silence):
