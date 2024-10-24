@@ -993,14 +993,16 @@ def read_point_cloud(
         # print("available attributes:", keys)
 
         points = pc_load["positions"]
+        points = points.astype(dtype=np.float64)
 
-        if "t" in keys:
-            ts = pc_load["t"] * 1e-8
-        elif "timestamp" in keys:
-            ts = pc_load["timestamp"]
-        else:
-            ts = None
+        time_fields = ["t", "ts", "time", "timestamp", "timestamps"]
 
+        ts = None
+        for time_field in time_fields:
+            if time_field in keys:
+                ts = pc_load[time_field]
+                break
+        
         if "colors" in keys and color_channel == 3:
             colors = pc_load["colors"]  # if they are available
             points = np.hstack((points, colors))
@@ -1008,6 +1010,7 @@ def read_point_cloud(
             intensity = pc_load["intensity"]  # if they are available
             # print(intensity)
             points = np.hstack((points, intensity))
+        
     elif ".pcd" in filename:  # currently cannot be readed by o3d.t.io
         pc_load = o3d.io.read_point_cloud(filename)
         points = np.asarray(pc_load.points, dtype=np.float64)

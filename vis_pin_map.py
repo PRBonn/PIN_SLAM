@@ -47,7 +47,7 @@ def vis_pin_map():
     sem_mlp = Decoder(config, config.sem_mlp_hidden_dim, config.sem_mlp_level, config.sem_class_count + 1) 
     color_mlp = Decoder(config, config.color_mlp_hidden_dim, config.color_mlp_level, config.color_channel)
 
-    # initialize the feature octree
+    # initialize the neural point features
     neural_points = NeuralPoints(config)
 
     # Load the map

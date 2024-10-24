@@ -595,8 +595,8 @@ class Mesher:
                 o3d.utility.Vector3iVector(faces),
             )
 
-        if not self.silence:
-            print("Marching cubes done")
+        # if not self.silence:
+        #     print("Marching cubes done")
 
         if estimate_sem:
             mesh = self.estimate_vertices_sem(mesh, verts, filter_free_space_vertices)
