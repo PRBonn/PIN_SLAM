@@ -238,6 +238,7 @@ class SLAMDataset(Dataset):
                 # TO ADD
             if "imus" in dict_keys:
                 self.cur_frame_imus = frame_data["imus"]
+                # TO ADD
          
         self.cur_point_cloud_torch = torch.tensor(points, device=self.device, dtype=self.dtype)
 
@@ -662,22 +663,24 @@ class SLAMDataset(Dataset):
         return odom_poses, gt_poses, pgo_poses
 
     def write_results(self):
-        odom_poses = self.odom_poses[:self.processed_frame+1]
-        odom_poses_out = apply_kitti_format_calib(odom_poses, self.calib["Tr"])
-        write_kitti_format_poses(os.path.join(self.run_path, "odom_poses"), odom_poses_out)
-        write_tum_format_poses(os.path.join(self.run_path, "odom_poses"), odom_poses_out, self.poses_ts, 0.1*self.config.step_frame)
-        write_traj_as_o3d(odom_poses, os.path.join(self.run_path, "odom_poses.ply"))
+        
+        if self.config.track_on:
+            odom_poses = self.odom_poses[:self.processed_frame+1]
+            odom_poses_out = apply_kitti_format_calib(odom_poses, self.calib["Tr"])
+            write_kitti_format_poses(os.path.join(self.run_path, "odom_poses"), odom_poses_out)
+            write_tum_format_poses(os.path.join(self.run_path, "odom_poses"), odom_poses_out, self.poses_ts, 0.1*self.config.step_frame)
+            write_traj_as_o3d(odom_poses, os.path.join(self.run_path, "odom_poses.ply"))
 
-        if self.config.pgo_on:
-            pgo_poses = self.pgo_poses[:self.processed_frame+1]
-            slam_poses_out = apply_kitti_format_calib(pgo_poses, self.calib["Tr"])
-            write_kitti_format_poses(
-                os.path.join(self.run_path, "slam_poses"), slam_poses_out
-            )
-            write_tum_format_poses(
-                os.path.join(self.run_path, "slam_poses"), slam_poses_out, self.poses_ts, 0.1*self.config.step_frame
-            )
-            write_traj_as_o3d(pgo_poses, os.path.join(self.run_path, "slam_poses.ply"))
+            if self.config.pgo_on:
+                pgo_poses = self.pgo_poses[:self.processed_frame+1]
+                slam_poses_out = apply_kitti_format_calib(pgo_poses, self.calib["Tr"])
+                write_kitti_format_poses(
+                    os.path.join(self.run_path, "slam_poses"), slam_poses_out
+                )
+                write_tum_format_poses(
+                    os.path.join(self.run_path, "slam_poses"), slam_poses_out, self.poses_ts, 0.1*self.config.step_frame
+                )
+                write_traj_as_o3d(pgo_poses, os.path.join(self.run_path, "slam_poses.ply"))
         
         # timing report
         time_table = np.array(self.time_table)
@@ -703,136 +706,137 @@ class SLAMDataset(Dataset):
             gt_poses = self.gt_poses[:self.processed_frame+1]
             write_traj_as_o3d(gt_poses, os.path.join(self.run_path, "gt_poses.ply"))
 
-            print("Odometry evaluation:")
-            avg_tra, avg_rot = relative_error(gt_poses, odom_poses)
-            ate_rot, ate_trans, align_mat = absolute_error(
-                gt_poses, odom_poses, self.config.eval_traj_align
-            )
-            if avg_tra == 0:  # for rgbd dataset (shorter sequence)
-                print("Absoulte Trajectory Error      (cm):", f"{ate_trans*100.0:.3f}")
-            else:
-                print("Average Translation Error       (%):", f"{avg_tra:.3f}")
-                print("Average Rotational Error (deg/100m):", f"{avg_rot*100.0:.3f}")
-                print("Absoulte Trajectory Error       (m):", f"{ate_trans:.3f}")
-
-            if self.config.wandb_vis_on:
-                wandb_log_content = {
-                    "Average Translation Error [%]": avg_tra,
-                    "Average Rotational Error [deg/m]": avg_rot,
-                    "Absoulte Trajectory Error [m]": ate_trans,
-                    "Absoulte Rotational Error [deg]": ate_rot,
-                    "Consuming time per frame [s]": mean_time_without_init_s,
-                }
-                wandb.log(wandb_log_content)
-
-            if self.config.pgo_on:
-                print("SLAM evaluation:")
-                avg_tra_slam, avg_rot_slam = relative_error(
-                    gt_poses, pgo_poses
+            if self.config.track_on:
+                print("Odometry evaluation:")
+                avg_tra, avg_rot = relative_error(gt_poses, odom_poses)
+                ate_rot, ate_trans, align_mat = absolute_error(
+                    gt_poses, odom_poses, self.config.eval_traj_align
                 )
-                ate_rot_slam, ate_trans_slam, align_mat_slam = absolute_error(
-                    gt_poses, pgo_poses, self.config.eval_traj_align
-                )
-                if avg_tra_slam == 0:  # for rgbd dataset (shorter sequence)
-                    print(
-                        "Absoulte Trajectory Error      (cm):",
-                        f"{ate_trans_slam*100.0:.3f}",
-                    )
+                if avg_tra == 0:  # for rgbd dataset (shorter sequence)
+                    print("Absoulte Trajectory Error      (cm):", f"{ate_trans*100.0:.3f}")
                 else:
-                    print("Average Translation Error       (%):", f"{avg_tra_slam:.3f}")
-                    print(
-                        "Average Rotational Error (deg/100m):",
-                        f"{avg_rot_slam*100.0:.3f}",
-                    )
-                    print(
-                        "Absoulte Trajectory Error       (m):", f"{ate_trans_slam:.3f}"
-                    )
+                    print("Average Translation Error       (%):", f"{avg_tra:.3f}")
+                    print("Average Rotational Error (deg/100m):", f"{avg_rot*100.0:.3f}")
+                    print("Absoulte Trajectory Error       (m):", f"{ate_trans:.3f}")
 
                 if self.config.wandb_vis_on:
                     wandb_log_content = {
-                        "SLAM Average Translation Error [%]": avg_tra_slam,
-                        "SLAM Average Rotational Error [deg/m]": avg_rot_slam,
-                        "SLAM Absoulte Trajectory Error [m]": ate_trans_slam,
-                        "SLAM Absoulte Rotational Error [deg]": ate_rot_slam,
+                        "Average Translation Error [%]": avg_tra,
+                        "Average Rotational Error [deg/m]": avg_rot,
+                        "Absoulte Trajectory Error [m]": ate_trans,
+                        "Absoulte Rotational Error [deg]": ate_rot,
+                        "Consuming time per frame [s]": mean_time_without_init_s,
                     }
                     wandb.log(wandb_log_content)
 
-            csv_columns = [
-                "Average Translation Error [%]",
-                "Average Rotational Error [deg/m]",
-                "Absoulte Trajectory Error [m]",
-                "Absoulte Rotational Error [deg]",
-                "Consuming time per frame [s]",
-                "Frame count",
-            ]
-            pose_eval = [
-                {
-                    csv_columns[0]: avg_tra,
-                    csv_columns[1]: avg_rot,
-                    csv_columns[2]: ate_trans,
-                    csv_columns[3]: ate_rot,
-                    csv_columns[4]: mean_time_without_init_s,
-                    csv_columns[5]: int(self.processed_frame),
-                }
-            ]
-            if self.config.pgo_on:
-                slam_eval_dict = {
-                    csv_columns[0]: avg_tra_slam,
-                    csv_columns[1]: avg_rot_slam,
-                    csv_columns[2]: ate_trans_slam,
-                    csv_columns[3]: ate_rot_slam,
-                    csv_columns[4]: mean_time_without_init_s,
-                    csv_columns[5]: int(self.processed_frame),
-                }
-                pose_eval.append(slam_eval_dict)
-            output_csv_path = os.path.join(self.run_path, "pose_eval.csv")
-            try:
-                with open(output_csv_path, "w") as csvfile:
-                    writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
-                    writer.writeheader()
-                    for data in pose_eval:
-                        writer.writerow(data)
-            except IOError:
-                print("I/O error")
+                if self.config.pgo_on:
+                    print("SLAM evaluation:")
+                    avg_tra_slam, avg_rot_slam = relative_error(
+                        gt_poses, pgo_poses
+                    )
+                    ate_rot_slam, ate_trans_slam, align_mat_slam = absolute_error(
+                        gt_poses, pgo_poses, self.config.eval_traj_align
+                    )
+                    if avg_tra_slam == 0:  # for rgbd dataset (shorter sequence)
+                        print(
+                            "Absoulte Trajectory Error      (cm):",
+                            f"{ate_trans_slam*100.0:.3f}",
+                        )
+                    else:
+                        print("Average Translation Error       (%):", f"{avg_tra_slam:.3f}")
+                        print(
+                            "Average Rotational Error (deg/100m):",
+                            f"{avg_rot_slam*100.0:.3f}",
+                        )
+                        print(
+                            "Absoulte Trajectory Error       (m):", f"{ate_trans_slam:.3f}"
+                        )
 
-            # if self.config.o3d_vis_on:  # x service issue for remote server
-            output_traj_plot_path_2d = os.path.join(self.run_path, "traj_plot_2d.png")
-            output_traj_plot_path_3d = os.path.join(self.run_path, "traj_plot_3d.png")
-            # trajectory not aligned yet in the plot
-            # require list of numpy arraies as the input
+                    if self.config.wandb_vis_on:
+                        wandb_log_content = {
+                            "SLAM Average Translation Error [%]": avg_tra_slam,
+                            "SLAM Average Rotational Error [deg/m]": avg_rot_slam,
+                            "SLAM Absoulte Trajectory Error [m]": ate_trans_slam,
+                            "SLAM Absoulte Rotational Error [deg]": ate_rot_slam,
+                        }
+                        wandb.log(wandb_log_content)
 
-            gt_position_list = [self.gt_poses[i] for i in range(self.processed_frame)]
-            odom_position_list = [self.odom_poses[i] for i in range(self.processed_frame)]
+                csv_columns = [
+                    "Average Translation Error [%]",
+                    "Average Rotational Error [deg/m]",
+                    "Absoulte Trajectory Error [m]",
+                    "Absoulte Rotational Error [deg]",
+                    "Consuming time per frame [s]",
+                    "Frame count",
+                ]
+                pose_eval = [
+                    {
+                        csv_columns[0]: avg_tra,
+                        csv_columns[1]: avg_rot,
+                        csv_columns[2]: ate_trans,
+                        csv_columns[3]: ate_rot,
+                        csv_columns[4]: mean_time_without_init_s,
+                        csv_columns[5]: int(self.processed_frame),
+                    }
+                ]
+                if self.config.pgo_on:
+                    slam_eval_dict = {
+                        csv_columns[0]: avg_tra_slam,
+                        csv_columns[1]: avg_rot_slam,
+                        csv_columns[2]: ate_trans_slam,
+                        csv_columns[3]: ate_rot_slam,
+                        csv_columns[4]: mean_time_without_init_s,
+                        csv_columns[5]: int(self.processed_frame),
+                    }
+                    pose_eval.append(slam_eval_dict)
+                output_csv_path = os.path.join(self.run_path, "pose_eval.csv")
+                try:
+                    with open(output_csv_path, "w") as csvfile:
+                        writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
+                        writer.writeheader()
+                        for data in pose_eval:
+                            writer.writerow(data)
+                except IOError:
+                    print("I/O error")
 
-            if self.config.pgo_on:
-                pgo_position_list = [self.pgo_poses[i] for i in range(self.processed_frame)]
-                plot_trajectories(
-                    output_traj_plot_path_2d,
-                    pgo_position_list,
-                    gt_position_list,
-                    odom_position_list,
-                    plot_3d=False,
-                )
-                plot_trajectories(
-                    output_traj_plot_path_3d,
-                    pgo_position_list,
-                    gt_position_list,
-                    odom_position_list,
-                    plot_3d=True,
-                )
-            else:
-                plot_trajectories(
-                    output_traj_plot_path_2d,
-                    odom_position_list,
-                    gt_position_list,
-                    plot_3d=False,
-                )
-                plot_trajectories(
-                    output_traj_plot_path_3d,
-                    odom_position_list,
-                    gt_position_list,
-                    plot_3d=True,
-                )
+                # if self.config.o3d_vis_on:  # x service issue for remote server
+                output_traj_plot_path_2d = os.path.join(self.run_path, "traj_plot_2d.png")
+                output_traj_plot_path_3d = os.path.join(self.run_path, "traj_plot_3d.png")
+                # trajectory not aligned yet in the plot
+                # require list of numpy arraies as the input
+
+                gt_position_list = [self.gt_poses[i] for i in range(self.processed_frame)]
+                odom_position_list = [self.odom_poses[i] for i in range(self.processed_frame)]
+
+                if self.config.pgo_on:
+                    pgo_position_list = [self.pgo_poses[i] for i in range(self.processed_frame)]
+                    plot_trajectories(
+                        output_traj_plot_path_2d,
+                        pgo_position_list,
+                        gt_position_list,
+                        odom_position_list,
+                        plot_3d=False,
+                    )
+                    plot_trajectories(
+                        output_traj_plot_path_3d,
+                        pgo_position_list,
+                        gt_position_list,
+                        odom_position_list,
+                        plot_3d=True,
+                    )
+                else:
+                    plot_trajectories(
+                        output_traj_plot_path_2d,
+                        odom_position_list,
+                        gt_position_list,
+                        plot_3d=False,
+                    )
+                    plot_trajectories(
+                        output_traj_plot_path_3d,
+                        odom_position_list,
+                        gt_position_list,
+                        plot_3d=True,
+                    )
 
         return pose_eval
 

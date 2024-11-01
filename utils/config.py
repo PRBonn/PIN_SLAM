@@ -42,8 +42,6 @@ class Config:
         self.num_workers: int = 12 # number of worker for the dataloader
         self.device: str = "cuda"  # use "cuda" or "cpu"
         self.gpu_id: str = "0"  # used GPU id
-        self.dtype = torch.float32 # default torch tensor data type
-        self.tran_dtype = torch.float64 # dtype used for all the transformation and poses
 
         # dataset specific
         self.kitti_correction_on: bool = False # intrinsic vertical angle correction # issue 11
@@ -206,7 +204,7 @@ class Config:
         self.ba_bs: int = 16384 # batch size for ba optimization
 
         # tracking (odometry estimation)
-        self.track_on: bool = True
+        self.track_on: bool = False
         self.photometric_loss_on: bool = False # add the color (or intensity) [photometric loss] to the tracking loss
         self.photometric_loss_weight: float = 0.01 # weight for the photometric loss in tracking
         self.consist_wieght_on: bool = True # weight for color (intensity) consistency for the measured and queried value
@@ -300,6 +298,9 @@ class Config:
         self.republish_raw_input: bool = False # publish the raw input point cloud or not
         self.timeout_duration_s: int = 30 # in seconds, exit after receiving no topic for x seconds 
 
+    def setup_dtype(self):
+        self.dtype = torch.float32 # default torch tensor data type
+        self.tran_dtype = torch.float64 # dtype used for all the transformation and poses
 
     def load(self, config_file):
         config_args = yaml.safe_load(open(os.path.abspath(config_file)))
@@ -346,8 +347,6 @@ class Config:
             self.stop_frame_thre = config_args["setting"].get("stop_frame_thre", self.stop_frame_thre)
 
             self.deskew = config_args["setting"].get("deskew", self.deskew) # apply motion undistortion or not
-            if self.step_frame > 1:
-                self.deskew = False
 
         # process
         if "process" in config_args:
@@ -438,8 +437,8 @@ class Config:
             self.pool_filter_freq = config_args["continual"].get("pool_filter_freq", 1)
         
         # tracker
-        self.track_on = config_args.get("tracker", False) # only on if indicated
-        if self.track_on:
+        if "tracker" in config_args:
+            self.track_on = True
             if self.color_on:
                 self.photometric_loss_on = config_args["tracker"].get("photo_loss", self.photometric_loss_on)
                 if self.photometric_loss_on:
@@ -461,29 +460,29 @@ class Config:
 
         # pgo
         if self.track_on:
-            self.pgo_on = config_args.get("pgo", False) # only on if indicated
-        if self.pgo_on: 
-            self.local_map_context = config_args["pgo"].get("map_context", self.local_map_context)
-            self.loop_with_feature = config_args["pgo"].get("loop_with_feature", self.loop_with_feature)
-            self.local_map_context_latency = config_args["pgo"].get('local_map_latency', self.local_map_context_latency)
-            self.context_virtual_side_count = config_args["pgo"].get("virtual_side_count", self.context_virtual_side_count)
-            self.context_virtual_step_m = config_args["pgo"].get("virtual_step_m", self.voxel_size_m * 4.0)
-            self.npmc_max_dist = config_args["pgo"].get("npmc_max_dist", self.max_range * 0.7)
-            self.pgo_freq = config_args["pgo"].get("pgo_freq_frame", self.pgo_freq)
-            self.pgo_with_pose_prior = config_args["pgo"].get("with_pose_prior", self.pgo_with_pose_prior)
-            # default cov (constant for all the edges)
-            self.pgo_tran_std = float(config_args["pgo"].get("tran_std", self.pgo_tran_std))
-            self.pgo_rot_std = float(config_args["pgo"].get("rot_std", self.pgo_rot_std))
-            # use default or estimated cov
-            self.use_reg_cov_mat = config_args["pgo"].get("use_reg_cov", False)
-            # merge the neural point map or not after the loop, merge the map may lead to some holes
-            self.pgo_error_thre = float(config_args["pgo"].get("pgo_error_thre_frame", self.pgo_error_thre_frame))
-            self.pgo_max_iter = config_args["pgo"].get("pgo_max_iter", self.pgo_max_iter) 
-            self.pgo_merge_map = config_args["pgo"].get("merge_map", False) 
-            self.context_cosdist_threshold = config_args["pgo"].get("context_cosdist", self.context_cosdist_threshold) 
-            self.min_loop_travel_dist_ratio = config_args["pgo"].get("min_loop_travel_ratio", self.min_loop_travel_dist_ratio) 
-            self.loop_dist_drift_ratio_thre = config_args["pgo"].get("max_loop_dist_ratio", self.loop_dist_drift_ratio_thre)
-            self.local_loop_dist_thre = config_args["pgo"].get("local_loop_dist_thre", self.voxel_size_m * 5.0)
+            if "pgo" in config_args:
+                self.pgo_on = True
+                self.local_map_context = config_args["pgo"].get("map_context", self.local_map_context)
+                self.loop_with_feature = config_args["pgo"].get("loop_with_feature", self.loop_with_feature)
+                self.local_map_context_latency = config_args["pgo"].get('local_map_latency', self.local_map_context_latency)
+                self.context_virtual_side_count = config_args["pgo"].get("virtual_side_count", self.context_virtual_side_count)
+                self.context_virtual_step_m = config_args["pgo"].get("virtual_step_m", self.voxel_size_m * 4.0)
+                self.npmc_max_dist = config_args["pgo"].get("npmc_max_dist", self.max_range * 0.7)
+                self.pgo_freq = config_args["pgo"].get("pgo_freq_frame", self.pgo_freq)
+                self.pgo_with_pose_prior = config_args["pgo"].get("with_pose_prior", self.pgo_with_pose_prior)
+                # default cov (constant for all the edges)
+                self.pgo_tran_std = float(config_args["pgo"].get("tran_std", self.pgo_tran_std))
+                self.pgo_rot_std = float(config_args["pgo"].get("rot_std", self.pgo_rot_std))
+                # use default or estimated cov
+                self.use_reg_cov_mat = config_args["pgo"].get("use_reg_cov", False)
+                # merge the neural point map or not after the loop, merge the map may lead to some holes
+                self.pgo_error_thre = float(config_args["pgo"].get("pgo_error_thre_frame", self.pgo_error_thre_frame))
+                self.pgo_max_iter = config_args["pgo"].get("pgo_max_iter", self.pgo_max_iter) 
+                self.pgo_merge_map = config_args["pgo"].get("merge_map", False) 
+                self.context_cosdist_threshold = config_args["pgo"].get("context_cosdist", self.context_cosdist_threshold) 
+                self.min_loop_travel_dist_ratio = config_args["pgo"].get("min_loop_travel_ratio", self.min_loop_travel_dist_ratio) 
+                self.loop_dist_drift_ratio_thre = config_args["pgo"].get("max_loop_dist_ratio", self.loop_dist_drift_ratio_thre)
+                self.local_loop_dist_thre = config_args["pgo"].get("local_loop_dist_thre", self.voxel_size_m * 5.0)
             
         # mapping optimizer
         if "optimizer" in config_args:

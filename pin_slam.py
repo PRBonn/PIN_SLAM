@@ -317,6 +317,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
                 cur_iter_num = max(1, cur_iter_num-10)
             if frame_id == config.freeze_after_frame: # freeze the decoder after certain frame 
                 freeze_decoders(geo_mlp, sem_mlp, color_mlp, config)
+                neural_points.compute_feature_principle_components(down_rate = 17) # prime number
 
             # conduct local bundle adjustment (with lower frequency)
             if config.track_on and config.ba_freq_frame > 0 and (frame_id+1) % config.ba_freq_frame == 0:
@@ -429,9 +430,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
         dataset.processed_frame += 1
     
     # VI. Save results
-    pose_eval_results = None
-    if config.track_on:
-        pose_eval_results = dataset.write_results()
+    pose_eval_results = dataset.write_results()
     if config.pgo_on and pgm.pgo_count>0:
         print("# Loop corrected: ", pgm.pgo_count)
         pgm.write_g2o(os.path.join(run_path, "final_pose_graph.g2o"))

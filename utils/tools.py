@@ -13,6 +13,7 @@ import subprocess
 import sys
 import time
 import warnings
+import yaml
 from datetime import datetime
 from pathlib import Path
 from typing import List
@@ -54,6 +55,9 @@ def setup_experiment(config: Config, argv=None, debug_mode: bool = False):
     else:
         torch.cuda.empty_cache()
 
+    # set the random seed for all
+    seed_anything(config.seed)
+
     if not debug_mode:
         access = 0o755
         os.makedirs(run_path, access, exist_ok=True)
@@ -67,10 +71,12 @@ def setup_experiment(config: Config, argv=None, debug_mode: bool = False):
         map_path = os.path.join(run_path, "map")
         model_path = os.path.join(run_path, "model")
         log_path = os.path.join(run_path, "log")
+        meta_data_path = os.path.join(run_path, "meta")
         os.makedirs(mesh_path, access, exist_ok=True)
         os.makedirs(map_path, access, exist_ok=True)
         os.makedirs(model_path, access, exist_ok=True)
         os.makedirs(log_path, access, exist_ok=True)
+        os.makedirs(meta_data_path, access, exist_ok=True)
 
         if config.wandb_vis_on:
             # set up wandb
@@ -97,16 +103,25 @@ def setup_experiment(config: Config, argv=None, debug_mode: bool = False):
                 run_str = "python3 " + " ".join(argv)
                 reproduce_shell.write(run_str)
 
-    # set the random seed for all
-    torch.set_default_dtype(config.dtype)
 
-    # set the random seed for all
-    setup_seed(config.seed)
+        # disable lidar deskewing when not input per frame 
+        if config.step_frame > 1:
+            config.deskew = False
+
+        # write the full configs to yaml file
+        config_dict = vars(config)
+        config_out_path = os.path.join(meta_data_path, "config_all.yaml")
+        with open(config_out_path, 'w') as file:
+            yaml.dump(config_dict, file, default_flow_style=False)
+
+    # set up dtypes, note that torch stuff cannot be write to yaml, so we set it up after write out the yaml for the whole config
+    config.setup_dtype()
+    torch.set_default_dtype(config.dtype)
 
     return run_path
 
 
-def setup_seed(seed):
+def seed_anything(seed):
     os.environ["PYTHONHASHSEED"] = str(seed)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -701,7 +716,7 @@ def tranmat_close_to_identity(mats: np.ndarray, rot_thre: float, tran_thre: floa
 
     rot_close_to_identity = np.all(rot_diff < rot_thre)
 
-    tran_diff = mats[:3, 3]
+    tran_diff = np.abs(mats[:3, 3])
 
     tran_close_to_identity = np.all(tran_diff < tran_thre)
 
@@ -710,6 +725,60 @@ def tranmat_close_to_identity(mats: np.ndarray, rot_thre: float, tran_thre: floa
     else:
         return False
 
+def feature_pca_torch(data, principal_components = None,
+                     principal_dim: int = 3,
+                     down_rate: int = 1,
+                     project_data: bool = True,
+                     normalize: bool = True):
+    """
+        do PCA to a NxD torch tensor to get the data along the K principle dimensions
+        N is the data count, D is the dimension of the data
+
+        We can also use a pre-computed principal_components for only the projection of input data
+    """
+
+    N, D = data.shape
+
+    # Step 1: Center the data (subtract the mean of each dimension)
+    data_centered = data - data.mean(dim=0)
+
+    if principal_components is None:
+        data_centered_for_compute = data_centered[::down_rate]
+
+        assert data_centered_for_compute.shape[0] > principal_dim, "not enough data for PCA computation, down_rate might be too large or original data count is too small"
+
+        # Step 2: Compute the covariance matrix (D x D)
+        cov_matrix = torch.matmul(data_centered_for_compute.T, data_centered_for_compute) / (N - 1)
+
+        # Step 3: Perform eigen decomposition of the covariance matrix
+        eigenvalues, eigenvectors = torch.linalg.eig(cov_matrix)
+        eigenvalues_r = eigenvalues.real.to(data)
+        eigenvectors_r = eigenvectors.real.to(data)
+
+        # Step 4: Sort eigenvalues and eigenvectors in descending order
+        sorted_indices = torch.argsort(eigenvalues_r, descending=True)
+        principal_components = eigenvectors_r[:, sorted_indices[:principal_dim]]  # First 3 principal components
+
+    data_pca = None
+    if project_data:
+        # Step 5: Project data onto the top 3 principal components
+        data_pca = torch.matmul(data_centered, principal_components) # N, D @ D, P
+
+        # normalize to show as rgb
+        if normalize: 
+            # min_vals = data_pca.min(dim=0, keepdim=True).values
+            # max_vals = data_pca.max(dim=0, keepdim=True).values
+
+            # # deal with outliers
+            min_vals = torch.quantile(data_pca, 0.02, dim=0, keepdim=True)
+            max_vals = torch.quantile(data_pca, 0.98, dim=0, keepdim=True)
+
+            # Normalize to range [0, 1]
+            data_pca = (data_pca - min_vals) / (max_vals - min_vals)
+
+            data_pca = data_pca.clamp(0, 1)
+
+    return data_pca, principal_components
 
 def plot_timing_detail(time_table: np.ndarray, saving_path: str, with_loop=False):
 

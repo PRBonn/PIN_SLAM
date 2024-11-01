@@ -40,19 +40,26 @@ def vis_pin_map():
 
     print("[bold green]Load PIN Map[/bold green]","📍" )
 
+
     run_path = setup_experiment(config, sys.argv, debug_mode=True)
+
+    o3d_vis_on = True # set to False if you don't want to visualize
     
     # initialize the mlp decoder
     geo_mlp = Decoder(config, config.geo_mlp_hidden_dim, config.geo_mlp_level, 1)
-    sem_mlp = Decoder(config, config.sem_mlp_hidden_dim, config.sem_mlp_level, config.sem_class_count + 1) 
-    color_mlp = Decoder(config, config.color_mlp_hidden_dim, config.color_mlp_level, config.color_channel)
+    color_mlp = None
+    if config.color_channel > 0: 
+        color_mlp = Decoder(config, config.color_mlp_hidden_dim, config.color_mlp_level, config.color_channel)
+    sem_mlp = Decoder(config, config.sem_mlp_hidden_dim, config.sem_mlp_level, config.sem_class_count + 1)
 
     # initialize the neural point features
-    neural_points = NeuralPoints(config)
+    neural_points: NeuralPoints = NeuralPoints(config)
 
     # Load the map
     loaded_model = torch.load(config.model_path)
     neural_points = loaded_model["neural_points"]
+    neural_points.temporal_local_map_on = False
+    neural_points.compute_feature_principle_components(down_rate = 17)
 
     # print(loaded_model.keys())
     geo_mlp.load_state_dict(loaded_model["geo_decoder"])
@@ -62,7 +69,7 @@ def vis_pin_map():
         color_mlp.load_state_dict(loaded_model["color_decoder"])
     print("PIN Map loaded")
 
-    if config.o3d_vis_on:
+    if o3d_vis_on:
         vis = MapVisualizer(config)
 
     neural_points.recreate_hash(neural_points.neural_points[0], torch.eye(3).cuda(), False, False)
@@ -123,7 +130,7 @@ def vis_pin_map():
         cur_mesh = mesher.recon_aabb_collections_mesh(chunks_aabb, mesh_vox_size_m, out_mesh_path, False, config.semantic_on, 
                                                      config.color_on, filter_isolated_mesh=True, mesh_min_nn=mesh_min_nn_used)
     
-    if config.o3d_vis_on:
+    if o3d_vis_on:
         while True:
             if vis.render_neural_points:
                 neural_pcd = neural_points.get_neural_points_o3d(query_global=True, color_mode=vis.neural_points_vis_mode, random_down_ratio=down_rate)

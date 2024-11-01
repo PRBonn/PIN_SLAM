@@ -22,6 +22,7 @@ from utils.tools import (
     transform_batch_torch,
     voxel_down_sample_min_value_torch,
     voxel_down_sample_torch,
+    feature_pca_torch,
 )
 
 
@@ -99,6 +100,10 @@ class NeuralPoints(nn.Module):
             )
         else:
             self.color_features = None
+        
+        # feature pca
+        self.geo_feature_pca = self.color_feature_pca = None
+        
         # here, the ts represent the actually processed frame id (not neccessarily the frame id of the dataset)
         self.point_ts_create = torch.empty(
             (0), device=self.device, dtype=torch.int
@@ -159,6 +164,14 @@ class NeuralPoints(nn.Module):
             print("Memory consumption: %f (MB)" % cur_memory)
         self.memory_footprint.append(cur_memory)
 
+
+    def compute_feature_principle_components(self, down_rate: int = 1):
+        _, self.geo_feature_pca = feature_pca_torch((self.geo_features)[:-1], down_rate=down_rate, project_data=False)
+
+        if self.color_features is not None:
+            _, self.color_feature_pca = feature_pca_torch((self.color_features)[:-1], down_rate=down_rate, project_data=False)
+
+
     def get_neural_points_o3d(
         self,
         query_global: bool = True,
@@ -191,35 +204,43 @@ class NeuralPoints(nn.Module):
         neural_pc_o3d = o3d.geometry.PointCloud()
         neural_pc_o3d.points = o3d.utility.Vector3dVector(neural_points_np)
 
-        if color_mode == 0:  # "geo_feature"
+        if color_mode == 0 and (self.geo_feature_pca is not None):  # "geo_feature"
             if query_global:
-                neural_features_vis = self.geo_features[:-1:random_down_ratio].detach()
+                neural_features_vis = self.geo_features[:-1:random_down_ratio]
             else:
                 neural_features_vis = self.local_geo_features[
                     :-1:random_down_ratio
                 ].detach()
-            neural_features_vis = F.normalize(neural_features_vis, p=2, dim=1)
-            neural_features_np = neural_features_vis.cpu().numpy().astype(np.float64)
-            neural_pc_o3d.colors = o3d.utility.Vector3dVector(
-                neural_features_np[:, 0:3] * ratio_vis
-            )
 
-        elif color_mode == 1:  # "color_feature"
-            if self.color_features is None:
-                return neural_pc_o3d
+            geo_feature_3d, _ = feature_pca_torch(neural_features_vis, principal_components=self.geo_feature_pca) # [0,1]
+            geo_feature_rgb = geo_feature_3d.cpu().numpy().astype(np.float64)
+            neural_pc_o3d.colors = o3d.utility.Vector3dVector(geo_feature_rgb)
+            
+            # neural_features_vis = F.normalize(neural_features_vis, p=2, dim=1)
+            # neural_features_np = neural_features_vis.cpu().numpy().astype(np.float64)
+            # neural_pc_o3d.colors = o3d.utility.Vector3dVector(
+            #     neural_features_np[:, 0:3] * ratio_vis
+            # )
+
+        elif color_mode == 1 and (self.color_feature_pca is not None) and (self.color_features is not None):  # "color_feature"
             if query_global:
                 neural_features_vis = self.color_features[
                     :-1:random_down_ratio
-                ].detach()
+                ]
             else:
                 neural_features_vis = self.local_color_features[
                     :-1:random_down_ratio
                 ].detach()
-            neural_features_vis = F.normalize(neural_features_vis, p=2, dim=1)
-            neural_features_np = neural_features_vis.cpu().numpy().astype(np.float64)
-            neural_pc_o3d.colors = o3d.utility.Vector3dVector(
-                neural_features_np[:, 0:3] * ratio_vis
-            )
+
+            color_feature_3d, _ = feature_pca_torch(neural_features_vis, principal_components=self.color_feature_pca) # [0,1]
+            color_feature_rgb = color_feature_3d.cpu().numpy().astype(np.float64)
+            neural_pc_o3d.colors = o3d.utility.Vector3dVector(color_feature_rgb)
+
+            # neural_features_vis = F.normalize(neural_features_vis, p=2, dim=1)
+            # neural_features_np = neural_features_vis.cpu().numpy().astype(np.float64)
+            # neural_pc_o3d.colors = o3d.utility.Vector3dVector(
+            #     neural_features_np[:, 0:3] * ratio_vis
+            # )
 
         elif color_mode == 2:  # "ts": # frame number (ts) as the color
             if query_global:
