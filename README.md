@@ -64,6 +64,9 @@
       <a href="#run-pin-slam">How to run PIN-SLAM</a>
     </li>
     <li>
+      <a href="#docker">Docker</a>
+    </li>
+    <li>
       <a href="#visualizer-instructions">Visualizer instructions</a>
     </li>
     <li>
@@ -332,6 +335,25 @@ For example, for the case of the sanity test described above, run:
 python3 vis_pin_map.py ./experiments/sanity_test_*  0.2 neural_points.ply mesh_20cm.ply 8
 ```
 </details>
+
+## Docker
+
+Thanks [@schneider-daniel](https://github.com/schneider-daniel) for providing a docker container.
+
+Build the docker container:
+
+```
+cd docker
+sudo chmod +x ./build_docker.sh
+./build_docker.sh
+```
+
+After building the container, configure the storage path in `start_docker.sh` and then run it by:
+```
+sudo chmod +x ./start_docker.sh
+./start_docker.sh
+
+```
 
 
 ## Visualizer Instructions
