@@ -80,7 +80,10 @@ def vis_pin_map():
     mesh_vox_size_m = None
     if len(sys.argv) > 2:
         mesh_vox_size_m = float(sys.argv[2])
-        print("Marching cubes resolution: ", mesh_vox_size_m, " m")
+        if mesh_vox_size_m <= 0:
+            mesh_vox_size_m = None
+        else:
+            print("Marching cubes resolution: ", mesh_vox_size_m, " m")
 
     down_rate = 1
 
@@ -99,7 +102,8 @@ def vis_pin_map():
             chunks_aabb = split_chunks(neural_pcd, mesh_aabb, mesh_vox_size_m*300) 
         # print("AABB for meshing: ", mesh_aabb)
     
-    print("Number of chunks for reconstruction:", len(chunks_aabb))
+    if mesh_vox_size_m is not None:
+        print("Number of chunks for reconstruction:", len(chunks_aabb))
     
     neural_pcd = neural_points.get_neural_points_o3d(query_global=True, color_mode=2, random_down_ratio=down_rate)
     neural_pcd_cropped = neural_pcd.crop(mesh_aabb)

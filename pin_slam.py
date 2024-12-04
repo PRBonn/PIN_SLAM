@@ -8,7 +8,6 @@ import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '0' # by default 0, change it here if you want to use other GPU 
 import sys
 
-import rerun as rr
 import numpy as np
 import open3d as o3d
 import torch
@@ -109,6 +108,7 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
         o3d_vis = MapVisualizer(config)
 
     if config.rerun_vis_on:
+        import rerun as rr
         rr.init("pin_slam_rerun_viewer", spawn=True)
 
     # initialize the mlp decoder
@@ -444,16 +444,18 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
     neural_pcd = neural_points.get_neural_points_o3d(query_global=True, color_mode = 0)
     if config.save_map:
         o3d.io.write_point_cloud(os.path.join(run_path, "map", "neural_points.ply"), neural_pcd) # write the neural point cloud
-    if config.save_mesh and cur_mesh is None:
-        output_mc_res_m = config.mc_res_m*0.6
+    
+    output_mc_res_m = config.mc_res_m*0.6
+    mc_cm_str = str(round(output_mc_res_m*1e2))
+    if config.save_mesh and cur_mesh is None:    
         chunks_aabb = split_chunks(neural_pcd, neural_pcd.get_axis_aligned_bounding_box(), output_mc_res_m * 300) # reconstruct in chunks
-        mc_cm_str = str(round(output_mc_res_m*1e2))
         mesh_path = os.path.join(run_path, "mesh", "mesh_" + mc_cm_str + "cm.ply")
         cur_mesh = mesher.recon_aabb_collections_mesh(chunks_aabb, output_mc_res_m, mesh_path, False, config.semantic_on, config.color_on, filter_isolated_mesh=True, mesh_min_nn=config.mesh_min_nn)
     neural_points.clear_temp() # clear temp data for output
     if config.save_map:
         save_implicit_map(run_path, neural_points, geo_mlp, color_mlp, sem_mlp)
         # lcd_npmc.save_context_dict(mapper.used_poses, run_path)
+        print("Use 'python vis_pin_map.py {} {} neural_points.ply mesh_out_{}cm.ply' to inspect the map offline.".format(run_path, output_mc_res_m, mc_cm_str))
 
     if config.save_merged_pc:
         dataset.write_merged_point_cloud() # replay: save merged point cloud map
@@ -465,6 +467,8 @@ def run_pin_slam(config_path=None, dataset_name=None, sequence_name=None, seed=N
             odom_poses, gt_poses, pgo_poses = dataset.get_poses_np_for_vis()
             o3d_vis.update_traj(dataset.cur_pose_ref, odom_poses, gt_poses, pgo_poses, loop_edges)
     
+
+
     return pose_eval_results
 
 if __name__ == "__main__":
