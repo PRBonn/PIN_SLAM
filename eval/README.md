@@ -1,6 +1,6 @@
 # PIN-SLAM Evaluation
 
-In this folder, you can find a few Python notebooks to run the evaluation of PIN-SLAM on typical public datasets without much effort.
+In this folder, you can find a few Python notebooks to run the evaluation of PIN-SLAM on typical public datasets without much effort. Note that you need to firstly checkout to the v1.0.0 branch of PIN-SLAM.
 
 This file is inspired by [KISS-ICP](https://github.com/PRBonn/kiss-icp/tree/main/eval).
 
