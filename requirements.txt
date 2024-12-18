@@ -12,6 +12,6 @@ rich==12.5.1
 roma==1.5.0
 rospkg==1.5.1
 scikit-image==0.21.0
-typer==0.15.1
+dtyper==2.5.1
 wandb==0.17.0
 opencv-python

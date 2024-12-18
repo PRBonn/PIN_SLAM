@@ -11,7 +11,7 @@ import sys
 import numpy as np
 import open3d as o3d
 import torch
-import typer
+import dtyper as typer
 import wandb
 from rich import print
 from tqdm import tqdm
@@ -52,8 +52,8 @@ app = typer.Typer(add_completion=False, rich_markup_mode="rich", context_setting
 _available_dl_help = available_dataloaders()
 
 docstring = f"""
-:round_pushpin: PIN-SLAM: a full-fledged implicit neural LiDAR SLAM \n
-\b
+:round_pushpin: PIN-SLAM: a full-fledged implicit neural LiDAR SLAM system \n
+
 [bold green]Examples: [/bold green]
 
 # Process all pointclouds in the given <data-dir> (*.ply, *.pcd, *.bin, etc.) using default config file
@@ -75,23 +75,23 @@ $ python pin_slam.py ./config/rgbd_slam/run_replica.yaml replica room0 -i <path-
 
 @app.command(help=docstring)
 def run_pin_slam(
-    config_path: Annotated[str, typer.Argument(help='Path to *.yaml config file')] = 'config/lidar_slam/run.yaml',
-    dataset_name: Annotated[Optional[str], typer.Argument(help='Name of a specific dataset, example: kitti, mulran, or rosbag (when -d is set)')] = None,
-    sequence_name: Annotated[Optional[str], typer.Argument(help='Name of a specific data sequence or the rostopic for point cloud (when -d is set)')] = None,
-    seed: Annotated[int, typer.Option(help='Set the random seed')] = 42,
-    input_path: Annotated[Optional[str], typer.Option('--input-path', '-i', help='Path to the point cloud input directory')] = None,
-    output_path: Annotated[Optional[str], typer.Option('--output-path', '-o', help='Path to the result output directory')] = None,
-    frame_range: Annotated[Optional[Tuple[int, int, int]], typer.Option('--range', help='Specify the start, end and step of the processed frame, e.g. --range 10 1000 1')] = None,
-    data_loader_on: Annotated[bool, typer.Option('--data-loader-on', '-d', help='Use specific data loader')] = False,
-    visualize: Annotated[bool, typer.Option('--visualize', '-v', help='Turn on the visualizer')] = False,
-    cpu_only: Annotated[bool, typer.Option('--cpu-only', '-c', help='Run only on CPU')] = False,
-    log_on: Annotated[bool, typer.Option('--log-on', '-l', help='Turn on the logs printing')] = False,
-    rerun_on: Annotated[bool, typer.Option('--rerun-on', '-r', help='Turn on the rerun logging')] = False,
-    wandb_on: Annotated[bool, typer.Option('--wandb-on', '-w', help='Turn on the weight & bias logging')] = False,
-    save_map: Annotated[bool, typer.Option('--save-map', '-s', help='Save the PIN map after SLAM')] = False,
-    save_mesh: Annotated[bool, typer.Option('--save-mesh', '-m', help='Save the reconstructed mesh after SLAM')] = False,
-    save_merged_pc: Annotated[bool, typer.Option('--save-merged-pc', '-p', help='Save the merged point cloud after SLAM')] = False,
-    deskew: Annotated[bool, typer.Option(help='Try to deskew the LiDAR scans (this would overwrite the config file deskew parameter)')] = False,
+    config_path: str = typer.Argument('config/lidar_slam/run.yaml', help='Path to *.yaml config file'),
+    dataset_name: Optional[str] = typer.Argument(None, help='Name of a specific dataset, example: kitti, mulran, or rosbag (when -d is set)'),
+    sequence_name: Optional[str] = typer.Argument(None, help='Name of a specific data sequence or the rostopic for point cloud (when -d is set)'),
+    input_path: Optional[str] = typer.Option(None, '--input-path', '-i', help='Path to the point cloud input directory'),
+    output_path: Optional[str] = typer.Option(None, '--output-path', '-o', help='Path to the result output directory'),
+    frame_range: Optional[Tuple[int, int, int]] = typer.Option(None, '--range', help='Specify the start, end and step of the processed frame, e.g. --range 10 1000 1'),
+    seed: int = typer.Option(42, help='Set the random seed'),
+    data_loader_on: bool = typer.Option(False, '--data-loader-on', '-d', help='Use specific data loader'),
+    visualize: bool = typer.Option(False, '--visualize', '-v', help='Turn on the visualizer'),
+    cpu_only: bool = typer.Option(False, '--cpu-only', '-c', help='Run only on CPU'),
+    log_on: bool = typer.Option(False, '--log-on', '-l', help='Turn on the logs printing'),
+    rerun_on: bool = typer.Option(False, '--rerun-on', '-r', help='Turn on the rerun logging'),
+    wandb_on: bool = typer.Option(False, '--wandb-on', '-w', help='Turn on the weight & bias logging'),
+    save_map: bool = typer.Option(False, '--save-map', '-s', help='Save the PIN map after SLAM'),
+    save_mesh: bool = typer.Option(False, '--save-mesh', '-m', help='Save the reconstructed mesh after SLAM'),
+    save_merged_pc: bool = typer.Option(False, '--save-merged-pc', '-p', help='Save the merged point cloud after SLAM'),
+    deskew: bool = typer.Option(False, '--deskew', help='Try to deskew the LiDAR scans (this would overwrite the config file deskew parameter)'),
 ):
     config = Config()
     config.load(config_path)
