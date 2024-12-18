@@ -306,9 +306,16 @@ class NeuralPoints(nn.Module):
         points: torch.Tensor,
         sensor_position: torch.Tensor,
         sensor_orientation: torch.Tensor,
-        cur_ts,
+        cur_ts: int,
     ):
-        # update the neural point map using new observations
+        """
+        update the neural point map using new observations
+        Input:
+            points: new observations, shape: [N, 3]
+            sensor_position: the position of the sensor, shape: [3]
+            sensor_orientation: the orientation of the sensor
+            cur_ts: the timestamp of the current frame, int
+        """
 
         cur_resolution = self.resolution
         # if self.mean_grid_sampling:
@@ -415,6 +422,15 @@ class NeuralPoints(nn.Module):
         use_travel_dist: bool = True,
         diff_ts_local: int = 50,
     ):
+        """
+        reset the local map using the new sensor position and orientation
+        Input:
+            sensor_position: the position of the sensor, shape: [3]
+            sensor_orientation: the orientation of the sensor
+            cur_ts: the timestamp of the current frame, int
+            use_travel_dist: whether to use the travel distance to filter the neural points, bool
+            diff_ts_local: the time difference to filter the neural points, int
+        """
     # TODO: not very efficient, optimize the code
 
         self.cur_ts = cur_ts
@@ -485,7 +501,9 @@ class NeuralPoints(nn.Module):
         self.local_orientation = sensor_orientation  # not used
 
     def assign_local_to_global(self):
-
+        """
+        assign the local map to the global map
+        """
         local_mask = self.local_mask
         # self.neural_points[local_mask[:-1]] = self.local_neural_points
         # self.point_orientations[local_mask[:-1]] = self.local_point_orientations
@@ -506,7 +524,16 @@ class NeuralPoints(nn.Module):
         query_geo_feature: bool = True,
         query_color_feature: bool = False,
     ):
-
+        """
+        query the feature of the neural points
+        Input:
+            query_points: the points to query, shape: [N, 3]
+            query_ts: the timestamp of the query points, shape: [N]
+            training_mode: whether to update the certainty of the neural points, bool
+            query_locally: whether to query the local map, bool
+            query_geo_feature: whether to query the geometric feature, bool
+            query_color_feature: whether to query the color feature, bool
+        """
         if not query_geo_feature and not query_color_feature:
             sys.exit("you need to at least query one kind of feature")
 
@@ -706,9 +733,14 @@ class NeuralPoints(nn.Module):
             queried_certainty,
         )
 
-    # prune inactive uncertain neural points
     def prune_map(self, prune_certainty_thre, min_prune_count = 500, global_prune = False):
-
+        """
+        prune inactive uncertain neural points
+        Input:
+            prune_certainty_thre: the threshold of the certainty to prune the neural points, float
+            min_prune_count: the minimum number of the neural points to prune, int
+            global_prune: whether to prune the global map, bool
+        """
         certainty_mask = self.point_certainties < prune_certainty_thre
 
         if global_prune:
@@ -745,6 +777,11 @@ class NeuralPoints(nn.Module):
         return False
 
     def adjust_map(self, pose_diff_torch):
+        """
+        adjust the neural point map using the pose difference
+        Input:
+            pose_diff_torch: the pose difference, shape: [N, 4, 4]
+        """
         # for each neural point, use its ts to find the diff between old and new pose, transform the position and rotate the orientation
         # we use the mid_ts for each neural point
 
@@ -775,7 +812,15 @@ class NeuralPoints(nn.Module):
         with_ts: bool = True,
         cur_ts=0,
     ):
-
+        """
+        recreate the hash of the neural point map
+        Input:
+            sensor_position: the position of the sensor, shape: [3]
+            sensor_orientation: the orientation of the sensor
+            kept_points: whether to keep the neural points, bool
+            with_ts: whether to use the timestamp to filter the neural points, bool
+            cur_ts: the timestamp of the current frame, int
+        """
         cur_resolution = self.resolution
 
         self.buffer_pt_index = torch.full(
@@ -853,7 +898,12 @@ class NeuralPoints(nn.Module):
     def set_search_neighborhood(
         self, num_nei_cells: int = 1, search_alpha: float = 1.0
     ):
-
+        """
+        set the search neighborhood
+        Input:
+            num_nei_cells: the number of the neighboring cells, int
+            search_alpha: the alpha value for the search, float
+        """
         dx = torch.arange(
             -num_nei_cells,
             num_nei_cells + 1,
@@ -888,7 +938,12 @@ class NeuralPoints(nn.Module):
     def radius_neighborhood_search(
         self, points: torch.Tensor, time_filtering: bool = False
     ):
-
+        """
+        search the neighborhood of the points
+        Input:
+            points: the points to search, shape: [N, 3]
+            time_filtering: whether to use the timestamp to filter the neural points, bool
+        """
         # T0 = get_time()
         cur_resolution = self.resolution
         cur_buffer_size = int(self.buffer_size)
@@ -943,7 +998,12 @@ class NeuralPoints(nn.Module):
 
     def query_certainty(
         self, query_points: torch.Tensor
-    ):  # a faster way to get the certainty at a batch of query points
+    ):  
+        """
+        a faster way to get the certainty at a batch of query points
+        Input:
+            query_points: the points to query, shape: [N, 3]
+        """
 
         _, idx = self.radius_neighborhood_search(query_points)  # only the self voxel
 
@@ -961,6 +1021,11 @@ class NeuralPoints(nn.Module):
 
     # clear the temp data that is not needed
     def clear_temp(self, clean_more: bool = False):
+        """
+        clear the temp data that is not needed
+        Input:
+            clean_more: whether to clean more data, bool
+        """
         self.buffer_pt_index = None
         self.local_neural_points = None
         self.local_point_orientations = None
@@ -978,6 +1043,9 @@ class NeuralPoints(nn.Module):
             self.point_certainties = None
 
     def get_map_o3d_bbx(self):
+        """
+        get the bounding box of the neural point map
+        """
         map_min, _ = torch.min(self.neural_points, dim=0)
         map_max, _ = torch.max(self.neural_points, dim=0)
 
@@ -988,10 +1056,6 @@ class NeuralPoints(nn.Module):
         )
 
         return o3d_bbx
-
-    # def feature_tsne(self):
-    #     tsne = TSNE(n_components=3, perplexity=30, n_iter=300)
-    #     tsne_result = tsne.fit_transform(self.geo_features[:-1].cpu().detach().numpy())
 
 
 # the positional encoding is actually not used

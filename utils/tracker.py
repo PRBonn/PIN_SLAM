@@ -635,7 +635,7 @@ def implicit_reg(
             3 dim translation part of the eigenvalues for the registration degerancy check
     """
 
-    cross = torch.cross(points, sdf_grad, dim=-1)  # N,3 x N,3
+    cross = torch.linalg.cross(points, sdf_grad, dim=-1)  # N,3 x N,3
     J_mat = torch.cat(
         [cross, sdf_grad], -1
     )  # The Jacobian matrix # first rotation, then translation # N, 6
@@ -694,7 +694,7 @@ def implicit_color_reg(
     lm_lambda=0.0,
 ):
 
-    geo_cross = torch.cross(points, sdf_grad)
+    geo_cross = torch.linalg.cross(points, sdf_grad)
     J_geo = torch.cat([geo_cross, sdf_grad], -1)  # first rotation, then translation
     N_geo = J_geo.T @ (weight * J_geo)
     g_geo = -(J_geo * weight).T @ sdf_residual
@@ -706,7 +706,7 @@ def implicit_color_reg(
     for i in range(
         color_channel
     ):  # we have converted color to intensity, so there's only one channel here
-        color_cross_channel = torch.cross(
+        color_cross_channel = torch.linalg.cross(
             points, color_grad[:, i, :]
         )  # first rotation, then translation
         J_color_channel = torch.cat([color_cross_channel, color_grad[:, i]], -1)

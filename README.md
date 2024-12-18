@@ -198,6 +198,11 @@ python3 pin_slam.py ./config/lidar_slam/run_demo.yaml -vsmc
 
 ### Run on your datasets
 
+Follow the instructions on how to run PIN-SLAM by typing:
+```
+python3 pin_slam.py -h
+```
+
 For an arbitrary data sequence, you can run with the default config file by:
 ```
 python3 pin_slam.py -i /path/to/your/point/cloud/folder -vsm
@@ -205,11 +210,6 @@ python3 pin_slam.py -i /path/to/your/point/cloud/folder -vsm
 
 <details>
   <summary>[More Usage (click to expand)]</summary>
-
-Follow the instructions on how to run PIN-SLAM by typing:
-```
-python3 pin_slam.py -h
-```
 
 To run PIN-SLAM with a specific config file, you can run:
 ```

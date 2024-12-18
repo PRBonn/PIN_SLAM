@@ -165,6 +165,8 @@ experiments
 experiments/
 .vscode/
 
+*.json
+
 bak
 TODO.md
 NOTE.md
