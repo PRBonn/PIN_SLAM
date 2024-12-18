@@ -15,7 +15,7 @@ import dtyper as typer
 import wandb
 from rich import print
 from tqdm import tqdm
-from typing import Annotated, Optional, Tuple
+from typing import Optional, Tuple
 
 from dataset.dataset_indexing import set_dataset_path
 from dataset.slam_dataset import SLAMDataset
@@ -57,20 +57,20 @@ docstring = f"""
 [bold green]Examples: [/bold green]
 
 # Process all pointclouds in the given <data-dir> (*.ply, *.pcd, *.bin, etc.) using default config file
-$ python pin_slam.py -i <data-dir>:open_file_folder: -vsm
+$ python3 pin_slam.py -i <data-dir>:open_file_folder: -vsm
 
 # Process all pointclouds in the given <data-dir> using specific config file (e.g. run_kitti.yaml)
-$ python pin_slam.py <path-to-config-file.yaml>:page_facing_up: -i <data-dir>:open_file_folder: -vsm
+$ python3 pin_slam.py <path-to-config-file.yaml>:page_facing_up: -i <data-dir>:open_file_folder: -vsm
 
 # Process a given [bold]ROS1/ROS2 [/bold]rosbag file (directory:open_file_folder:, ".bag":page_facing_up:)
-$ python pin_slam.py <path-to-config-file.yaml>:page_facing_up: rosbag -i <path-to-my-rosbag>[:open_file_folder:/:page_facing_up:] -dvsm
+$ python3 pin_slam.py <path-to-config-file.yaml>:page_facing_up: rosbag -i <path-to-my-rosbag>[:open_file_folder:/:page_facing_up:] -dvsm
 
 # Use a more specific dataloader: {", ".join(_available_dl_help)}
 # For example, to process KITTI dataset sequence 00:
-$ python pin_slam.py ./config/lidar_slam/run_kitti.yaml kitti 00 -i <path-to-kitti-root>:open_file_folder: -dvsm
+$ python3 pin_slam.py ./config/lidar_slam/run_kitti.yaml kitti 00 -i <path-to-kitti-root>:open_file_folder: -dvsm
 
 # For example, to process Replica dataset sequence room0:
-$ python pin_slam.py ./config/rgbd_slam/run_replica.yaml replica room0 -i <path-to-replica-root>:open_file_folder: -dvsm
+$ python3 pin_slam.py ./config/rgbd_slam/run_replica.yaml replica room0 -i <path-to-replica-root>:open_file_folder: -dvsm
 """
 
 @app.command(help=docstring)
