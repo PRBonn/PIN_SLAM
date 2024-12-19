@@ -100,7 +100,7 @@ def smooth_sdf_loss(pred, label, delta=20.0, weight=None, weighted=False):
     final_loss = ((2.0 / delta) * final_loss * weight).mean()
     return final_loss
 
-
+# deprecated
 def ray_estimation_loss(x, y, d_meas):  # for each ray
     # x as depth
     # y as sdf prediction
@@ -120,7 +120,7 @@ def ray_estimation_loss(x, y, d_meas):  # for each ray
 
     return d_error
 
-
+# deprecated
 def ray_rendering_loss(x, y, d_meas):  # for each ray [should run in batch]
     # x as depth
     # y as occ.prob. prediction
@@ -140,7 +140,7 @@ def ray_rendering_loss(x, y, d_meas):  # for each ray [should run in batch]
 
     return d_error
 
-
+# deprecated
 def batch_ray_rendering_loss(x, y, d_meas, neus_on=True):  # for all rays in a batch
     # x as depth [ray number * sample number]
     # y as prediction (the alpha in volume rendering) [ray number * sample number]

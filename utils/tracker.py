@@ -54,7 +54,21 @@ class Tracker:
         loop_reg: bool = False,
         vis_result: bool = False,
     ):
-
+        """
+        Perform tracking
+        Args:
+            source_points: N,3 torch tensor, the coordinates of all N query points
+            init_pose: 4,4 torch tensor, the initial pose
+            source_colors: N,3 torch tensor, the colors of all N query points
+            source_normals: N,3 torch tensor, the normals of all N query points
+            source_sdf: N torch tensor, the SDF values of all N query points
+            cur_ts: float, the timestamp of the current frame
+            loop_reg: bool, whether this is a registration for loop closure
+            vis_result: bool, whether to visualize the result
+        Returns:
+            T: 4,4 torch tensor, the final pose
+            cov_mat: 6,6 torch tensor, the covariance matrix
+        """
         if init_pose is None:
             T = torch.eye(4, dtype=torch.float64, device=self.device)
         else:
@@ -365,7 +379,9 @@ class Tracker:
         lm_lambda=0.0,
         vis_weight_pc=False,
     ):  # if lm_lambda = 0, then it's Gaussian Newton Optimization
-
+        """
+        Perform one step of registration
+        """
         T0 = get_time()
 
         colors_on = colors is not None and self.config.color_on
@@ -757,6 +773,9 @@ def ct_registration_step(
 
 # math tools
 def skew(v):
+    """
+    Compute the skew-symmetric matrix of a 3D vector
+    """
     S = torch.zeros(3, 3, device=v.device, dtype=v.dtype)
     S[0, 1] = -v[2]
     S[0, 2] = v[1]
@@ -765,7 +784,9 @@ def skew(v):
 
 
 def expmap(axis_angle: torch.Tensor):
-
+    """
+    Convert an axis-angle representation to a rotation matrix
+    """
     angle = axis_angle.norm()
     axis = axis_angle / angle
     eye = torch.eye(3, device=axis_angle.device, dtype=axis_angle.dtype)
@@ -777,6 +798,9 @@ def expmap(axis_angle: torch.Tensor):
 
 
 def rotation_matrix_to_axis_angle(R):
+    """
+    Convert a rotation matrix to an axis-angle representation
+    """
     # epsilon = 1e-8  # A small value to handle numerical precision issues
     # Ensure the input matrix is a valid rotation matrix
     assert torch.is_tensor(R) and R.shape == (3, 3), "Invalid rotation matrix"

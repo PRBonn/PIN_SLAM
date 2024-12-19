@@ -227,8 +227,10 @@ def step_lr_decay(
     return learning_rate
 
 
-# calculate the analytical gradient by pytorch auto diff
 def get_gradient(inputs, outputs):
+    """
+    Calculate the analytical gradient by pytorch auto diff
+    """
     d_points = torch.ones_like(outputs, requires_grad=False, device=outputs.device)
     points_grad = grad(
         outputs=outputs,
@@ -387,8 +389,10 @@ def create_axis_aligned_bounding_box(center, size):
 
 
 def apply_quaternion_rotation(quat: torch.tensor, points: torch.tensor) -> torch.tensor:
-    # apply passive rotation: coordinate system rotation w.r.t. the points
-    # p' = qpq^-1
+    """
+    Apply passive rotation: coordinate system rotation w.r.t. the points
+    p' = qpq^-1
+    """
     quat_w = quat[..., 0].unsqueeze(-1)
     quat_xyz = -quat[..., 1:]
     t = 2 * torch.linalg.cross(quat_xyz, points)
@@ -416,6 +420,11 @@ def rotmat_to_quat(rot_matrix: torch.tensor):
 
 
 def quat_to_rotmat(quaternions: torch.tensor):
+    """
+    Convert a batch of quaternions to rotation matrices.
+    quaternions: N,4
+    return N,3,3
+    """
     # Ensure quaternions are normalized
     quaternions /= torch.norm(quaternions, dim=1, keepdim=True)
 
@@ -469,6 +478,9 @@ def quat_multiply(q1: torch.tensor, q2: torch.tensor):
 
 
 def torch2o3d(points_torch):
+    """
+    Convert a batch of points from torch to o3d
+    """
     pc_o3d = o3d.geometry.PointCloud()
     points_np = points_torch.cpu().detach().numpy().astype(np.float64)
     pc_o3d.points = o3d.utility.Vector3dVector(points_np)
@@ -476,12 +488,22 @@ def torch2o3d(points_torch):
 
 
 def o3d2torch(o3d, device="cpu", dtype=torch.float32):
+    """
+    Convert a batch of points from o3d to torch
+    """
     return torch.tensor(np.asarray(o3d.points), dtype=dtype, device=device)
 
 
 def transform_torch(points: torch.tensor, transformation: torch.tensor):
-    # points [N, 3]
-    # transformation [4, 4]
+    """
+    Transform a batch of points by a transformation matrix
+    Args:
+        points: N,3 torch tensor, the coordinates of all N (axbxc) query points in the scaled
+                kaolin coordinate system [-1,1]
+        transformation: 4,4 torch tensor, the transformation matrix
+    Returns:
+        transformed_points: N,3 torch tensor, the transformed coordinates
+    """
     # Add a homogeneous coordinate to each point in the point cloud
     points_homo = torch.cat([points, torch.ones(points.shape[0], 1).to(points)], dim=1)
 
@@ -495,9 +517,15 @@ def transform_torch(points: torch.tensor, transformation: torch.tensor):
 
 
 def transform_batch_torch(points: torch.tensor, transformation: torch.tensor):
-    # points [N, 3]
-    # transformation [N, 4, 4]
-    # N,3,3 @ N,3,1 -> N,3,1 + N,3,1 -> N,3,1 -> N,3
+    """
+    Transform a batch of points by a batch of transformation matrices
+    Args:
+        points: N,3 torch tensor, the coordinates of all N (axbxc) query points in the scaled
+                kaolin coordinate system [-1,1]
+        transformation: N,4,4 torch tensor, the transformation matrices
+    Returns:
+        transformed_points: N,3 torch tensor, the transformed coordinates
+    """
 
     # Extract rotation and translation components
     rotation = transformation[:, :3, :3].to(points)
@@ -609,7 +637,9 @@ def split_chunks(
     aabb: o3d.geometry.AxisAlignedBoundingBox(),
     chunk_m: float = 100.0
 ):
-
+    """
+    Split a large point cloud into bounding box chunks
+    """
     if not pc.has_points():
         return None
 
@@ -680,7 +710,9 @@ def split_chunks(
 def deskewing(
     points: torch.tensor, ts: torch.tensor, pose: torch.tensor, ts_mid_pose=0.5
 ):
-
+    """
+    Deskew a batch of points at timestamp ts by a relative transformation matrix
+    """
     if ts is None:
         return points  # no deskewing
 
@@ -711,7 +743,9 @@ def deskewing(
 
 
 def tranmat_close_to_identity(mats: np.ndarray, rot_thre: float, tran_thre: float):
-
+    """
+    Check if a batch of transformation matrices is close to identity
+    """
     rot_diff = np.abs(mats[:3, :3] - np.identity(3))
 
     rot_close_to_identity = np.all(rot_diff < rot_thre)
@@ -781,7 +815,9 @@ def feature_pca_torch(data, principal_components = None,
     return data_pca, principal_components
 
 def plot_timing_detail(time_table: np.ndarray, saving_path: str, with_loop=False):
-
+    """
+    Plot the timing detail for processing per frame
+    """
     frame_count = time_table.shape[0]
     time_table_ms = time_table * 1e3
 

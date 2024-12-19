@@ -352,9 +352,7 @@ After building the container, configure the storage path in `start_docker.sh` an
 ```
 sudo chmod +x ./start_docker.sh
 ./start_docker.sh
-
 ```
-
 
 ## Visualizer Instructions
 

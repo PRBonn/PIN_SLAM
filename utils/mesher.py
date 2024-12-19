@@ -213,7 +213,9 @@ class Mesher:
         return coord, voxel_num_xyz, voxel_origin
 
     def get_query_from_hor_slice(self, bbx, slice_z, voxel_size):
-        """get grid query points inside a given bounding box (bbx) at slice height (slice_z)"""
+        """
+        get grid query points inside a given bounding box (bbx) at slice height (slice_z)
+        """
         # bbx and voxel_size are all in the world coordinate system
         min_bound = bbx.get_min_bound()
         max_bound = bbx.get_max_bound()
@@ -246,7 +248,9 @@ class Mesher:
         return coord, voxel_num_xyz, voxel_origin
 
     def get_query_from_ver_slice(self, bbx, slice_x, voxel_size):
-        """get grid query points inside a given bounding box (bbx) at slice position (slice_x)"""
+        """
+        get grid query points inside a given bounding box (bbx) at slice position (slice_x)
+        """
         # bbx and voxel_size are all in the world coordinate system
         min_bound = bbx.get_min_bound()
         max_bound = bbx.get_max_bound()
@@ -279,6 +283,9 @@ class Mesher:
         return coord, voxel_num_xyz, voxel_origin
 
     def generate_sdf_map(self, coord, sdf_pred, mc_mask):
+        """
+        Generate the SDF map for saving
+        """
         device = o3d.core.Device("CPU:0")
         dtype = o3d.core.float32
         sdf_map_pc = o3d.t.geometry.PointCloud(device)
@@ -305,7 +312,9 @@ class Mesher:
     def generate_sdf_map_for_vis(
         self, coord, sdf_pred, mc_mask, min_sdf=-1.0, max_sdf=1.0, cmap="bwr"
     ):  # 'jet','bwr','viridis'
-
+        """
+        Generate the SDF map for visualization
+        """
         # do the masking or not
         if mc_mask is not None:
             coord = coord[mc_mask > 0]
@@ -392,6 +401,9 @@ class Mesher:
         return verts, faces
 
     def estimate_vertices_sem(self, mesh, verts, filter_free_space_vertices=True):
+        """
+        Predict the semantic label of the vertices
+        """
         if len(verts) == 0:
             return mesh
 
@@ -413,6 +425,9 @@ class Mesher:
         return mesh
 
     def estimate_vertices_color(self, mesh, verts):
+        """
+        Predict the color of the vertices
+        """
         if len(verts) == 0:
             return mesh
 
@@ -430,7 +445,9 @@ class Mesher:
         return mesh
 
     def filter_isolated_vertices(self, mesh, filter_cluster_min_tri=300):
-        # print("Cluster connected triangles")
+        """
+        Cluster connected triangles and remove the small clusters
+        """
         triangle_clusters, cluster_n_triangles, _ = mesh.cluster_connected_triangles()
         triangle_clusters = np.asarray(triangle_clusters)
         cluster_n_triangles = np.asarray(cluster_n_triangles)
@@ -445,6 +462,9 @@ class Mesher:
     def generate_bbx_sdf_hor_slice(
         self, bbx, slice_z, voxel_size, query_locally=False, min_sdf=-1.0, max_sdf=1.0
     ):
+        """
+        Generate the SDF slice at height (slice_z)
+        """
         # print("Generate the SDF slice at heright %.2f (m)" % (slice_z))
         coord, _, _ = self.get_query_from_hor_slice(bbx, slice_z, voxel_size)
         sdf_pred, _, _, mc_mask = self.query_points(
@@ -466,6 +486,9 @@ class Mesher:
     def generate_bbx_sdf_ver_slice(
         self, bbx, slice_x, voxel_size, query_locally=False, min_sdf=-1.0, max_sdf=1.0
     ):
+        """
+        Generate the SDF slice at x position (slice_x)
+        """
         # print("Generate the SDF slice at x position %.2f (m)" % (slice_x))
         coord, _, _ = self.get_query_from_ver_slice(bbx, slice_x, voxel_size)
         sdf_pred, _, _, mc_mask = self.query_points(
@@ -499,6 +522,9 @@ class Mesher:
         mesh_min_nn=10,
         use_torch_mc=False,
     ):
+        """
+        Reconstruct the mesh from a collection of bounding boxes
+        """
         if not self.silence:
             print("# Chunk for meshing: ", len(aabbs))
             
@@ -545,7 +571,9 @@ class Mesher:
         mesh_min_nn=10,
         use_torch_mc=False,
     ):
-
+        """
+        Reconstruct the mesh from a given bounding box
+        """
         # reconstruct and save the (semantic) mesh from the feature octree the decoders within a
         # given bounding box.  bbx and voxel_size all with unit m, in world coordinate system
         coord, voxel_num_xyz, voxel_origin = self.get_query_from_bbx(
