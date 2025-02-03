@@ -2,7 +2,6 @@ setting:
   name: "test_mulran"
   output_root: "./experiments"
   pc_path: "./data/MulRan/kaist01"
-  pose_path: "./data/MulRan/kaist01/poses.txt" 
   deskew: True
 process:
   min_range_m: 3.0
