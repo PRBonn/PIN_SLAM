@@ -239,6 +239,8 @@ class SLAMDataset(Dataset):
             if "imus" in dict_keys:
                 self.cur_frame_imus = frame_data["imus"]
                 # TO ADD
+        else: # no data found, for example None
+            return
          
         self.cur_point_cloud_torch = torch.tensor(points, device=self.device, dtype=self.dtype)
 
@@ -381,6 +383,14 @@ class SLAMDataset(Dataset):
             self.cur_pose_guess_torch = torch.tensor(
                 cur_pose_init_guess, dtype=torch.float64, device=self.device
             )   
+
+        if self.cur_point_cloud_torch is None:  # deal with missing data (invalid frame)
+            print("[bold red]Invalid frame, skip this frame[/bold red]")
+            if self.config.track_on:
+                self.odom_poses[frame_id] = cur_pose_init_guess
+            if self.config.pgo_on:
+                self.pgo_poses[frame_id] = cur_pose_init_guess
+            return False
 
         if self.config.adaptive_range_on:
             pc_max_bound, _ = torch.max(self.cur_point_cloud_torch[:, :3], dim=0)
@@ -808,35 +818,35 @@ class SLAMDataset(Dataset):
                 gt_position_list = [self.gt_poses[i] for i in range(self.processed_frame)]
                 odom_position_list = [self.odom_poses[i] for i in range(self.processed_frame)]
 
-                if self.config.pgo_on:
-                    pgo_position_list = [self.pgo_poses[i] for i in range(self.processed_frame)]
-                    plot_trajectories(
-                        output_traj_plot_path_2d,
-                        pgo_position_list,
-                        gt_position_list,
-                        odom_position_list,
-                        plot_3d=False,
-                    )
-                    plot_trajectories(
-                        output_traj_plot_path_3d,
-                        pgo_position_list,
-                        gt_position_list,
-                        odom_position_list,
-                        plot_3d=True,
-                    )
-                else:
-                    plot_trajectories(
-                        output_traj_plot_path_2d,
-                        odom_position_list,
-                        gt_position_list,
-                        plot_3d=False,
-                    )
-                    plot_trajectories(
-                        output_traj_plot_path_3d,
-                        odom_position_list,
-                        gt_position_list,
-                        plot_3d=True,
-                    )
+                # if self.config.pgo_on:
+                #     pgo_position_list = [self.pgo_poses[i] for i in range(self.processed_frame)]
+                #     plot_trajectories(
+                #         output_traj_plot_path_2d,
+                #         pgo_position_list,
+                #         gt_position_list,
+                #         odom_position_list,
+                #         plot_3d=False,
+                #     )
+                #     plot_trajectories(
+                #         output_traj_plot_path_3d,
+                #         pgo_position_list,
+                #         gt_position_list,
+                #         odom_position_list,
+                #         plot_3d=True,
+                #     )
+                # else:
+                #     plot_trajectories(
+                #         output_traj_plot_path_2d,
+                #         odom_position_list,
+                #         gt_position_list,
+                #         plot_3d=False,
+                #     )
+                #     plot_trajectories(
+                #         output_traj_plot_path_3d,
+                #         odom_position_list,
+                #         gt_position_list,
+                #         plot_3d=True,
+                #     )
 
         return pose_eval
 

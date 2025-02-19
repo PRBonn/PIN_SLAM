@@ -90,6 +90,8 @@ class HeLiPRDataset:
 
     def __getitem__(self, idx):
         data = self.get_data(idx)
+        if data is None:
+            return None
         points = self.read_point_cloud(data)
         timestamps = self.read_timestamps(data)
         frame_data = {"points": points, "point_ts": timestamps}
@@ -123,11 +125,15 @@ class HeLiPRDataset:
         with open(file_path, "rb") as f:
             binary = f.read()
             offset = 0
-            while offset < len(binary) - chunk_size: # chunk_size issue fixed
+            while offset < len(binary) - chunk_size: # chunk_size issue fixed # have problem when reading 16716th frame of Town03 Ouster 
                 list_lines.append(struct.unpack_from(f"={format_string}", binary, offset))
                 offset += chunk_size
-        data = np.stack(list_lines)
-        return data
+        if len(list_lines) > 0:
+            data = np.stack(list_lines)
+            return data
+        else:
+            print(f"Error: No data found for file {file_path}")
+            return None
 
     def read_timestamps(self, data: np.ndarray) -> np.ndarray:
         time = data[:, self.time_channel]
