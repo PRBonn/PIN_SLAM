@@ -44,6 +44,7 @@ class NeuralPointMapContextManager:
         self.ringkeys = [None] * self.ENOUGH_LARGE
         self.contexts_feature = [None] * self.ENOUGH_LARGE
         self.ringkeys_feature = [None] * self.ENOUGH_LARGE
+        self.valid_flags = [False] * self.ENOUGH_LARGE
 
         self.query_contexts = []
         self.tran_from_frame = []
@@ -55,7 +56,7 @@ class NeuralPointMapContextManager:
         self.virtual_sdf_thre = 0.0
 
     # fast implementation of scan context by torch
-    def add_node(self, frame_id, ptcloud, ptfeatures=None):
+    def add_node(self, frame_id, ptcloud, ptfeatures=None, valid_flag = True):
 
         # ptcloud as torch tensor
         sc, sc_feature = ptcloud2sc_torch(
@@ -68,6 +69,7 @@ class NeuralPointMapContextManager:
         self.curr_node_idx = frame_id
         self.contexts[frame_id] = sc
         self.ringkeys[frame_id] = rk
+        self.valid_flags[frame_id] = valid_flag
 
         if sc_feature is not None:
             rk_feature = sc2rk(sc_feature)
@@ -166,7 +168,13 @@ class NeuralPointMapContextManager:
         else:
             global_loop_candidate_idx = np.where(loop_candidate_mask)[0]
 
+        # check valid flags 
+        if global_loop_candidate_idx.shape[0] > 0:
+            valid_candidates_mask = np.array([self.valid_flags[idx] for idx in global_loop_candidate_idx], dtype=bool)
+            global_loop_candidate_idx = global_loop_candidate_idx[valid_candidates_mask]
+
         if global_loop_candidate_idx.shape[0] > 0:  # candidate exist
+
             context_pc = (
                 neural_points.local_neural_points.detach()
             )  # augment virtual poses
@@ -449,7 +457,7 @@ def detect_local_loop(
     min_dist = np.min(dist_to_past[loop_candidate_mask])
     min_index = np.where(dist_to_past == min_dist)[0]
     if (
-        min_dist < dist_thre and cur_drift < drift_thre and loop_reg_failed_count < 3
+        min_dist < dist_thre and cur_drift < drift_thre and loop_reg_failed_count < 3 
     ):  # local loop
         loop_id, loop_dist = min_index[0], min_dist  # a candidate found
         loop_transform = np.linalg.inv(pgo_poses[loop_id]) @ pgo_poses[-1]

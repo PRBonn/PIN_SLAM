@@ -59,7 +59,7 @@ def vis_pin_map():
     loaded_model = torch.load(config.model_path)
     neural_points = loaded_model["neural_points"]
     neural_points.temporal_local_map_on = False
-    neural_points.compute_feature_principle_components(down_rate = 17)
+    neural_points.compute_feature_principle_components(down_rate = 59)
 
     # print(loaded_model.keys())
     geo_mlp.load_state_dict(loaded_model["geo_decoder"])

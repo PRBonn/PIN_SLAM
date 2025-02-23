@@ -7,14 +7,13 @@ import argparse
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '0' # by default 0, change it here if you want to use other GPU 
 import sys
-
+import time
 import numpy as np
 import open3d as o3d
 import torch
+import torch.multiprocessing as mp
 import dtyper as typer
 import wandb
-from rich import print
-from tqdm import tqdm
 from typing import Optional, Tuple
 
 from dataset.dataset_indexing import set_dataset_path
@@ -32,6 +31,7 @@ from utils.mesher import Mesher
 from utils.pgo import PoseGraphManager
 from utils.tools import (
     freeze_decoders,
+    unfreeze_decoders,
     get_time,
     save_implicit_map,
     setup_experiment,
@@ -41,6 +41,7 @@ from utils.tools import (
 )
 from utils.tracker import Tracker
 from utils.visualizer import MapVisualizer
+
 
 '''
     📍PIN-SLAM: LiDAR SLAM Using a Point-Based Implicit Neural Representation for Achieving Global Map Consistency
@@ -227,7 +228,7 @@ def run_pin_slam(
                 dataset.lose_track = not valid_flag
                 dataset.update_odom_pose(cur_pose_torch) # update dataset.cur_pose_torch
                 
-                if not valid_flag and config.o3d_vis_on and o3d_vis.debug_mode > 0:
+                if dataset.lose_track and config.o3d_vis_on and o3d_vis.debug_mode > 0: # pause at the failure point
                     o3d_vis.stop()
                 
             else: # incremental mapping with gt pose
@@ -238,6 +239,7 @@ def run_pin_slam(
 
         travel_dist = dataset.travel_dist[:frame_id+1]
         neural_points.travel_dist = torch.tensor(travel_dist, device=config.device, dtype=config.dtype) # always update this
+        valid_mapping_flag = (not dataset.lose_track) and (not dataset.stop_status)
                                                                                                                                                             
         T3 = get_time()
 
@@ -251,9 +253,9 @@ def run_pin_slam(
                         neural_points.reset_local_map(local_map_pose[:3,3], None, local_map_frame_id, config.loop_local_map_by_travel_dist, config.loop_local_map_time_window)
                     context_pc_local = transform_torch(neural_points.local_neural_points.detach(), torch.linalg.inv(local_map_pose)) # transformed back into the local frame
                     neural_points_feature = neural_points.local_geo_features[:-1].detach() if config.loop_with_feature else None
-                    lcd_npmc.add_node(local_map_frame_id, context_pc_local, neural_points_feature)
+                    lcd_npmc.add_node(local_map_frame_id, context_pc_local, neural_points_feature, valid_flag=valid_mapping_flag)
                 else: # first frame not yet have local map, use scan context
-                    lcd_npmc.add_node(frame_id, dataset.cur_point_cloud_torch)
+                    lcd_npmc.add_node(frame_id, dataset.cur_point_cloud_torch, valid_flag=valid_mapping_flag)
             pgm.add_frame_node(frame_id, dataset.pgo_poses[frame_id]) # add new node and pose initial guess
             pgm.init_poses = dataset.pgo_poses[:frame_id+1]
             if frame_id > 0:
@@ -272,8 +274,10 @@ def run_pin_slam(
                     if loop_id is None and config.global_loop_on: # global loop detection (large drift)
                         loop_id, loop_cos_dist, loop_transform, local_map_context_loop = lcd_npmc.detect_global_loop(dataset.pgo_poses[:frame_id+1], pgm.drift_radius*config.loop_dist_drift_ratio_thre, loop_candidate_mask, neural_points) # latency has been considered here     
                 if loop_id is not None:
-                    if config.loop_z_check_on and abs(loop_transform[2,3]) > config.voxel_size_m*4.0: # for multi-floor buildings, z may cause ambiguilties
+                    if config.loop_z_check_on and abs(loop_transform[2,3]) > config.voxel_size_m*4.0 : # for multi-floor buildings, z may cause ambiguilties
                         loop_id = None # delta z check failed
+                    if not lcd_npmc.valid_flags[loop_id]:
+                        loop_id = None # loop node is invalid
                 if loop_id is not None: # if a loop is found, we refine loop closure transform initial guess with a scan-to-map registration                    
                     pose_init_torch = torch.tensor((dataset.pgo_poses[loop_id] @ loop_transform), device=config.device, dtype=torch.float64) # T_w<-c = T_w<-l @ T_l<-c 
                     neural_points.recreate_hash(pose_init_torch[:3,3], None, True, True, loop_id) # recreate hash and local map at the loop candidate frame for registration, this is the reason why we'd better to keep the duplicated neural points until the end
@@ -322,26 +326,38 @@ def run_pin_slam(
 
         T4 = get_time()
         
+        # check failure and reboot the system
+        system_rebooted = False
+        if dataset.consecutive_lose_track_frame >= config.reboot_frame_thre:
+            # reboot the system
+            if not config.silence:
+                print("[bold red]Lose track for a long time, reboot the system[/bold red]")
+            mapper.init_pool()
+            neural_points.reboot_ts = frame_id
+            system_rebooted = True
+            dataset.consecutive_lose_track_frame = 0
+            unfreeze_decoders(geo_mlp, sem_mlp, color_mlp, config)
+            
         # IV: Mapping and bundle adjustment
-        # if lose track, we will not update the map and data pool (don't let the wrong pose to corrupt the map)
-        # if the robot stop, also don't process this frame, since there's no new oberservations
-        if mapping_on and (frame_id < 5 or (not dataset.lose_track and not dataset.stop_status)):
+        # if lose track, we will not update the map and data pool (don't let the wrong pose corrupt the map)
+        # if the robot stop, also don't process this frame, since there's no new oberservations        
+        if mapping_on and (frame_id < 5 or valid_mapping_flag or system_rebooted):
             mapper.process_frame(dataset.cur_point_cloud_torch, dataset.cur_sem_labels_torch,
-                                dataset.cur_pose_torch, frame_id, (config.dynamic_filter_on and frame_id > 0))
+                                 dataset.cur_pose_torch, frame_id, (config.dynamic_filter_on and frame_id > 0))
         else:
             mapper.determine_used_pose()
-            neural_points.reset_local_map(dataset.cur_pose_torch[:3,3], None, frame_id) # not efficient for large map
+            neural_points.reset_local_map(dataset.cur_pose_torch[:3,3], None, frame_id, reboot_map=True) # not efficient for large map
                                     
         T5 = get_time()
 
         if mapping_on:
             # for the first frame, we need more iterations to do the initialization (warm-up)
-            cur_iter_num = config.iters * config.init_iter_ratio if frame_id == 0 else config.iters
+            cur_iter_num = config.iters * config.init_iter_ratio if (frame_id == 0 or system_rebooted) else config.iters
             if dataset.stop_status:
                 cur_iter_num = max(1, cur_iter_num-10)
-            if frame_id == config.freeze_after_frame: # freeze the decoder after certain frame 
+            if (frame_id-neural_points.reboot_ts) == config.freeze_after_frame: # freeze the decoder after certain frame 
                 freeze_decoders(geo_mlp, sem_mlp, color_mlp, config)
-                neural_points.compute_feature_principle_components(down_rate = 17) # prime number
+                neural_points.compute_feature_principle_components(down_rate = 17) # prime number # only for visualization
 
             # conduct local bundle adjustment (with lower frequency)
             if config.track_on and config.ba_freq_frame > 0 and (frame_id+1) % config.ba_freq_frame == 0:

@@ -67,6 +67,8 @@ class NeuralPoints(nn.Module):
             self.config.diff_ts_local
         )  # not used now, switch to travel distance
 
+        self.reboot_ts = 0
+
         self.local_orientation = torch.eye(3, device=self.device)
 
         self.cur_ts = 0  # current frame No. or the current timestamp
@@ -166,10 +168,10 @@ class NeuralPoints(nn.Module):
 
 
     def compute_feature_principle_components(self, down_rate: int = 1):
-        _, self.geo_feature_pca = feature_pca_torch((self.geo_features)[:-1], down_rate=down_rate, project_data=False)
+        _, self.geo_feature_pca = feature_pca_torch((self.local_geo_features.detach())[:-1], down_rate=down_rate, project_data=False)
 
         if self.color_features is not None:
-            _, self.color_feature_pca = feature_pca_torch((self.color_features)[:-1], down_rate=down_rate, project_data=False)
+            _, self.color_feature_pca = feature_pca_torch((self.local_color_features.detach())[:-1], down_rate=down_rate, project_data=False)
 
 
     def get_neural_points_o3d(
@@ -331,7 +333,7 @@ class NeuralPoints(nn.Module):
         hash_idx = self.buffer_pt_index[hash]
 
         # not occupied before or is occupied but already far away (then it would be a hash collision)
-        if not self.is_empty():
+        if (not self.is_empty()) and (cur_ts != self.reboot_ts):
             vec_points = self.neural_points[hash_idx] - sample_points
             dist2 = torch.sum(vec_points**2, dim=-1)
 
@@ -409,7 +411,7 @@ class NeuralPoints(nn.Module):
         self.point_certainties = torch.cat((self.point_certainties, new_certainty), 0)
 
         self.reset_local_map(
-            sensor_position, sensor_orientation, cur_ts
+            sensor_position, sensor_orientation, cur_ts, reboot_map=True
         )  # no need to recreate hash
 
         return new_point_ratio
@@ -421,6 +423,7 @@ class NeuralPoints(nn.Module):
         cur_ts: int,
         use_travel_dist: bool = True,
         diff_ts_local: int = 50,
+        reboot_map: bool = False,
     ):
         """
         reset the local map using the new sensor position and orientation
@@ -430,6 +433,7 @@ class NeuralPoints(nn.Module):
             cur_ts: the timestamp of the current frame, int
             use_travel_dist: whether to use the travel distance to filter the neural points, bool
             diff_ts_local: the time difference to filter the neural points, int
+            reboot_map: whether to reboot the map, bool, if true, we will set the local map with only the neural points with timestamps after the roboot points
         """
     # TODO: not very efficient, optimize the code
 
@@ -452,6 +456,9 @@ class NeuralPoints(nn.Module):
             else:  # use delta_t
                 delta_t = torch.abs(cur_ts - point_ts_used)
                 time_mask = (delta_t < diff_ts_local) 
+
+            if reboot_map:
+                time_mask = time_mask & (point_ts_used >= self.reboot_ts)
 
             if torch.sum(time_mask) < 100: # not enough neural points in the temporal window, we set all true to avoid error
                 time_mask = torch.ones(self.count(), dtype=torch.bool, device=self.device) # all true

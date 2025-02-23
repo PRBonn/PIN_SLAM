@@ -78,6 +78,9 @@ class Mapper:
         self.adaptive_iter_offset = 0
 
         # data pool
+        self.init_pool()
+
+    def init_pool(self):
         self.coord_pool = torch.empty(
             (0, 3), device=self.device, dtype=self.dtype
         )  # coordinate in each frame's coordinate frame
@@ -156,6 +159,7 @@ class Mapper:
                 device=self.device, 
                 dtype=torch.float64
             )
+    
 
     def process_frame(
         self,
@@ -254,6 +258,7 @@ class Mapper:
                 self.neural_points.recreate_hash(None, None, True, True, frame_id)
         
         # update map and judge how much new observations are gained
+        # the local map is also reset here
         self.cur_new_point_ratio = self.neural_points.update(
             update_points, frame_origin_torch, frame_orientation_torch, frame_id
         )

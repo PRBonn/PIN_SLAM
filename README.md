@@ -117,7 +117,7 @@ PIN-SLAM can run at the sensor frame rate on a moderate GPU.
 
 * With GPU (recommended) or CPU only (run much slower)
 
-* GPU memory requirement (> 6 GB recommended)
+* GPU memory requirement (> 4 GB recommended)
 
 * Windows/MacOS with CPU-only mode
 

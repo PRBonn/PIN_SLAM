@@ -50,7 +50,7 @@ class MulranDataset:
         points = np.fromfile(file_path, dtype=np.float32).reshape((-1, 4))[:, :3]
         timestamps = self.get_timestamps()
         if points.shape[0] != timestamps.shape[0]:
-            # MuRan has some broken point clouds, just fallback to no timestamps
+            # MulRan has some broken point clouds, just fallback to no timestamps
             return points.astype(np.float64), np.ones(points.shape[0])
         return points.astype(np.float64), timestamps
 
@@ -61,7 +61,7 @@ class MulranDataset:
         return (np.floor(np.arange(H * W) / H) / W).reshape(-1, 1)
 
     def load_gt_poses(self, poses_file: str):
-        """MuRan has more poses than scans, therefore we need to match 1-1 timestamp with pose"""
+        """MulRan has more poses than scans, therefore we need to match 1-1 timestamp with pose"""
 
         def read_csv(poses_file: str):
             poses = np.loadtxt(poses_file, delimiter=",")

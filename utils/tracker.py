@@ -99,7 +99,7 @@ class Tracker:
             min_valid_ratio = 0.15
 
         max_increment_sdf_residual_ratio = 1.1
-        eigenvalue_ratio_thre = 0.005
+        eigenvalue_ratio_thre = self.config.eigenvalue_ratio_thre # 0.005
         min_valid_points = 30
         converged = False
         valid_flag = True

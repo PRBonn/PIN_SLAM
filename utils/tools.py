@@ -55,6 +55,9 @@ def setup_experiment(config: Config, argv=None, debug_mode: bool = False):
     else:
         torch.cuda.empty_cache()
 
+    # set X service (FIXME)
+    os.environ["DISPLAY"] = ":0"
+
     # set the random seed for all
     seed_anything(config.seed)
 
@@ -264,6 +267,14 @@ def freeze_decoders(geo_decoder, sem_decoder, color_decoder, config):
     if config.color_on:
         freeze_model(color_decoder)  # fixed the color decoder
 
+def unfreeze_decoders(geo_decoder, sem_decoder, color_decoder, config):
+    if not config.silence:
+        print("Unfreeze the decoder")
+    unfreeze_model(geo_decoder)  # fixed the geo decoder
+    if config.semantic_on:
+        unfreeze_model(sem_decoder)  # fixed the sem decoder
+    if config.color_on:
+        unfreeze_model(color_decoder)  # fixed the color decoder
 
 def save_checkpoint(
     neural_points,
@@ -804,8 +815,9 @@ def feature_pca_torch(data, principal_components = None,
             # max_vals = data_pca.max(dim=0, keepdim=True).values
 
             # # deal with outliers
-            min_vals = torch.quantile(data_pca, 0.02, dim=0, keepdim=True)
-            max_vals = torch.quantile(data_pca, 0.98, dim=0, keepdim=True)
+            quantile_down_rate = 31 # quantile has count limit, downsample the data to avoid the limit
+            min_vals = torch.quantile(data_pca[::quantile_down_rate], 0.02, dim=0, keepdim=True)
+            max_vals = torch.quantile(data_pca[::quantile_down_rate], 0.98, dim=0, keepdim=True)
 
             # Normalize to range [0, 1]
             data_pca = (data_pca - min_vals) / (max_vals - min_vals)

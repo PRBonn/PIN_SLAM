@@ -77,6 +77,9 @@ class Config:
         self.color_map_on: bool = True # colorized mapping default on (if False, then we only visualize the colorized point cloud but do not use them for mapping or localization)
         self.color_on: bool = False
         self.color_channel: int = 0 # For RGB, channel=3, For Lidar with intensity, channel=1
+        
+        # robust processing
+        self.reboot_frame_thre: int = 5 # if lose track for more than this frame, we consider the system failed and reboot the system
 
         # map-based dynamic filtering (observations in certain freespace are dynamic)
         self.dynamic_filter_on: bool = False
@@ -144,7 +147,7 @@ class Config:
         # or the feature dim of the neural point latent feature,
         # or the iteration number for mapping
         # or decrease the voxel size (resolution) for neural points
-        self.freeze_after_frame: int = 40  # if the decoder model is not loaded, it would be trained and freezed after such frame number
+        self.freeze_after_frame: int = 40  # if the decoder model is not loaded, it would be trained and freezed after such frame number # TODO: change to based on moving frames
 
         # positional encoding related [not used]
         self.use_gaussian_pe: bool = False # use Gaussian Fourier or original log positional encoding
@@ -224,6 +227,7 @@ class Config:
         self.reg_term_thre_deg: float = 0.01 # iteration termination criteria for rotation 
         self.reg_term_thre_m: float = 0.001  # iteration termination criteria for translation
         self.eigenvalue_check: bool = True # use eigen value of Hessian matrix for degenaracy check
+        self.eigenvalue_ratio_thre: float = 0.05 # threshold for eigenvalue ratio
         self.final_residual_ratio_thre: float = 0.6
 
         # loop closure detection
@@ -263,7 +267,7 @@ class Config:
         self.silence: bool = True # print log in the terminal or not
         self.o3d_vis_on: bool = False # visualize the mesh in-the-fly using o3d visualzier or not [press space to pasue/resume]
         self.o3d_vis_raw: bool = False # visualize the raw point cloud or the weight source point cloud
-        self.log_freq_frame: int = 0 # save the result log per x frames
+        self.log_freq_frame: int = 2000 # save the result log per x frames
         self.mesh_freq_frame: int = 20  # do the reconstruction per x frames
         self.sdfslice_freq_frame: int = 1 # visualize the SDF slice per x frames
         self.vis_sdf_slice_v: bool = False # also visualize the vertical SDF slice or not (default only horizontal slice)
@@ -456,6 +460,7 @@ class Config:
             self.reg_term_thre_deg = float(config_args["tracker"].get("term_deg", self.reg_term_thre_deg))
             self.reg_term_thre_m = float(config_args["tracker"].get("term_m", self.reg_term_thre_m))
             self.eigenvalue_check = config_args["tracker"].get("eigenvalue_check", self.eigenvalue_check)
+            self.eigenvalue_ratio_thre = config_args["tracker"].get("eigenvalue_ratio_thre", self.eigenvalue_ratio_thre)
             self.final_residual_ratio_thre = float(config_args["tracker"].get("final_residual_ratio_thre", self.final_residual_ratio_thre))
 
         # pgo
@@ -515,7 +520,7 @@ class Config:
             self.sensor_cad_path = config_args["eval"].get('sensor_cad_path', None)
             
             # frequency for pose log (per x frame)
-            self.log_freq_frame = config_args["eval"].get('log_freq_frame', 0)
+            self.log_freq_frame = config_args["eval"].get('log_freq_frame', self.log_freq_frame)
             # frequency for mesh reconstruction (per x frame)
             self.mesh_freq_frame = config_args["eval"].get('mesh_freq_frame', self.mesh_freq_frame)
             # keep the previous reconstructed mesh in the visualizer or not
