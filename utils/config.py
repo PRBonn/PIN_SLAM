@@ -147,6 +147,7 @@ class Config:
         # or the feature dim of the neural point latent feature,
         # or the iteration number for mapping
         # or decrease the voxel size (resolution) for neural points
+        self.decoder_freezed: bool = False
         self.freeze_after_frame: int = 40  # if the decoder model is not loaded, it would be trained and freezed after such frame number # TODO: change to based on moving frames
 
         # positional encoding related [not used]
@@ -227,7 +228,7 @@ class Config:
         self.reg_term_thre_deg: float = 0.01 # iteration termination criteria for rotation 
         self.reg_term_thre_m: float = 0.001  # iteration termination criteria for translation
         self.eigenvalue_check: bool = True # use eigen value of Hessian matrix for degenaracy check
-        self.eigenvalue_ratio_thre: float = 0.05 # threshold for eigenvalue ratio
+        self.eigenvalue_ratio_thre: float = 0.005 # threshold for eigenvalue ratio
         self.final_residual_ratio_thre: float = 0.6
 
         # loop closure detection
@@ -289,6 +290,9 @@ class Config:
         self.vis_frame_axis_len: float = 0.8 # sensor frame axis length, for visualization, unit: m
         self.vis_point_size: int = 2 # point size for visualization in o3d
         self.sensor_cad_path = None # the path to the sensor cad file, "./cad/ipb_car.ply" for visualization
+        
+        # gui 
+        self.visualizer_split_width_ratio: float = 0.7 # the width ratio of the visualizer split window
 
         # result saving settings
         self.save_map: bool = False # save the neural point map model and decoders or not
