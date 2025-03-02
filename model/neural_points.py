@@ -97,11 +97,13 @@ class NeuralPoints(nn.Module):
             (1, self.geo_feature_dim), dtype=self.dtype, device=self.device
         )
         if self.config.color_on:
+            self.color_on = True
             self.color_features = torch.empty(
                 (1, self.color_feature_dim), dtype=self.dtype, device=self.device
             )
         else:
             self.color_features = None
+            self.color_on = False
         
         # feature pca
         self.geo_feature_pca = self.color_feature_pca = None
@@ -138,6 +140,7 @@ class NeuralPoints(nn.Module):
             num_nei_cells=config.num_nei_cells, search_alpha=config.search_alpha
         )
 
+        self.cur_memory_mb = 0.0
         self.memory_footprint = []
 
         self.to(self.device)
@@ -149,23 +152,25 @@ class NeuralPoints(nn.Module):
         return self.neural_points.shape[0]
 
     def local_count(self):
-        return self.local_neural_points.shape[0]
+        if self.local_neural_points is not None:
+            return self.local_neural_points.shape[0]
+        else:
+            return 0
 
-    def print_memory(self):
-        if not self.silence:
+    def record_memory(self, verbose: bool = True, record_footprint: bool = True):
+        if verbose:
             print("# Global neural point: %d" % (self.count()))
             print("# Local  neural point: %d" % (self.local_count()))
         neural_point_count = self.count()
-        point_dim = (
-            self.config.feature_dim + 3 + 4
-        )  # feature plus neural point position and orientation
+        # feature plus neural point position and orientation
+        point_dim = self.geo_feature_dim + 3 + 4    
         if self.color_features is not None:
-            point_dim += self.config.feature_dim  # also include the color feature
-        cur_memory = neural_point_count * point_dim * 4 / 1024 / 1024  # as float32
-        if not self.silence:
-            print("Memory consumption: %f (MB)" % cur_memory)
-        self.memory_footprint.append(cur_memory)
-
+            point_dim += self.color_feature_dim  # also include the color feature
+        self.cur_memory_mb = neural_point_count * point_dim * 4 / 1024 / 1024  # as float32 # TODO: add memory consumption of gausssian parameters
+        if verbose:
+            print("Current map memory consumption: {:.3f} MB".format(self.cur_memory_mb))
+        if record_footprint:
+            self.memory_footprint.append(self.cur_memory_mb)
 
     def compute_feature_principle_components(self, down_rate: int = 1):
         _, self.geo_feature_pca = feature_pca_torch((self.local_geo_features.detach())[:-1], down_rate=down_rate, project_data=False)
@@ -900,7 +905,7 @@ class NeuralPoints(nn.Module):
             self.reset_local_map(sensor_position, sensor_orientation, cur_ts)
 
         if not kept_points:  # merged
-            self.print_memory()  # show the updated memory after merging
+            self.record_memory(verbose=(not self.silence)) # show the updated memory after merging
 
     def set_search_neighborhood(
         self, num_nei_cells: int = 1, search_alpha: float = 1.0

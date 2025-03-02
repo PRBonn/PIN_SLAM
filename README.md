@@ -67,9 +67,6 @@
       <a href="#docker">Docker</a>
     </li>
     <li>
-      <a href="#visualizer-instructions">Visualizer instructions</a>
-    </li>
-    <li>
       <a href="#citation">Citation</a>
     </li>
     <li>
@@ -125,14 +122,14 @@ PIN-SLAM can run at the sensor frame rate on a moderate GPU.
 ### 1. Set up conda environment
 
 ```
-conda create --name pin python=3.8
+conda create --name pin python=3.10
 conda activate pin
 ```
 
 ### 2. Install the key requirement PyTorch
 
 ```
-conda install pytorch==2.0.0 torchvision==0.15.0 torchaudio==2.0.0 pytorch-cuda=11.7 -c pytorch -c nvidia 
+conda install pytorch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1  pytorch-cuda=11.8 -c pytorch -c nvidia
 ```
 
 The commands depend on your CUDA version (check it by `nvcc --version`). You may check the instructions [here](https://pytorch.org/get-started/previous-versions/).
@@ -171,7 +168,7 @@ python3 pin_slam.py ./config/lidar_slam/run_demo.yaml -vsm
 <details>
   <summary>[Details (click to expand)]</summary>
   
-You can visualize the SLAM process in PIN-SLAM visualizer and check the results in the `./experiments` folder.
+You can visualize the SLAM process in PIN-SLAM viewer GUI and check the results in the `./experiments` folder.
 
 Use `run_demo_sem.yaml` if you want to conduct metric-semantic SLAM using semantic segmentation labels:
 ```
@@ -203,7 +200,7 @@ Follow the instructions on how to run PIN-SLAM by typing:
 python3 pin_slam.py -h
 ```
 
-For an arbitrary data sequence, you can run with the default config file by:
+For an arbitrary data sequence with point clouds in the format of `*.ply`, `*.pcd`, `*.las` or `*.bin`, you can run with the default config file by:
 ```
 python3 pin_slam.py -i /path/to/your/point/cloud/folder -vsm
 ```
@@ -216,7 +213,7 @@ To run PIN-SLAM with a specific config file, you can run:
 python3 pin_slam.py path_to_your_config_file.yaml -vsm
 ```
 
-The flags `-v`, `-s`, `-m` toggle the visualizer, map saving and mesh saving, respectively.
+The flags `-v`, `-s`, `-m` toggle the viewer GUI, map saving and mesh saving, respectively.
 
 To specify the path to the input point cloud folder, you can either set `pc_path` in the config file or set `-i INPUT_PATH` upon running.
 
@@ -236,6 +233,8 @@ python3 pin_slam.py ./config/lidar_slam/run_ncd.yaml ncd 01 -vsm
 # Replica dataset sequence room0
 python3 pin_slam.py ./config/rgbd_slam/run_replica.yaml replica room0 -vsm
 ```
+
+**Use specific data loaders with the -d flag**
 
 We also support loading data from rosbag, mcap or pcap (ros2) using specific data loaders (originally from [KISS-ICP](https://github.com/PRBonn/kiss-icp)). You need to set the flag `-d` to use such data loaders. For example:
 ```
@@ -265,11 +264,26 @@ For example, you can run on [KITTI-MOT dataset](https://www.cvlibs.net/datasets/
 python pin_slam.py ./config/lidar_slam/run_kitti_mos.yaml kitti_mot 00 -i data/kitti_mot -vsmd --deskew
 ```
 
+Other examples:
+```
+# MulRan sequence DCC01
+python3 pin_slam.py ./config/lidar_slam/run_mulran.yaml mulran -i data/MulRan/dcc/DCC01 -vsmd
+
+# KITTI 360 sequence 00
+python3 pin_slam.py ./config/lidar_slam/run_kitti_color.yaml kitti360 00 -i data/kitti360 -vsmd --deskew
+
+# M2DGR sequence street_01
+python3 pin_slam.py ./config/lidar_slam/run.yaml rosbag -i data/m2dgr/street_01.bag -vsmd
+
+# Newer College 128 sequence stairs
+python3 pin_slam.py ./config/lidar_slam/run_ncd_128_s.yaml rosbag -i data/ncd128/staris/ -vsmd
+```
+
 The SLAM results and logs will be output in the `output_root` folder set in the config file or specified by the `-o OUTPUT_PATH` flag. 
 
 For evaluation, you may check [here](https://github.com/PRBonn/PIN_SLAM/blob/main/eval/README.md) for the results that can be obtained with this repository on a couple of popular datasets. 
 
-The training logs can be monitored via Weights & Bias online if you set the flag `-w`. If it's your first time using [Weights & Bias](https://wandb.ai/site), you will be requested to register and log in to your wandb account. You can also set the flag `-l` to turn on the log printing in the terminal and set the flag `-r` to turn on the visualization logging by [rerun](https://github.com/rerun-io/rerun). If you want to get the dense merged point cloud map using the estimated poses of PIN-SLAM, you can set the flag `-p`.
+The training logs can be monitored via Weights & Bias online if you set the flag `-w`. If it's your first time using [Weights & Bias](https://wandb.ai/site), you will be requested to register and log in to your wandb account. You can also set the flag `-l` to turn on the log printing in the terminal. If you want to get the dense merged point cloud map using the estimated poses of PIN-SLAM, you can set the flag `-p`.
 
 </details>
 
@@ -321,19 +335,20 @@ We will add support for ROS2 in the near future.
 After the SLAM process, you can reconstruct mesh from the PIN map within an arbitrary bounding box with an arbitrary resolution by running:
 
 ```
-python3 vis_pin_map.py path/to/your/result/folder [marching_cubes_resolution_m] [(cropped)_map_file.ply] [output_mesh_file.ply] [mesh_min_nn]
+python3 vis_pin_map.py path/to/your/result/folder -m [marching_cubes_resolution_m] -c [(cropped)_map_file.ply] -o [output_mesh_file.ply] -n [mesh_min_nn]
 ```
 
 <details>
   <summary>[Details (click to expand)]</summary>
 
-The bounding box of `(cropped)_map_file.ply` will be used as the bounding box for mesh reconstruction. This file should be stored in the `map` subfolder of the result folder. You may directly use the original `neural_points.ply` or crop the neural points in software such as CloudCompare. The argument `mesh_min_nn` controls the trade-off between completeness and accuracy. The smaller number (for example `6`) will lead to a more complete mesh with more guessed artifacts. The larger number (for example `15`) will lead to a less complete but more accurate mesh. The reconstructed mesh would be saved as `output_mesh_file.ply` in the `mesh` subfolder of the result folder.
+Use `python3 vis_pin_map.py -h` to check the help message. The bounding box of `(cropped)_map_file.ply` will be used as the bounding box for mesh reconstruction. This file should be stored in the `map` subfolder of the result folder. You may directly use the original `neural_points.ply` or crop the neural points in software such as CloudCompare. The argument `mesh_min_nn` controls the trade-off between completeness and accuracy. The smaller number (for example `6`) will lead to a more complete mesh with more guessed artifacts. The larger number (for example `15`) will lead to a less complete but more accurate mesh. The reconstructed mesh would be saved as `output_mesh_file.ply` in the `mesh` subfolder of the result folder.
 
 For example, for the case of the sanity test described above, run:
 
 ```
-python3 vis_pin_map.py ./experiments/sanity_test_*  0.2 neural_points.ply mesh_20cm.ply 8
+python3 vis_pin_map.py ./experiments/sanity_test_*  -m 0.2 -c neural_points.ply -o mesh_20cm.ply -n 8
 ```
+
 </details>
 
 ## Docker
@@ -353,44 +368,6 @@ After building the container, configure the storage path in `start_docker.sh` an
 sudo chmod +x ./start_docker.sh
 ./start_docker.sh
 ```
-
-## Visualizer Instructions
-
-We provide a PIN-SLAM visualizer based on [lidar-visualizer](https://github.com/PRBonn/lidar-visualizer) to monitor the SLAM process. You can use `-v` flag to turn on it.
-
-<details>
-  <summary>[Keyboard callbacks (click to expand)]</summary>
-
-| Button |                                          Function                                          |
-|:------:|:------------------------------------------------------------------------------------------:|
-|  Space |                                        pause/resume                                        |
-| ESC/Q  |                           exit                                                             |
-|   G    |                     switch between the global/local map visualization                      |
-|   E    |                     switch between the ego/map viewpoint                                   |
-|   F    |                     toggle on/off the current point cloud  visualization                   |
-|   M    |                         toggle on/off the mesh visualization                               |
-|   A    |                 toggle on/off the current frame axis & sensor model visualization          |
-|   P    |                 toggle on/off the neural points map visualization                          |
-|   D    |               toggle on/off the training data pool visualization                           |
-|   I    |               toggle on/off the SDF horizontal slice visualization                         |
-|   T    |              toggle on/off PIN SLAM trajectory visualization                               |
-|   Y    |              toggle on/off the ground truth trajectory visualization                       |
-|   U    |              toggle on/off PIN odometry trajectory visualization                           |
-|   R    |                           re-center the view point                                         |
-|   Z    |              3D screenshot, save the currently visualized entities in the log folder       |
-|   B    |                  toggle on/off back face rendering                                         |
-|   W    |                  toggle on/off mesh wireframe                                              |
-| Ctrl+9 |                                Set mesh color as normal direction                          |
-|   5    |   switch between point cloud for mapping and for registration (with point-wise weight)     |
-|   7    |                                      switch between black and white background             |
-|   /    |   switch among different neural point color mode, 0: geometric feature, 1: color feature, 2: timestamp, 3: stability, 4: random             |
-|  <     |  decrease mesh nearest neighbor threshold (more complete and more artifacts)               |
-|  >     |  increase mesh nearest neighbor threshold (less complete but more accurate)                |
-|  \[/\] |  decrease/increase mesh marching cubes voxel size                                          |
-|  ↑/↓   |  move up/down the horizontal SDF slice                                                     |
-|  +/-   |                  increase/decrease point size                                              |
-
-</details>
 
 ## Citation
 
@@ -424,3 +401,6 @@ If you have any questions, please contact:
 [KISS-ICP (RAL 23)](https://github.com/PRBonn/kiss-icp): A LiDAR odometry pipeline that just works
 
 [4DNDF (CVPR 24)](https://github.com/PRBonn/4dNDF): 3D LiDAR Mapping in Dynamic Environments using a 4D Implicit Neural Representation
+
+[PINGS](https://github.com/PRBonn/PINGS): Gaussian Splatting Meets Distance Fields within a Point-Based Implicit Neural Map
+

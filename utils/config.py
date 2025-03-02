@@ -16,6 +16,7 @@ class Config:
 
         # settings
         self.name: str = "dummy"  # experiment name
+        self.run_name: str = self.name # this would also include an unique timestamp
 
         self.run_path: str = ""
         self.output_root: str = "experiments"  # output root folder
@@ -264,15 +265,17 @@ class Config:
 
         # eval
         self.wandb_vis_on: bool = False # monitor the training on weight and bias or not
-        self.rerun_vis_on: bool = False # visualize the process using rerun visualizer or not
         self.silence: bool = True # print log in the terminal or not
         self.o3d_vis_on: bool = False # visualize the mesh in-the-fly using o3d visualzier or not [press space to pasue/resume]
         self.o3d_vis_raw: bool = False # visualize the raw point cloud or the weight source point cloud
         self.log_freq_frame: int = 2000 # save the result log per x frames
+        self.mesh_default_on: bool = False
         self.mesh_freq_frame: int = 20  # do the reconstruction per x frames
+        self.sdf_default_on: bool = False # visualize the SDF slice or not
         self.sdfslice_freq_frame: int = 1 # visualize the SDF slice per x frames
         self.vis_sdf_slice_v: bool = False # also visualize the vertical SDF slice or not (default only horizontal slice)
         self.sdf_slice_height: float = -1.0 # initial height of the horizontal SDF slice (m) in sensor frame
+        self.vis_sdf_res_m: float = 0.2 # resolution for the SDF slice for visualization (m)
         self.eval_traj_align: bool = True # do the SE3 alignment of the trajectory when evaluating the absolute error
         
         # mesh reconstruction, marching cubes related
@@ -285,7 +288,9 @@ class Config:
         self.keep_local_mesh: bool = False # keep the local mesh in the visualizer or not (don't delete them could cause a too large memory consumption)
         self.infer_bs: int = 4096 # batch size for inference
 
-        # o3d visualization
+        # visualization
+        self.local_map_default_on: bool = True
+        self.neural_point_map_default_on: bool = True
         self.mesh_vis_normal: bool = False # normal colorization
         self.vis_frame_axis_len: float = 0.8 # sensor frame axis length, for visualization, unit: m
         self.vis_point_size: int = 2 # point size for visualization in o3d
@@ -522,6 +527,8 @@ class Config:
             self.o3d_vis_on = config_args["eval"].get("o3d_vis_on", self.o3d_vis_on)
             # path to the sensor cad file
             self.sensor_cad_path = config_args["eval"].get('sensor_cad_path', None)
+
+            self.local_map_default_on = config_args["eval"].get('local_map_default_on', self.local_map_default_on)
             
             # frequency for pose log (per x frame)
             self.log_freq_frame = config_args["eval"].get('log_freq_frame', self.log_freq_frame)
@@ -530,10 +537,12 @@ class Config:
             # keep the previous reconstructed mesh in the visualizer or not
             self.keep_local_mesh = config_args["eval"].get('keep_local_mesh', self.keep_local_mesh)
             # frequency for sdf slice visualization (per x frame)
-            self.sdfslice_freq_frame = config_args["eval"].get('sdf_freq_frame', 1)
+            self.sdf_default_on = config_args["eval"].get('sdf_default_on', self.sdf_default_on)
+            self.sdfslice_freq_frame = config_args["eval"].get('sdf_freq_frame', self.sdfslice_freq_frame)
             self.sdf_slice_height = config_args["eval"].get('sdf_slice_height', self.sdf_slice_height) # in sensor frame, unit: m
             
-            # mesh masking
+            # mesh related
+            self.mesh_default_on = config_args["eval"].get('mesh_default_on', self.mesh_default_on)
             self.mesh_min_nn = config_args["eval"].get('mesh_min_nn', self.mesh_min_nn)
             self.skip_top_voxel = config_args["eval"].get('skip_top_voxel', self.skip_top_voxel)
             self.min_cluster_vertices = config_args["eval"].get('min_cluster_vertices', self.min_cluster_vertices)
@@ -549,4 +558,5 @@ class Config:
         self.consistency_count = int(self.bs / 4)
         self.window_radius = max(self.max_range, 6.0) # for the sampling data poo, should not be too small
         self.local_map_radius = self.max_range + 2.0 # for the local neural points
-        self.vis_frame_axis_len = self.max_range / 50.0
+        self.vis_frame_axis_len = self.max_range / 40.0
+        self.vis_sdf_res_m = self.voxel_size_m * 0.3

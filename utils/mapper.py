@@ -36,18 +36,16 @@ class Mapper:
         config: Config,
         dataset: SLAMDataset,
         neural_points: NeuralPoints,
-        geo_mlp: Decoder,
-        sem_mlp: Decoder,
-        color_mlp: Decoder,
+        decoders: dict
     ):
 
         self.config = config
         self.silence = config.silence
         self.dataset = dataset
         self.neural_points = neural_points
-        self.geo_mlp = geo_mlp
-        self.sem_mlp = sem_mlp
-        self.color_mlp = color_mlp
+        self.sdf_mlp = decoders["sdf"]
+        self.sem_mlp = decoders["semantic"]
+        self.color_mlp = decoders["color"]
         self.device = config.device
         self.dtype = config.dtype
         self.used_poses = None
@@ -107,7 +105,7 @@ class Mapper:
             points_torch, training_mode=False
         )
 
-        sdf_pred = self.geo_mlp.sdf(
+        sdf_pred = self.sdf_mlp.sdf(
             geo_feature
         )  # predict the scaled sdf with the feature # [N, K, 1]
         if not self.config.weighted_first:
@@ -269,8 +267,7 @@ class Mapper:
 
         # local map is also updated here
 
-        if not self.silence:
-            self.neural_points.print_memory()
+        self.neural_points.record_memory(verbose=(not self.silence))
 
         T3 = get_time()
 
@@ -605,7 +602,7 @@ class Mapper:
         iter_count = max(1, iter_count + self.adaptive_iter_offset)
 
         neural_point_feat = list(self.neural_points.parameters())
-        geo_mlp_param = list(self.geo_mlp.parameters())
+        sdf_mlp_param = list(self.sdf_mlp.parameters())
         if self.config.semantic_on:
             sem_mlp_param = list(self.sem_mlp.parameters())
         else:
@@ -618,7 +615,7 @@ class Mapper:
         opt = setup_optimizer(
             self.config,
             neural_point_feat,
-            geo_mlp_param,
+            sdf_mlp_param,
             sem_mlp_param,
             color_mlp_param,
         )
@@ -658,7 +655,7 @@ class Mapper:
             T02 = get_time()
             # predict the scaled sdf with the feature
 
-            sdf_pred = self.geo_mlp.sdf(
+            sdf_pred = self.sdf_mlp.sdf(
                 geo_feature
             )  # predict the scaled sdf with the feature # [N, K, 1]
             if not self.config.weighted_first:
@@ -722,7 +719,7 @@ class Mapper:
                     _,
                     _,
                 ) = self.neural_points.query_feature(coord_near)
-                pred_near = self.geo_mlp.sdf(geo_feature_near)
+                pred_near = self.sdf_mlp.sdf(geo_feature_near)
                 if not self.config.weighted_first:
                     pred_near = torch.sum(pred_near * weight_knn, dim=1).squeeze(1)  # N
                 g_near = get_gradient(coord_near, pred_near)
@@ -942,7 +939,7 @@ class Mapper:
     # short-hand function
     def sdf(self, x, get_std=False, min_nn_count=1, accumulate_stability=False):
         geo_feature, _, weight_knn, nn_count, _ = self.neural_points.query_feature(x, training_mode=accumulate_stability)
-        sdf_pred = self.geo_mlp.sdf(geo_feature)    
+        sdf_pred = self.sdf_mlp.sdf(geo_feature)    
         # predict the scaled sdf with the feature # [N, K, 1]
         sdf_std = None
         if not self.config.weighted_first:

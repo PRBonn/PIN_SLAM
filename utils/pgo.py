@@ -4,6 +4,8 @@
 # Copyright (c) 2024 Yue Pan, all rights reserved
 
 import gtsam
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy.linalg import inv

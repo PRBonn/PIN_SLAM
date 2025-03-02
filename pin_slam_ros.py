@@ -34,7 +34,7 @@ from utils.pgo import PoseGraphManager
 from utils.tools import (
     freeze_decoders,
     get_time,
-    load_decoder,
+    load_decoders,
     save_implicit_map,
     setup_experiment,
     split_chunks,
@@ -47,6 +47,7 @@ from utils.tracker import Tracker
     📍PIN-SLAM: LiDAR SLAM Using a Point-Based Implicit Neural Representation for Achieving Global Map Consistency
      Y. Pan et al.
 '''
+
 
 class PINSLAMer:
     def __init__(self, config_path, point_cloud_topic):
@@ -71,25 +72,31 @@ class PINSLAMer:
         self.geo_mlp = Decoder(self.config, self.config.geo_mlp_hidden_dim, self.config.geo_mlp_level, 1)
         self.sem_mlp = Decoder(self.config, self.config.sem_mlp_hidden_dim, self.config.sem_mlp_level, self.config.sem_class_count + 1) if self.config.semantic_on else None
         self.color_mlp = Decoder(self.config, self.config.color_mlp_hidden_dim, self.config.color_mlp_level, self.config.color_channel) if self.config.color_on else None
-
+        
+        self.mlp_dict = {}
+        self.mlp_dict["sdf"] = self.geo_mlp
+        self.mlp_dict["semantic"] = self.sem_mlp
+        self.mlp_dict["color"] = self.color_mlp
+    
         # initialize the feature octree
         self.neural_points = NeuralPoints(self.config)
 
         # Load the decoder model
         if self.config.load_model: # not used
-            load_decoder(self.config, self.geo_mlp, self.sem_mlp, self.color_mlp)
+            load_decoders(self.config, self.mlp_dict)
+            self.config.decoder_freezed = True
 
         # dataset
         self.dataset = SLAMDataset(self.config)
 
         # odometry tracker
-        self.tracker = Tracker(self.config, self.neural_points, self.geo_mlp, self.sem_mlp, self.color_mlp)
+        self.tracker = Tracker(self.config, self.neural_points, self.mlp_dict)
 
         # mapper
-        self.mapper = Mapper(self.config, self.dataset, self.neural_points, self.geo_mlp, self.sem_mlp, self.color_mlp)
+        self.mapper = Mapper(self.config, self.dataset, self.neural_points, self.mlp_dict)
 
         # mesh reconstructor
-        self.mesher = Mesher(self.config, self.neural_points, self.geo_mlp, self.sem_mlp, self.color_mlp)
+        self.mesher = Mesher(self.config, self.neural_points, self.mlp_dict)
 
         # pose graph manager (for back-end optimization) initialization
         self.pgm = PoseGraphManager(self.config)
@@ -116,9 +123,6 @@ class PINSLAMer:
         self.frame_reg_pub = rospy.Publisher("~frame/registration", PointCloud2, queue_size=queue_size_)
         self.map_pub = rospy.Publisher("~map/neural_points", PointCloud2, queue_size=queue_size_)
         self.tf_broadcaster = tf2_ros.TransformBroadcaster()
-
-        # self.pose_pub = rospy.Publisher("~pose", PoseStamped, queue_size=100)
-        # self.neural_points_pub = rospy.Publisher("~neural_points", PointCloud2, queue_size=10)
 
         self.last_message_time = time.time()
         self.begin = False
@@ -209,7 +213,9 @@ class PINSLAMer:
         if self.config.adaptive_iters and self.dataset.stop_status:
             cur_iter_num = max(1, cur_iter_num-10)
         if self.dataset.processed_frame == self.config.freeze_after_frame: # freeze the decoder after certain frame 
-            freeze_decoders(self.geo_mlp, self.sem_mlp, self.color_mlp, self.config)
+            freeze_decoders(self.mlp_dict, self.config)
+            self.config.decoder_freezed = True
+            self.neural_points.compute_feature_principle_components(down_rate = 17)
         
         # conduct local bundle adjustment (with lower frequency)
         if self.config.ba_freq_frame > 0 and (self.dataset.processed_frame+1) % self.config.ba_freq_frame == 0:
@@ -228,14 +234,14 @@ class PINSLAMer:
 
         if not self.config.silence:
             print("Frame (", self.dataset.processed_frame, ")")
-            print("time for frame reading          (ms):", (T1-T0)*1e3)
-            print("time for frame preprocessing    (ms):", (T2-T1)*1e3)
-            print("time for odometry               (ms):", (T3-T2)*1e3)
+            print("time for frame reading          (ms): {:.2f}".format((T1-T0)*1e3))
+            print("time for frame preprocessing    (ms): {:.2f}".format((T2-T1)*1e3))
+            print("time for odometry               (ms): {:.2f}".format((T3-T2)*1e3))
             if self.config.pgo_on:
-                print("time for loop detection and PGO (ms):", (T4-T3)*1e3)
-            print("time for mapping preparation    (ms):", (T5-T4)*1e3)
-            print("time for training               (ms):", (T6-T5)*1e3)
-            print("time for publishing             (ms):", (T7-T6)*1e3)
+                print("time for loop detection and PGO (ms): {:.2f}".format((T4-T3)*1e3))
+            print("time for mapping preparation    (ms): {:.2f}".format((T5-T4)*1e3))
+            print("time for training               (ms): {:.2f}".format((T6-T5)*1e3))
+            print("time for publishing             (ms): {:.2f}".format((T7-T6)*1e3))
         
         cur_frame_process_time = np.array([T2-T1, T3-T2, T5-T4, T6-T5, T4-T3]) # loop & pgo in the end, visualization and I/O time excluded
         self.dataset.time_table.append(cur_frame_process_time) # in s
@@ -265,15 +271,14 @@ class PINSLAMer:
 
     def save_results(self, terminate: bool = False):
         
-        print("Mission completed")
-        
         self.dataset.write_results()
         if self.config.pgo_on and self.pgm.pgo_count>0:
             print("# Loop corrected: ", self.pgm.pgo_count)
             self.pgm.write_g2o(os.path.join(self.run_path, "final_pose_graph.g2o"))
-            self.pgm.plot_loops(os.path.join(self.run_path, "loop_plot.png"), vis_now=False)      
+            # self.pgm.plot_loops(os.path.join(self.run_path, "loop_plot.png"), vis_now=False)      
 
         if terminate:
+            print("Mission completed")
             self.neural_points.prune_map(self.config.max_prune_certainty, 0) # prune uncertain points for the final output 
             self.neural_points.recreate_hash(None, None, False, False) # merge the final neural point map
             
@@ -282,7 +287,7 @@ class PINSLAMer:
             o3d.io.write_point_cloud(os.path.join(self.run_path, "map", "neural_points.ply"), neural_pcd)
             if terminate:
                 self.neural_points.clear_temp() # clear temp data for output
-            save_implicit_map(self.run_path, self.neural_points, self.geo_mlp, self.color_mlp, self.sem_mlp)
+            save_implicit_map(self.run_path, self.neural_points, self.mlp_dict)
 
     def publish_msg(self, input_pc_msg):
         
@@ -361,9 +366,6 @@ class PINSLAMer:
             down_rate_level = min(down_rate_level, len(self.config.publish_np_map_down_rate_list)-1)
             publish_np_map_down_rate = self.config.publish_np_map_down_rate_list[down_rate_level] 
             neural_points_np = self.neural_points.neural_points[::publish_np_map_down_rate].detach().cpu().numpy().astype(np.float32)
-            # neural_points_feature_np = self.neural_points.geo_features[:-1,0:3].detach().cpu().numpy().astype(np.float32) # how to convert to rgb that we actually needed
-            # neural_features_vis = F.normalize(neural_features_vis, p=2, dim=1)
-            # TODO: add rgb (time or feature as rgb)
 
             neural_points_pc2_msg = pc2.create_cloud(header, fields_xyz, neural_points_np)
             self.map_pub.publish(neural_points_pc2_msg)
@@ -386,8 +388,6 @@ class PINSLAMer:
             header.frame_id = self.sensor_frame_name 
 
             frame_registration_np = self.dataset.cur_source_points.detach().cpu().numpy().astype(np.float32)
-
-            # TODO: add rgb (weight as rgb)
 
             frame_registration_pc2_msg = pc2.create_cloud(header, fields_xyz, frame_registration_np)
             self.frame_reg_pub.publish(frame_registration_pc2_msg)
@@ -469,7 +469,7 @@ class PINSLAMer:
                         self.loop_reg_failed_count += 1
 
         return False
-                    
+                
 if __name__ == "__main__":
 
     config_path = rospy.get_param('~config_path', "./config/lidar_slam/run.yaml")

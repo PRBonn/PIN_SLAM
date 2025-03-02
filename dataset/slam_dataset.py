@@ -545,7 +545,7 @@ class SLAMDataset(Dataset):
         accu_travel_dist = self.travel_dist[cur_frame_id-1] + cur_frame_travel_dist
         self.travel_dist[cur_frame_id] = accu_travel_dist
         if not self.silence:
-            print("Accumulated travel distance (m): %f" % accu_travel_dist)
+            print("Accumulated travel distance (m): {:.3f}".format(accu_travel_dist))
         
         self.last_pose_ref = self.cur_pose_ref  # update for the next frame
 

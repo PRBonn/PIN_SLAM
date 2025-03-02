@@ -14,6 +14,8 @@ import torch
 import torch.multiprocessing as mp
 import dtyper as typer
 import wandb
+from rich import print
+from tqdm import tqdm
 from typing import Optional, Tuple
 
 from dataset.dataset_indexing import set_dataset_path
@@ -32,16 +34,19 @@ from utils.pgo import PoseGraphManager
 from utils.tools import (
     freeze_decoders,
     unfreeze_decoders,
+    load_decoders,
     get_time,
     save_implicit_map,
     setup_experiment,
     split_chunks,
     transform_torch,
-    remove_gpu_cache
+    remove_gpu_cache,
+    create_bbx_o3d
 )
 from utils.tracker import Tracker
-from utils.visualizer import MapVisualizer
 
+from gui import slam_gui
+from gui.gui_utils import ParamsGUI, VisPacket, ControlPacket
 
 '''
     📍PIN-SLAM: LiDAR SLAM Using a Point-Based Implicit Neural Representation for Achieving Global Map Consistency
@@ -79,15 +84,14 @@ def run_pin_slam(
     config_path: str = typer.Argument('config/lidar_slam/run.yaml', help='Path to *.yaml config file'),
     dataset_name: Optional[str] = typer.Argument(None, help='Name of a specific dataset, example: kitti, mulran, or rosbag (when -d is set)'),
     sequence_name: Optional[str] = typer.Argument(None, help='Name of a specific data sequence or the rostopic for point cloud (when -d is set)'),
-    input_path: Optional[str] = typer.Option(None, '--input-path', '-i', help='Path to the point cloud input directory'),
-    output_path: Optional[str] = typer.Option(None, '--output-path', '-o', help='Path to the result output directory'),
+    input_path: Optional[str] = typer.Option(None, '--input-path', '-i', help='Path to the point cloud input directory, this will overwrite the config file pc_path'),
+    output_path: Optional[str] = typer.Option(None, '--output-path', '-o', help='Path to the result output directory, this will overwrite the config file output_root'),
     frame_range: Optional[Tuple[int, int, int]] = typer.Option(None, '--range', help='Specify the start, end and step of the processed frame, e.g. --range 10 1000 1'),
     seed: int = typer.Option(42, help='Set the random seed'),
-    data_loader_on: bool = typer.Option(False, '--data-loader-on', '-d', help='Use specific data loader'),
+    data_loader_on: bool = typer.Option(False, '--data-loader-on', '-d', help='Use a specific data loader'),
     visualize: bool = typer.Option(False, '--visualize', '-v', help='Turn on the visualizer'),
     cpu_only: bool = typer.Option(False, '--cpu-only', '-c', help='Run only on CPU'),
     log_on: bool = typer.Option(False, '--log-on', '-l', help='Turn on the logs printing'),
-    rerun_on: bool = typer.Option(False, '--rerun-on', '-r', help='Turn on the rerun logging'),
     wandb_on: bool = typer.Option(False, '--wandb-on', '-w', help='Turn on the weight & bias logging'),
     save_map: bool = typer.Option(False, '--save-map', '-s', help='Save the PIN map after SLAM'),
     save_mesh: bool = typer.Option(False, '--save-mesh', '-m', help='Save the reconstructed mesh after SLAM'),
@@ -100,7 +104,6 @@ def run_pin_slam(
     config.seed = seed
     config.silence = not log_on
     config.wandb_vis_on = wandb_on
-    config.rerun_vis_on = rerun_on
     config.o3d_vis_on = visualize
     config.save_map = save_map
     config.save_mesh = save_mesh
@@ -128,18 +131,18 @@ def run_pin_slam(
     run_path = setup_experiment(config, argv)
     print("[bold green]PIN-SLAM starts[/bold green]")
 
-    # non-blocking visualizer
     if config.o3d_vis_on:
-        o3d_vis = MapVisualizer(config)
-
-    if config.rerun_vis_on:
-        import rerun as rr
-        rr.init("pin_slam_rerun_viewer", spawn=True)
+        mp.set_start_method("spawn") # don't forget this
 
     # initialize the mlp decoder
     geo_mlp = Decoder(config, config.geo_mlp_hidden_dim, config.geo_mlp_level, 1)
     sem_mlp = Decoder(config, config.sem_mlp_hidden_dim, config.sem_mlp_level, config.sem_class_count + 1) if config.semantic_on else None
     color_mlp = Decoder(config, config.color_mlp_hidden_dim, config.color_mlp_level, config.color_channel) if config.color_on else None
+
+    mlp_dict = {}
+    mlp_dict["sdf"] = geo_mlp
+    mlp_dict["semantic"] = sem_mlp
+    mlp_dict["color"] = color_mlp
 
     # initialize the neural points
     neural_points: NeuralPoints = NeuralPoints(config)
@@ -153,15 +156,13 @@ def run_pin_slam(
     if config.load_model:
         loaded_model = torch.load(config.model_path)
         neural_points = loaded_model["neural_points"]
-        geo_mlp.load_state_dict(loaded_model["geo_decoder"])
-        if 'sem_decoder' in loaded_model.keys():
-            sem_mlp.load_state_dict(loaded_model["sem_decoder"])
-        if 'color_decoder' in loaded_model.keys():
-            color_mlp.load_state_dict(loaded_model["color_decoder"])
-        freeze_decoders(geo_mlp, sem_mlp, color_mlp, config)
+        neural_points.config = config
+        load_decoders(loaded_model, mlp_dict) 
+        config.decoder_freezed = True
         
         print("PIN Map loaded")  
         neural_points.recreate_hash(torch.zeros(3).to(config.device), None, True, False)
+        neural_points.compute_feature_principle_components(down_rate=59)
         mapping_on = False # localization mode
         neural_points.temporal_local_map_on = False # don't use travel distance for filtering
         config.pgo_on = False
@@ -170,15 +171,15 @@ def run_pin_slam(
     dataset = SLAMDataset(config)
 
     # odometry tracker
-    tracker = Tracker(config, neural_points, geo_mlp, sem_mlp, color_mlp)
-    if config.load_model and not mapping_on: 
+    tracker = Tracker(config, neural_points, mlp_dict)
+    if config.load_model and not mapping_on: # pure-localization mode
         tracker.reg_local_map = False
 
     # mapper
-    mapper = Mapper(config, dataset, neural_points, geo_mlp, sem_mlp, color_mlp)
+    mapper = Mapper(config, dataset, neural_points, mlp_dict)
 
     # mesh reconstructor
-    mesher = Mesher(config, neural_points, geo_mlp, sem_mlp, color_mlp)
+    mesher = Mesher(config, neural_points, mlp_dict)
     cur_mesh = None
 
     # pose graph manager (for back-end optimization) initialization
@@ -194,15 +195,50 @@ def run_pin_slam(
     #     print("Load and merge the map point cloud with the reference (GT) poses ... ...")
     #     dataset.write_merged_point_cloud(use_gt_pose=True, out_file_name='merged_gt_pc', 
     #     frame_step=5, merged_downsample=True)
+
+    q_main2vis = q_vis2main = None
+    if config.o3d_vis_on:
+        # communicator between the processes
+        q_main2vis = mp.Queue(maxsize=5) 
+        q_vis2main = mp.Queue(maxsize=1)
+
+        params_gui = ParamsGUI(
+            q_main2vis=q_main2vis,
+            q_vis2main=q_vis2main,
+            config=config,
+            local_map_default_on=config.local_map_default_on, 
+            mesh_default_on=config.mesh_default_on,
+            sdf_default_on=config.sdf_default_on,
+            neural_point_map_default_on=config.neural_point_map_default_on,
+        )
+        gui_process = mp.Process(target=slam_gui.run, args=(params_gui,))
+        gui_process.start()
+        time.sleep(3) # second
+
+        # visualizer configs
+        vis_visualize_on = True
+        vis_source_pc_weight = False
+        vis_global_on = not config.local_map_default_on
+        vis_mesh_on = config.mesh_default_on
+        vis_mesh_freq_frame = config.mesh_freq_frame
+        vis_mesh_mc_res_m = config.mc_res_m
+        vis_mesh_min_nn = config.mesh_min_nn
+        vis_sdf_on = config.sdf_default_on
+        vis_sdf_freq_frame = config.sdfslice_freq_frame
+        vis_sdf_slice_height = config.sdf_slice_height
+        vis_sdf_res_m = config.vis_sdf_res_m
+
+    cur_mesh = None
+    cur_sdf_slice = None
         
     # for each frame
     # frame id as the processed frame, possible skipping done in data loader
     for frame_id in tqdm(range(dataset.total_pc_count)): 
 
+        remove_gpu_cache()
+
         # I. Load data and preprocessing
         T0 = get_time()
-
-        remove_gpu_cache()
 
         if config.use_dataloader:
             dataset.read_frame_with_loader(frame_id)
@@ -222,14 +258,10 @@ def run_pin_slam(
         if frame_id > 0: 
             if config.track_on:
                 tracking_result = tracker.tracking(dataset.cur_source_points, dataset.cur_pose_guess_torch, 
-                                                   dataset.cur_source_colors, dataset.cur_source_normals,
-                                                   vis_result=config.o3d_vis_on and not config.o3d_vis_raw)
+                                                   dataset.cur_source_colors, dataset.cur_source_normals, vis_result=config.o3d_vis_on)
                 cur_pose_torch, cur_odom_cov, weight_pc_o3d, valid_flag = tracking_result
                 dataset.lose_track = not valid_flag
                 dataset.update_odom_pose(cur_pose_torch) # update dataset.cur_pose_torch
-                
-                if dataset.lose_track and config.o3d_vis_on and o3d_vis.debug_mode > 0: # pause at the failure point
-                    o3d_vis.stop()
                 
             else: # incremental mapping with gt pose
                 if dataset.gt_pose_provided:
@@ -282,14 +314,7 @@ def run_pin_slam(
                     pose_init_torch = torch.tensor((dataset.pgo_poses[loop_id] @ loop_transform), device=config.device, dtype=torch.float64) # T_w<-c = T_w<-l @ T_l<-c 
                     neural_points.recreate_hash(pose_init_torch[:3,3], None, True, True, loop_id) # recreate hash and local map at the loop candidate frame for registration, this is the reason why we'd better to keep the duplicated neural points until the end
                     loop_reg_source_point = dataset.cur_source_points.clone()
-                    pose_refine_torch, loop_cov_mat, weight_pcd, reg_valid_flag = tracker.tracking(loop_reg_source_point, pose_init_torch, loop_reg=True, vis_result=config.o3d_vis_on)
-                    if config.o3d_vis_on and o3d_vis.debug_mode > 1: # visualize the loop closure and loop registration (when the vis debug mode is on)
-                        points_torch_init = transform_torch(loop_reg_source_point, pose_init_torch) # apply transformation
-                        points_o3d_init = o3d.geometry.PointCloud()
-                        points_o3d_init.points = o3d.utility.Vector3dVector(points_torch_init.detach().cpu().numpy().astype(np.float64))
-                        loop_neural_pcd = neural_points.get_neural_points_o3d(query_global=False, color_mode=o3d_vis.neural_points_vis_mode, random_down_ratio=1)
-                        o3d_vis.update(points_o3d_init, neural_points=loop_neural_pcd, pause_now=True)
-                        o3d_vis.update(weight_pcd, neural_points=loop_neural_pcd, pause_now=True)
+                    pose_refine_torch, loop_cov_mat, weight_pcd, reg_valid_flag = tracker.tracking(loop_reg_source_point, pose_init_torch, loop_reg=True)
                     # only conduct pgo when the loop and loop constraint is correct
                     if reg_valid_flag: # refine succeed
                         pose_refine_np = pose_refine_torch.detach().cpu().numpy()
@@ -314,15 +339,11 @@ def run_pin_slam(
                         pgm.last_loop_idx = frame_id
                         pgm.min_loop_idx = min(pgm.min_loop_idx, loop_id)
                         loop_reg_failed_count = 0
-                        if config.o3d_vis_on:
-                            o3d_vis.before_pgo = False
                     else:
                         if not config.silence:
                             print("[bold red]Registration failed, reject the loop candidate [/bold red]")
                         neural_points.recreate_hash(dataset.cur_pose_torch[:3,3], None, True, True, frame_id) # if failed, you need to reset the local map back to current frame
                         loop_reg_failed_count += 1
-                        if config.o3d_vis_on and o3d_vis.debug_mode > 1:
-                            o3d_vis.stop()
 
         T4 = get_time()
         
@@ -336,7 +357,8 @@ def run_pin_slam(
             neural_points.reboot_ts = frame_id
             system_rebooted = True
             dataset.consecutive_lose_track_frame = 0
-            unfreeze_decoders(geo_mlp, sem_mlp, color_mlp, config)
+            unfreeze_decoders(mlp_dict, config)
+            config.decoder_freezed = False
             
         # IV: Mapping and bundle adjustment
         # if lose track, we will not update the map and data pool (don't let the wrong pose corrupt the map)
@@ -356,7 +378,8 @@ def run_pin_slam(
             if dataset.stop_status:
                 cur_iter_num = max(1, cur_iter_num-10)
             if (frame_id-neural_points.reboot_ts) == config.freeze_after_frame: # freeze the decoder after certain frame 
-                freeze_decoders(geo_mlp, sem_mlp, color_mlp, config)
+                freeze_decoders(mlp_dict, config)
+                config.decoder_freezed = True
                 neural_points.compute_feature_principle_components(down_rate = 17) # prime number # only for visualization
 
             # conduct local bundle adjustment (with lower frequency)
@@ -370,95 +393,107 @@ def run_pin_slam(
         T6 = get_time()
         
         if not config.silence:
-            print("time for frame reading          (ms):", (T1-T0)*1e3)
-            print("time for frame preprocessing    (ms):", (T2-T1)*1e3)
+            print("time for frame reading          (ms): {:.2f}".format((T1-T0)*1e3))
+            print("time for frame preprocessing    (ms): {:.2f}".format((T2-T1)*1e3))
             if config.track_on:
-                print("time for odometry               (ms):", (T3-T2)*1e3)
+                print("time for odometry               (ms): {:.2f}".format((T3-T2)*1e3))
             if config.pgo_on:
-                print("time for loop detection and PGO (ms):", (T4-T3)*1e3)
-            print("time for mapping preparation    (ms):", (T5-T4)*1e3)
-            print("time for mapping                (ms):", (T6-T5)*1e3)
+                print("time for loop detection and PGO (ms): {:.2f}".format((T4-T3)*1e3))
+            print("time for mapping preparation    (ms): {:.2f}".format((T5-T4)*1e3))
+            print("time for mapping                (ms): {:.2f}".format((T6-T5)*1e3))
 
         # regular saving logs
         if config.log_freq_frame > 0 and (frame_id+1) % config.log_freq_frame == 0:
             dataset.write_results_log()
 
         # V: Mesh reconstruction and visualization
-        cur_mesh = None
-        if config.o3d_vis_on: # if visualizer is off, there's no need to reconstruct the mesh
+        if config.o3d_vis_on:
 
-            o3d_vis.cur_frame_id = frame_id # frame id in the data folder
-            dataset.update_o3d_map()
-            if config.track_on and frame_id > 0 and (not o3d_vis.vis_pc_color) and (weight_pc_o3d is not None): 
-                dataset.cur_frame_o3d = weight_pc_o3d
+            if not q_vis2main.empty():
+                control_packet: ControlPacket = q_vis2main.get()
 
-            T7 = get_time()
+                vis_visualize_on = control_packet.flag_vis
+                vis_global_on = control_packet.flag_global
+                vis_mesh_on = control_packet.flag_mesh   
+                vis_sdf_on = control_packet.flag_sdf
+                vis_source_pc_weight = control_packet.flag_source
+                vis_mesh_mc_res_m = control_packet.mc_res_m
+                vis_mesh_min_nn = control_packet.mesh_min_nn
+                vis_mesh_freq_frame = control_packet.mesh_freq_frame
+                vis_sdf_slice_height = control_packet.sdf_slice_height
+                vis_sdf_freq_frame = control_packet.sdf_freq_frame
+                vis_sdf_res_m = control_packet.sdf_res_m
 
-            if frame_id == last_frame:
-                o3d_vis.vis_global = True
-                o3d_vis.ego_view = False
-                mapper.free_pool()
+                while control_packet.flag_pause:
+                    time.sleep(0.1)
+                    if not q_vis2main.empty():
+                        control_packet = q_vis2main.get()
+                        if not control_packet.flag_pause:
+                            break
 
-            neural_pcd = None
-            if o3d_vis.render_neural_points or (frame_id == last_frame): # last frame also vis
-                neural_pcd = neural_points.get_neural_points_o3d(query_global=o3d_vis.vis_global, color_mode=o3d_vis.neural_points_vis_mode, random_down_ratio=1) # select from geo_feature, ts and certainty
+            if vis_visualize_on:
 
-            # reconstruction by marching cubes
-            if config.mesh_freq_frame > 0:
-                if o3d_vis.render_mesh and (frame_id == 0 or frame_id == last_frame or (frame_id+1) % config.mesh_freq_frame == 0 or pgm.last_loop_idx == frame_id):              
+                dataset.update_o3d_map()
+                if config.track_on and frame_id > 0 and vis_source_pc_weight and (weight_pc_o3d is not None): 
+                    dataset.cur_frame_o3d = weight_pc_o3d
+            
+                T7 = get_time()
+               
+                # reconstruction by marching cubes
+                if vis_mesh_on and (frame_id == 0 or frame_id == last_frame or (frame_id+1) % vis_mesh_freq_frame == 0 or pgm.last_loop_idx == frame_id):              
                     # update map bbx
-                    global_neural_pcd_down = neural_points.get_neural_points_o3d(query_global=True, random_down_ratio=23) # prime number
+                    global_neural_pcd_down = neural_points.get_neural_points_o3d(query_global=True, random_down_ratio=37) # prime number
                     dataset.map_bbx = global_neural_pcd_down.get_axis_aligned_bounding_box()
-                    
-                    mesh_path = None # no need to save the mesh
-                    if frame_id == last_frame and config.save_mesh: # save the mesh at the last frame
-                        mc_cm_str = str(round(o3d_vis.mc_res_m*1e2))
-                        mesh_path = os.path.join(run_path, "mesh", 'mesh_frame_' + str(frame_id) + "_" + mc_cm_str + "cm.ply")
-                    
-                    # figure out how to do it efficiently
-                    if not o3d_vis.vis_global: # only build the local mesh
-                        # cur_mesh = mesher.recon_aabb_mesh(dataset.cur_bbx, o3d_vis.mc_res_m, mesh_path, True, config.semantic_on, config.color_on, filter_isolated_mesh=True, mesh_min_nn=o3d_vis.mesh_min_nn)
-                        chunks_aabb = split_chunks(global_neural_pcd_down, dataset.cur_bbx, o3d_vis.mc_res_m * 100) # reconstruct in chunks
-                        cur_mesh = mesher.recon_aabb_collections_mesh(chunks_aabb, o3d_vis.mc_res_m, mesh_path, True, config.semantic_on, config.color_on, filter_isolated_mesh=True, mesh_min_nn=o3d_vis.mesh_min_nn)    
+                        
+                    if not vis_global_on: # only build the local mesh
+                        chunks_aabb = split_chunks(global_neural_pcd_down, dataset.cur_bbx, vis_mesh_mc_res_m * 100) # reconstruct in chunks
+                        cur_mesh = mesher.recon_aabb_collections_mesh(chunks_aabb, vis_mesh_mc_res_m, None, True, config.semantic_on, config.color_on, filter_isolated_mesh=True, mesh_min_nn=vis_mesh_min_nn)    
                     else:
                         aabb = global_neural_pcd_down.get_axis_aligned_bounding_box()
-                        chunks_aabb = split_chunks(global_neural_pcd_down, aabb, o3d_vis.mc_res_m * 300) # reconstruct in chunks
-                        cur_mesh = mesher.recon_aabb_collections_mesh(chunks_aabb, o3d_vis.mc_res_m, mesh_path, False, config.semantic_on, config.color_on, filter_isolated_mesh=True, mesh_min_nn=o3d_vis.mesh_min_nn)    
-            cur_sdf_slice = None
-            if config.sdfslice_freq_frame > 0:
-                if o3d_vis.render_sdf and (frame_id == 0 or frame_id == last_frame or (frame_id + 1) % config.sdfslice_freq_frame == 0):
-                    slice_res_m = config.voxel_size_m * 0.2
+                        chunks_aabb = split_chunks(global_neural_pcd_down, aabb, vis_mesh_mc_res_m * 300) # reconstruct in chunks
+                        cur_mesh = mesher.recon_aabb_collections_mesh(chunks_aabb, vis_mesh_mc_res_m, None, False, config.semantic_on, config.color_on, filter_isolated_mesh=True, mesh_min_nn=vis_mesh_min_nn)    
+                
+                # cur_sdf_slice = None
+                if vis_sdf_on and (frame_id == 0 or frame_id == last_frame or (frame_id + 1) % vis_sdf_freq_frame == 0):
                     sdf_bound = config.surface_sample_range_m * 4.0
-                    query_sdf_locally = True
-                    if o3d_vis.vis_global:
-                        cur_sdf_slice_h = mesher.generate_bbx_sdf_hor_slice(dataset.map_bbx, dataset.cur_pose_ref[2,3] + o3d_vis.sdf_slice_height, slice_res_m, False, -sdf_bound, sdf_bound) # horizontal slice
-                    else:
-                        cur_sdf_slice_h = mesher.generate_bbx_sdf_hor_slice(dataset.cur_bbx, dataset.cur_pose_ref[2,3] + o3d_vis.sdf_slice_height, slice_res_m, query_sdf_locally, -sdf_bound, sdf_bound) # horizontal slice (local)
+                    vis_sdf_bbx = create_bbx_o3d(dataset.cur_pose_ref[:3,3], config.max_range/2)
+                    cur_sdf_slice_h = mesher.generate_bbx_sdf_hor_slice(vis_sdf_bbx, dataset.cur_pose_ref[2,3] + vis_sdf_slice_height, vis_sdf_res_m, True, -sdf_bound, sdf_bound) # horizontal slice (local)
                     if config.vis_sdf_slice_v:
-                        cur_sdf_slice_v = mesher.generate_bbx_sdf_ver_slice(dataset.cur_bbx, dataset.cur_pose_ref[0,3], slice_res_m, query_sdf_locally, -sdf_bound, sdf_bound) # vertical slice (local)
+                        cur_sdf_slice_v = mesher.generate_bbx_sdf_ver_slice(dataset.cur_bbx, dataset.cur_pose_ref[0,3], vis_sdf_res_m, True, -sdf_bound, sdf_bound) # vertical slice (local)
                         cur_sdf_slice = cur_sdf_slice_h + cur_sdf_slice_v
                     else:
                         cur_sdf_slice = cur_sdf_slice_h
-                                
-            pool_pcd = mapper.get_data_pool_o3d(down_rate=23, only_cur_data=o3d_vis.vis_only_cur_samples) if o3d_vis.render_data_pool else None # down rate should be a prime number
-            odom_poses, gt_poses, pgo_poses = dataset.get_poses_np_for_vis()
-            loop_edges = pgm.loop_edges_vis if config.pgo_on else None
-            o3d_vis.update_traj(dataset.cur_pose_ref, odom_poses, gt_poses, pgo_poses, loop_edges)
-            o3d_vis.update(dataset.cur_frame_o3d, dataset.cur_pose_ref, cur_sdf_slice, cur_mesh, neural_pcd, pool_pcd)
+                                    
+                pool_pcd = mapper.get_data_pool_o3d(down_rate=37)
+                odom_poses, gt_poses, pgo_poses = dataset.get_poses_np_for_vis()
+                loop_edges = pgm.loop_edges_vis if config.pgo_on else None
 
-            if config.rerun_vis_on:
-                if neural_pcd is not None:
-                    rr.log("world/neural_points", rr.Points3D(neural_pcd.points, colors=neural_pcd.colors, radii=0.05))
+                packet_to_vis: VisPacket = VisPacket(frame_id=frame_id, travel_dist=travel_dist[-1])
+
+                if not neural_points.is_empty():
+                    packet_to_vis.add_neural_points_data(neural_points, only_local_map=(not vis_global_on), pca_color_on=config.decoder_freezed)
+
                 if dataset.cur_frame_o3d is not None:
-                    rr.log("world/input_scan", rr.Points3D(dataset.cur_frame_o3d.points, colors=dataset.cur_frame_o3d.colors, radii=0.03))
-                if cur_mesh is not None:
-                    rr.log("world/mesh_map", rr.Mesh3D(vertex_positions=cur_mesh.vertices, triangle_indices=cur_mesh.triangles, vertex_normals=cur_mesh.vertex_normals, vertex_colors=cur_mesh.vertex_colors))
-            
-            T8 = get_time()
+                    packet_to_vis.add_scan(np.array(dataset.cur_frame_o3d.points, dtype=np.float64), np.array(dataset.cur_frame_o3d.colors, dtype=np.float64))
 
-            if not config.silence:
-                print("time for o3d update             (ms):", (T7-T6)*1e3)
-                print("time for visualization          (ms):", (T8-T7)*1e3)
+                if cur_mesh is not None:
+                    packet_to_vis.add_mesh(np.array(cur_mesh.vertices, dtype=np.float64), np.array(cur_mesh.triangles), np.array(cur_mesh.vertex_colors, dtype=np.float64))
+                
+                if cur_sdf_slice is not None:
+                    packet_to_vis.add_sdf_slice(np.array(cur_sdf_slice.points, dtype=np.float64), np.array(cur_sdf_slice.colors, dtype=np.float64))
+
+                if pool_pcd is not None:
+                    packet_to_vis.add_sdf_training_pool(np.array(pool_pcd.points, dtype=np.float64), np.array(pool_pcd.colors, dtype=np.float64))
+
+                packet_to_vis.add_traj(odom_poses, gt_poses, pgo_poses, loop_edges)
+
+                q_main2vis.put(packet_to_vis)
+    
+                T8 = get_time()
+
+                if not config.silence:
+                    print("time for o3d update             (ms): {:.2f}".format((T7-T6)*1e3))
+                    print("time for visualization          (ms): {:.2f}".format((T8-T7)*1e3))
 
         cur_frame_process_time = np.array([T2-T1, T3-T2, T5-T4, T6-T5, T4-T3]) # loop & pgo in the end, visualization and I/O time excluded
         dataset.time_table.append(cur_frame_process_time) # in s
@@ -470,6 +505,7 @@ def run_pin_slam(
         dataset.processed_frame += 1
     
     # VI. Save results
+    mapper.free_pool()
     pose_eval_results = dataset.write_results()
     if config.pgo_on and pgm.pgo_count>0:
         print("# Loop corrected: ", pgm.pgo_count)
@@ -487,28 +523,39 @@ def run_pin_slam(
     
     output_mc_res_m = config.mc_res_m*0.6
     mc_cm_str = str(round(output_mc_res_m*1e2))
-    if config.save_mesh and cur_mesh is None:    
+    if config.save_mesh:    
         chunks_aabb = split_chunks(neural_pcd, neural_pcd.get_axis_aligned_bounding_box(), output_mc_res_m * 300) # reconstruct in chunks
         mesh_path = os.path.join(run_path, "mesh", "mesh_" + mc_cm_str + "cm.ply")
+        print("Reconstructing the global mesh with resolution {} cm".format(mc_cm_str))
         cur_mesh = mesher.recon_aabb_collections_mesh(chunks_aabb, output_mc_res_m, mesh_path, False, config.semantic_on, config.color_on, filter_isolated_mesh=True, mesh_min_nn=config.mesh_min_nn)
+        print("Reconstructing the global mesh done")
     neural_points.clear_temp() # clear temp data for output
     if config.save_map:
-        save_implicit_map(run_path, neural_points, geo_mlp, color_mlp, sem_mlp)
+        save_implicit_map(run_path, neural_points, mlp_dict)
         # lcd_npmc.save_context_dict(mapper.used_poses, run_path)
-        print("Use 'python vis_pin_map.py {} {} neural_points.ply mesh_out_{}cm.ply' to inspect the map offline.".format(run_path, output_mc_res_m, mc_cm_str))
+        print("Use 'python vis_pin_map.py {} -m {} -o mesh_out_{}cm.ply' to inspect the map offline.".format(run_path, output_mc_res_m, mc_cm_str))
 
     if config.save_merged_pc:
         dataset.write_merged_point_cloud() # replay: save merged point cloud map
-
-    if config.o3d_vis_on:
-        while True:
-            o3d_vis.ego_view = False
-            o3d_vis.update(dataset.cur_frame_o3d, dataset.cur_pose_ref, cur_sdf_slice, cur_mesh, neural_pcd, pool_pcd)
-            odom_poses, gt_poses, pgo_poses = dataset.get_poses_np_for_vis()
-            o3d_vis.update_traj(dataset.cur_pose_ref, odom_poses, gt_poses, pgo_poses, loop_edges)
     
+    if config.o3d_vis_on:
+       
+        while True:
+            if not q_vis2main.empty():
+                q_vis2main.get()
 
+            packet_to_vis: VisPacket = VisPacket(frame_id=frame_id, travel_dist=travel_dist[-1], slam_finished=True)
 
+            if not neural_points.is_empty():
+                packet_to_vis.add_neural_points_data(neural_points, only_local_map=False, pca_color_on=config.decoder_freezed)
+
+            if cur_mesh is not None:
+                packet_to_vis.add_mesh(np.array(cur_mesh.vertices, dtype=np.float64), np.array(cur_mesh.triangles), np.array(cur_mesh.vertex_colors, dtype=np.float64))
+                cur_mesh = None
+
+            q_main2vis.put(packet_to_vis)
+            time.sleep(1.0) 
+    
     return pose_eval_results
 
 if __name__ == "__main__":
