@@ -167,6 +167,10 @@ experiments/
 
 *.json
 
+
+.viewpoints/
+screenshots/
+
 bak
 TODO.md
 NOTE.md

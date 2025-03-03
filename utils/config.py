@@ -16,6 +16,7 @@ class Config:
 
         # settings
         self.name: str = "dummy"  # experiment name
+        self.run_name: str = self.name # this would also include an unique timestamp
 
         self.run_path: str = ""
         self.output_root: str = "experiments"  # output root folder
@@ -77,6 +78,9 @@ class Config:
         self.color_map_on: bool = True # colorized mapping default on (if False, then we only visualize the colorized point cloud but do not use them for mapping or localization)
         self.color_on: bool = False
         self.color_channel: int = 0 # For RGB, channel=3, For Lidar with intensity, channel=1
+        
+        # robust processing
+        self.reboot_frame_thre: int = 5 # if lose track for more than this frame, we consider the system failed and reboot the system
 
         # map-based dynamic filtering (observations in certain freespace are dynamic)
         self.dynamic_filter_on: bool = False
@@ -144,7 +148,8 @@ class Config:
         # or the feature dim of the neural point latent feature,
         # or the iteration number for mapping
         # or decrease the voxel size (resolution) for neural points
-        self.freeze_after_frame: int = 40  # if the decoder model is not loaded, it would be trained and freezed after such frame number
+        self.decoder_freezed: bool = False
+        self.freeze_after_frame: int = 40  # if the decoder model is not loaded, it would be trained and freezed after such frame number # TODO: change to based on moving frames
 
         # positional encoding related [not used]
         self.use_gaussian_pe: bool = False # use Gaussian Fourier or original log positional encoding
@@ -224,6 +229,7 @@ class Config:
         self.reg_term_thre_deg: float = 0.01 # iteration termination criteria for rotation 
         self.reg_term_thre_m: float = 0.001  # iteration termination criteria for translation
         self.eigenvalue_check: bool = True # use eigen value of Hessian matrix for degenaracy check
+        self.eigenvalue_ratio_thre: float = 0.005 # threshold for eigenvalue ratio
         self.final_residual_ratio_thre: float = 0.6
 
         # loop closure detection
@@ -259,15 +265,17 @@ class Config:
 
         # eval
         self.wandb_vis_on: bool = False # monitor the training on weight and bias or not
-        self.rerun_vis_on: bool = False # visualize the process using rerun visualizer or not
         self.silence: bool = True # print log in the terminal or not
         self.o3d_vis_on: bool = False # visualize the mesh in-the-fly using o3d visualzier or not [press space to pasue/resume]
         self.o3d_vis_raw: bool = False # visualize the raw point cloud or the weight source point cloud
-        self.log_freq_frame: int = 0 # save the result log per x frames
+        self.log_freq_frame: int = 2000 # save the result log per x frames
+        self.mesh_default_on: bool = False
         self.mesh_freq_frame: int = 20  # do the reconstruction per x frames
+        self.sdf_default_on: bool = False # visualize the SDF slice or not
         self.sdfslice_freq_frame: int = 1 # visualize the SDF slice per x frames
         self.vis_sdf_slice_v: bool = False # also visualize the vertical SDF slice or not (default only horizontal slice)
         self.sdf_slice_height: float = -1.0 # initial height of the horizontal SDF slice (m) in sensor frame
+        self.vis_sdf_res_m: float = 0.2 # resolution for the SDF slice for visualization (m)
         self.eval_traj_align: bool = True # do the SE3 alignment of the trajectory when evaluating the absolute error
         
         # mesh reconstruction, marching cubes related
@@ -280,11 +288,16 @@ class Config:
         self.keep_local_mesh: bool = False # keep the local mesh in the visualizer or not (don't delete them could cause a too large memory consumption)
         self.infer_bs: int = 4096 # batch size for inference
 
-        # o3d visualization
+        # visualization
+        self.local_map_default_on: bool = True
+        self.neural_point_map_default_on: bool = True
         self.mesh_vis_normal: bool = False # normal colorization
         self.vis_frame_axis_len: float = 0.8 # sensor frame axis length, for visualization, unit: m
         self.vis_point_size: int = 2 # point size for visualization in o3d
         self.sensor_cad_path = None # the path to the sensor cad file, "./cad/ipb_car.ply" for visualization
+        
+        # gui 
+        self.visualizer_split_width_ratio: float = 0.7 # the width ratio of the visualizer split window
 
         # result saving settings
         self.save_map: bool = False # save the neural point map model and decoders or not
@@ -456,6 +469,7 @@ class Config:
             self.reg_term_thre_deg = float(config_args["tracker"].get("term_deg", self.reg_term_thre_deg))
             self.reg_term_thre_m = float(config_args["tracker"].get("term_m", self.reg_term_thre_m))
             self.eigenvalue_check = config_args["tracker"].get("eigenvalue_check", self.eigenvalue_check)
+            self.eigenvalue_ratio_thre = config_args["tracker"].get("eigenvalue_ratio_thre", self.eigenvalue_ratio_thre)
             self.final_residual_ratio_thre = float(config_args["tracker"].get("final_residual_ratio_thre", self.final_residual_ratio_thre))
 
         # pgo
@@ -513,18 +527,22 @@ class Config:
             self.o3d_vis_on = config_args["eval"].get("o3d_vis_on", self.o3d_vis_on)
             # path to the sensor cad file
             self.sensor_cad_path = config_args["eval"].get('sensor_cad_path', None)
+
+            self.local_map_default_on = config_args["eval"].get('local_map_default_on', self.local_map_default_on)
             
             # frequency for pose log (per x frame)
-            self.log_freq_frame = config_args["eval"].get('log_freq_frame', 0)
+            self.log_freq_frame = config_args["eval"].get('log_freq_frame', self.log_freq_frame)
             # frequency for mesh reconstruction (per x frame)
             self.mesh_freq_frame = config_args["eval"].get('mesh_freq_frame', self.mesh_freq_frame)
             # keep the previous reconstructed mesh in the visualizer or not
             self.keep_local_mesh = config_args["eval"].get('keep_local_mesh', self.keep_local_mesh)
             # frequency for sdf slice visualization (per x frame)
-            self.sdfslice_freq_frame = config_args["eval"].get('sdf_freq_frame', 1)
+            self.sdf_default_on = config_args["eval"].get('sdf_default_on', self.sdf_default_on)
+            self.sdfslice_freq_frame = config_args["eval"].get('sdf_freq_frame', self.sdfslice_freq_frame)
             self.sdf_slice_height = config_args["eval"].get('sdf_slice_height', self.sdf_slice_height) # in sensor frame, unit: m
             
-            # mesh masking
+            # mesh related
+            self.mesh_default_on = config_args["eval"].get('mesh_default_on', self.mesh_default_on)
             self.mesh_min_nn = config_args["eval"].get('mesh_min_nn', self.mesh_min_nn)
             self.skip_top_voxel = config_args["eval"].get('skip_top_voxel', self.skip_top_voxel)
             self.min_cluster_vertices = config_args["eval"].get('min_cluster_vertices', self.min_cluster_vertices)
@@ -540,4 +558,5 @@ class Config:
         self.consistency_count = int(self.bs / 4)
         self.window_radius = max(self.max_range, 6.0) # for the sampling data poo, should not be too small
         self.local_map_radius = self.max_range + 2.0 # for the local neural points
-        self.vis_frame_axis_len = self.max_range / 50.0
+        self.vis_frame_axis_len = self.max_range / 40.0
+        self.vis_sdf_res_m = self.voxel_size_m * 0.3

@@ -14,13 +14,15 @@ def set_dataset_path(config: Config, dataset_name: str = '', seq: str = ''):
     
     config.name = config.name + '_' + dataset_name + '_' + seq.replace("/", "")
     
+    # recommended
     if config.use_dataloader:
         config.data_loader_name = dataset_name
         config.data_loader_seq = seq
         print('Using data loader for specific dataset or specific input data format')
-        from dataset.dataloaders import available_dataloaders 
-        print('Available dataloaders:', available_dataloaders())
-
+        # from dataset.dataloaders import available_dataloaders 
+        # print('Available dataloaders:', available_dataloaders())
+    
+    # not recommended
     else:
         if dataset_name == "kitti":
             base_path = config.pc_path.rsplit('/', 3)[0]
@@ -35,7 +37,7 @@ def set_dataset_path(config: Config, dataset_name: str = '', seq: str = ''):
             config.name = config.name + "_mulran_" + seq
             base_path = config.pc_path.rsplit('/', 2)[0]
             config.pc_path = os.path.join(base_path, seq, "Ouster")  # input point cloud folder
-            config.pose_path = os.path.join(base_path, seq, "poses.txt")   # input pose file
+            config.pose_path = os.path.join(base_path, seq, "poses.txt")   # input pose file (for this you need to do the conversion from global_pose.csv to poses.txt in kitti format by yourself. Otherwise, use Mulran data loader with the -d flag)
         elif dataset_name == "kitti_carla":
             config.name = config.name + "_kitti_carla_" + seq
             base_path = config.pc_path.rsplit('/', 3)[0]

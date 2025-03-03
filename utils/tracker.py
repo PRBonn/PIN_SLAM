@@ -22,17 +22,15 @@ class Tracker:
         self,
         config: Config,
         neural_points: NeuralPoints,
-        geo_decoder: Decoder,
-        sem_decoder: Decoder,
-        color_decoder: Decoder,
+        decoders: dict
     ):
 
         self.config = config
         self.silence = config.silence
         self.neural_points = neural_points
-        self.geo_decoder = geo_decoder
-        self.sem_decoder = sem_decoder
-        self.color_decoder = color_decoder
+        self.sdf_mlp = decoders["sdf"]
+        self.sem_mlp = decoders["semantic"]
+        self.color_mlp = decoders["color"]
         self.device = config.device
         self.dtype = config.dtype
         # NOTE: use torch.float64 for all the transformations and poses
@@ -99,7 +97,7 @@ class Tracker:
             min_valid_ratio = 0.15
 
         max_increment_sdf_residual_ratio = 1.1
-        eigenvalue_ratio_thre = 0.005
+        eigenvalue_ratio_thre = self.config.eigenvalue_ratio_thre # 0.005
         min_valid_points = 30
         converged = False
         valid_flag = True
@@ -193,9 +191,9 @@ class Tracker:
 
         if not self.silence:
             print("# Valid source point             :", valid_point_count)
-            print("Odometry residual (cm):", sdf_residual_cm)
+            print("Odometry residual (cm): {:.2f}".format(sdf_residual_cm))
             if photo_residual is not None:
-                print("Photometric residual:", photo_residual)
+                print("Photometric residual: {:.2f}".format(photo_residual))
 
         if sdf_residual_cm > max_valid_final_sdf_residual_cm:
             if not self.silence:
@@ -311,7 +309,7 @@ class Tracker:
 
             # print(weight_knn)
             if query_sdf:
-                batch_sdf = self.geo_decoder.sdf(batch_geo_feature)
+                batch_sdf = self.sdf_mlp.sdf(batch_geo_feature)
                 if not self.config.weighted_first:
                     # batch_sdf = torch.sum(batch_sdf * weight_knn, dim=1).squeeze(1)
                     # print(batch_sdf.squeeze(-1))
@@ -336,13 +334,13 @@ class Tracker:
                     sdf_grad[head:tail, :] = batch_sdf_grad.detach()
                 sdf_pred[head:tail] = batch_sdf.detach()
             if query_sem:
-                batch_sem_prob = self.sem_decoder.sem_label_prob(batch_geo_feature)
+                batch_sem_prob = self.sem_mlp.sem_label_prob(batch_geo_feature)
                 if not self.config.weighted_first:
                     batch_sem_prob = torch.sum(batch_sem_prob * weight_knn, dim=1)
                 batch_sem = torch.argmax(batch_sem_prob, dim=1)
                 sem_pred[head:tail] = batch_sem.detach()
             if query_color:
-                batch_color = self.color_decoder.regress_color(batch_color_feature)
+                batch_color = self.color_mlp.regress_color(batch_color_feature)
                 if not self.config.weighted_first:
                     batch_color = torch.sum(batch_color * weight_knn, dim=1)  # N, C
                 if query_color_grad:

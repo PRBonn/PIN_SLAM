@@ -26,6 +26,8 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 import wandb
+import matplotlib
+matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 from matplotlib.cm import viridis
 from torch import optim
@@ -44,9 +46,8 @@ def setup_experiment(config: Config, argv=None, debug_mode: bool = False):
     o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Error)
     warnings.filterwarnings("ignore", category=FutureWarning) 
 
-    run_name = config.name + "_" + ts  # modified to a name that is easier to index
-
-    run_path = os.path.join(config.output_root, run_name)
+    config.run_name = config.name + "_" + ts  # modified to a name that is easier to index
+    run_path = os.path.join(config.output_root, config.run_name)
 
     cuda_available = torch.cuda.is_available()
     if not cuda_available:
@@ -54,6 +55,11 @@ def setup_experiment(config: Config, argv=None, debug_mode: bool = False):
         config.device = "cpu"
     else:
         torch.cuda.empty_cache()
+    if config.device == "cpu":
+        print("Using the pure CPU mode, this would be slow")
+        
+    # set X service (FIXME)
+    os.environ["DISPLAY"] = ":0"
 
     # set the random seed for all
     seed_anything(config.seed)
@@ -84,7 +90,7 @@ def setup_experiment(config: Config, argv=None, debug_mode: bool = False):
             wandb.init(
                 project="PIN_SLAM", config=vars(config), dir=run_path
             )  # your own worksapce
-            wandb.run.name = run_name
+            wandb.run.name = config.run_name
 
         # config file and reproducable shell script
         if argv is not None:
@@ -255,73 +261,64 @@ def unfreeze_model(model: nn.Module):
             param.requires_grad = True
 
 
-def freeze_decoders(geo_decoder, sem_decoder, color_decoder, config):
+def freeze_decoders(mlp_dict, config):
     if not config.silence:
-        print("Freeze the decoder")
-    freeze_model(geo_decoder)  # fixed the geo decoder
-    if config.semantic_on:
-        freeze_model(sem_decoder)  # fixed the sem decoder
-    if config.color_on:
-        freeze_model(color_decoder)  # fixed the color decoder
+        print("Freeze the decoders")
+    
+    keys = list(mlp_dict.keys())
+    for key in keys:
+        mlp = mlp_dict[key]
+        if mlp is not None:
+            freeze_model(mlp)
 
-
-def save_checkpoint(
-    neural_points,
-    geo_decoder,
-    color_decoder,
-    sem_decoder,
-    optimizer,
-    run_path,
-    checkpoint_name,
-    iters,
-):
-    torch.save(
-        {
-            "iters": iters,
-            "neural_points": neural_points,  # save the whole NN module
-            "geo_decoder": geo_decoder.state_dict(),
-            "color_decoder": color_decoder.state_dict(),
-            "sem_decoder": sem_decoder.state_dict(),
-            "optimizer": optimizer.state_dict(),
-        },
-        os.path.join(run_path, f"{checkpoint_name}.pth"),
-    )
-    print(f"save the model to {run_path}/{checkpoint_name}.pth")
+def unfreeze_decoders(mlp_dict, config):
+    if not config.silence:
+        print("Unfreeze the decoders")
+    keys = list(mlp_dict.keys())
+    for key in keys:
+        mlp = mlp_dict[key]
+        if mlp is not None:
+            unfreeze_model(mlp)
 
 
 def save_implicit_map(
-    run_path, neural_points, geo_decoder, color_decoder=None, sem_decoder=None
+    run_path, neural_points, mlp_dict, with_footprint: bool = True
 ):
+    # together with the mlp decoders
 
-    map_dict = {"neural_points": neural_points, "geo_decoder": geo_decoder.state_dict()}
-    if color_decoder is not None:
-        map_dict["color_decoder"] = color_decoder.state_dict()
-    if sem_decoder is not None:
-        map_dict["sem_decoder"] = sem_decoder.state_dict()
+    map_model = {"neural_points": neural_points}
+
+    for key in list(mlp_dict.keys()):
+        if mlp_dict[key] is not None:
+            map_model[key] = mlp_dict[key].state_dict()
+        else:
+            map_model[key] = None
 
     model_save_path = os.path.join(run_path, "model", "pin_map.pth")  # end with .pth
-    torch.save(map_dict, model_save_path)
+    torch.save(map_model, model_save_path)
 
     print(f"save the map to {model_save_path}")
 
-    np.save(
-        os.path.join(run_path, "memory_footprint.npy"),
-        np.array(neural_points.memory_footprint),
-    )  # save detailed memory table
+    if with_footprint:
+        np.save(
+            os.path.join(run_path, "memory_footprint.npy"),
+            np.array(neural_points.memory_footprint),
+        )  # save detailed memory table
 
 
-def load_decoder(config, geo_mlp, sem_mlp, color_mlp):
-    loaded_model = torch.load(config.model_path)
-    geo_mlp.load_state_dict(loaded_model["geo_decoder"])
-    print("Pretrained decoder loaded")
-    freeze_model(geo_mlp)  # fixed the decoder
-    if config.semantic_on:
-        sem_mlp.load_state_dict(loaded_model["sem_decoder"])
-        freeze_model(sem_mlp)  # fixed the decoder
-    if config.color_on:
-        color_mlp.load_state_dict(loaded_model["color_decoder"])
-        freeze_model(color_mlp)  # fixed the decoder
+def load_decoders(loaded_model, mlp_dict, freeze_decoders: bool = True):
 
+    for key in list(loaded_model.keys()):
+        if key != "neural_points":
+            if loaded_model[key] is not None:
+                mlp_dict[key].load_state_dict(loaded_model[key])
+                if freeze_decoders:
+                    freeze_model(mlp_dict[key])
+
+    print("Pretrained decoders loaded")
+
+def create_bbx_o3d(center, half_size):
+    return o3d.geometry.AxisAlignedBoundingBox(center - half_size, center + half_size)
 
 def get_time():
     """
@@ -345,6 +342,35 @@ def track_progress():
         wrapper.calls = 0
         return wrapper
     return decorator
+
+def is_prime(n):
+    """Helper function to check if a number is prime."""
+    if n < 2:
+        return False
+    for i in range(2, int(n ** 0.5) + 1):
+        if n % i == 0:
+            return False
+    return True
+
+def find_closest_prime(n):
+    """Find the closest prime number to n."""
+    if n < 2:
+        return 2
+    
+    if is_prime(n):
+        return n
+        
+    # Check numbers both above and below n
+    lower = n - 1
+    upper = n + 1
+    
+    while True:
+        if is_prime(lower):
+            return lower
+        if is_prime(upper):
+            return upper
+        lower -= 1
+        upper += 1
 
 
 def load_from_json(filename: Path):
@@ -804,8 +830,9 @@ def feature_pca_torch(data, principal_components = None,
             # max_vals = data_pca.max(dim=0, keepdim=True).values
 
             # # deal with outliers
-            min_vals = torch.quantile(data_pca, 0.02, dim=0, keepdim=True)
-            max_vals = torch.quantile(data_pca, 0.98, dim=0, keepdim=True)
+            quantile_down_rate = 31 # quantile has count limit, downsample the data to avoid the limit
+            min_vals = torch.quantile(data_pca[::quantile_down_rate], 0.02, dim=0, keepdim=True)
+            max_vals = torch.quantile(data_pca[::quantile_down_rate], 0.98, dim=0, keepdim=True)
 
             # Normalize to range [0, 1]
             data_pca = (data_pca - min_vals) / (max_vals - min_vals)

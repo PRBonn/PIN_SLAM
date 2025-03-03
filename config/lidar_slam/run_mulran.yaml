@@ -34,6 +34,8 @@ pgo:
   map_context: True
   pgo_freq_frame: 30
   context_cosdist: 0.25
+  virtual_side_count: 10 # added
+  local_loop_dist_thre: 20.0 # added
 optimizer: # mapper
   iters: 15 # iterations per frame
   batch_size: 16384

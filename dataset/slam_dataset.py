@@ -244,6 +244,9 @@ class SLAMDataset(Dataset):
          
         self.cur_point_cloud_torch = torch.tensor(points, device=self.device, dtype=self.dtype)
 
+        if self.cur_point_cloud_torch.shape[0] == 0: # skip empty frame
+            return
+
         if self.config.deskew: 
             self.get_point_ts(point_ts)
 
@@ -415,7 +418,8 @@ class SLAMDataset(Dataset):
         # down sampling (together with the color and semantic entities)
         original_count = self.cur_point_cloud_torch.shape[0]
         if original_count < 10:  # deal with missing data (invalid frame)
-            print("[bold red]Not enough input point cloud, skip this frame[/bold red]")
+            if not self.config.silence:
+                print("[bold red]Not enough input point cloud, skip this frame[/bold red]")
             if self.config.track_on:
                 self.odom_poses[frame_id] = cur_pose_init_guess
             if self.config.pgo_on:
@@ -533,18 +537,25 @@ class SLAMDataset(Dataset):
             cur_odom_pose = self.odom_poses[cur_frame_id-1] @ self.last_odom_tran  # T_world<-cur
             self.odom_poses[cur_frame_id] = cur_odom_pose
 
+        if self.lose_track:
+            self.consecutive_lose_track_frame += 1
+        else:
+            self.consecutive_lose_track_frame = 0
+
         cur_frame_travel_dist = np.linalg.norm(self.last_odom_tran[:3, 3])
         if (
-            cur_frame_travel_dist > self.config.surface_sample_range_m * 40.0
-        ):  # too large translation in one frame --> lose track
+            cur_frame_travel_dist > self.config.surface_sample_range_m * 20.0
+        ):  # too large translation in one frame --> lose track # FIXME deal with very fast motion (>300km/h)
             self.lose_track = True
-            self.write_results() # record before the failure point
-            sys.exit("Too large translation in one frame, system failed")
+            self.consecutive_lose_track_frame = self.config.reboot_frame_thre # directly reboot the system
+            if not self.silence:
+                print("Too large translation in one frame, lose track")
+            self.write_results_log() # record before the reboot point
 
         accu_travel_dist = self.travel_dist[cur_frame_id-1] + cur_frame_travel_dist
         self.travel_dist[cur_frame_id] = accu_travel_dist
         if not self.silence:
-            print("Accumulated travel distance (m): %f" % accu_travel_dist)
+            print("Accumulated travel distance (m): {:.3f}".format(accu_travel_dist))
         
         self.last_pose_ref = self.cur_pose_ref  # update for the next frame
 
@@ -556,14 +567,6 @@ class SLAMDataset(Dataset):
                 torch.tensor(self.last_odom_tran, device=self.device, dtype=self.dtype),
             )  # T_last<-cur
 
-        if self.lose_track:
-            self.consecutive_lose_track_frame += 1
-        else:
-            self.consecutive_lose_track_frame = 0
-
-        if self.consecutive_lose_track_frame > 10:
-            self.write_results() # record before the failure point
-            sys.exit("Lose track for a long time, system failed") 
 
     def update_poses_after_pgo(self, pgo_poses):
         self.pgo_poses[:self.processed_frame+1] = pgo_poses  # update pgo pose
@@ -658,6 +661,8 @@ class SLAMDataset(Dataset):
                 self.gt_poses[:self.processed_frame+1],
                 os.path.join(self.run_path, log_folder, frame_str + "_gt_poses.ply"),
             )
+        # TODO: also write the trajectory in txt format, and add the option for logging the map
+        # self.write_results()
 
     def get_poses_np_for_vis(self):
         odom_poses = None
@@ -818,35 +823,36 @@ class SLAMDataset(Dataset):
                 gt_position_list = [self.gt_poses[i] for i in range(self.processed_frame)]
                 odom_position_list = [self.odom_poses[i] for i in range(self.processed_frame)]
 
-                # if self.config.pgo_on:
-                #     pgo_position_list = [self.pgo_poses[i] for i in range(self.processed_frame)]
-                #     plot_trajectories(
-                #         output_traj_plot_path_2d,
-                #         pgo_position_list,
-                #         gt_position_list,
-                #         odom_position_list,
-                #         plot_3d=False,
-                #     )
-                #     plot_trajectories(
-                #         output_traj_plot_path_3d,
-                #         pgo_position_list,
-                #         gt_position_list,
-                #         odom_position_list,
-                #         plot_3d=True,
-                #     )
-                # else:
-                #     plot_trajectories(
-                #         output_traj_plot_path_2d,
-                #         odom_position_list,
-                #         gt_position_list,
-                #         plot_3d=False,
-                #     )
-                #     plot_trajectories(
-                #         output_traj_plot_path_3d,
-                #         odom_position_list,
-                #         gt_position_list,
-                #         plot_3d=True,
-                #     )
+                # plot_trajectories may cause error when running in the remote server without X service (FIXME)
+                if self.config.pgo_on:
+                    pgo_position_list = [self.pgo_poses[i] for i in range(self.processed_frame)]
+                    plot_trajectories(
+                        output_traj_plot_path_2d,
+                        pgo_position_list,
+                        gt_position_list,
+                        odom_position_list,
+                        plot_3d=False,
+                    )
+                    plot_trajectories(
+                        output_traj_plot_path_3d,
+                        pgo_position_list,
+                        gt_position_list,
+                        odom_position_list,
+                        plot_3d=True,
+                    )
+                else:
+                    plot_trajectories(
+                        output_traj_plot_path_2d,
+                        odom_position_list,
+                        gt_position_list,
+                        plot_3d=False,
+                    )
+                    plot_trajectories(
+                        output_traj_plot_path_3d,
+                        odom_position_list,
+                        gt_position_list,
+                        plot_3d=True,
+                    )
 
         return pose_eval
 
