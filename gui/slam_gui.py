@@ -5,7 +5,6 @@
 # This GUI is built on top of the great work of MonoGS (https://github.com/muskie82/MonoGS/blob/main/gui/slam_gui.py) 
 
 from typing import Dict, List, Tuple
-import pathlib
 import threading
 import time
 from datetime import datetime
@@ -18,7 +17,6 @@ import copy
 import open3d as o3d
 import open3d.visualization.gui as gui
 import open3d.visualization.rendering as rendering
-import torch
 
 from pickle import load, dump
 
@@ -303,7 +301,7 @@ class SLAM_GUI:
             self._on_load_view_btn
         )  # set the callback function
 
-        self.reset_view_btn = gui.Button("Reset Viewpoint")
+        self.reset_view_btn = gui.Button("Reset")
         self.reset_view_btn.set_on_clicked(
             self._on_reset_view_btn
         )  # set the callback function
@@ -336,24 +334,19 @@ class SLAM_GUI:
         chbox_tile_3dobj.add_child(self.mesh_chbox)
         self.mesh_name = "pin_mesh"
 
-        self.cmesh_chbox = gui.Checkbox("Mesh (color)")
-        self.cmesh_chbox.checked = False
-        self.cmesh_chbox.set_on_checked(self._on_cmesh_chbox)
-        chbox_tile_3dobj.add_child(self.cmesh_chbox)
-
         self.sdf_chbox = gui.Checkbox("SDF Slice")
         self.sdf_chbox.checked = self.sdf_default_on
         self.sdf_chbox.set_on_checked(self._on_sdf_chbox)
         chbox_tile_3dobj.add_child(self.sdf_chbox)
         self.sdf_name = "cur_sdf_slice"  
-        
-        chbox_tile_3dobj_2 = gui.Horiz(0.5 * em, gui.Margins(margin))
 
         self.cad_chbox = gui.Checkbox("Robot")
         self.cad_chbox.checked = self.robot_default_on
         self.cad_chbox.set_on_checked(self._on_cad_chbox)
-        chbox_tile_3dobj_2.add_child(self.cad_chbox)
+        chbox_tile_3dobj.add_child(self.cad_chbox)
         self.cad_name = "sensor_cad"
+        
+        chbox_tile_3dobj_2 = gui.Horiz(0.5 * em, gui.Margins(margin))
 
         self.gt_traj_chbox = gui.Checkbox("GT Trajectory")
         self.gt_traj_chbox.checked = False
@@ -386,11 +379,6 @@ class SLAM_GUI:
         chbox_tile_3dobj_3.add_child(self.sdf_pool_chbox)
         self.sdf_pool_name = "sdf_sample_pool" 
 
-        self.source_pc_chbox = gui.Checkbox("Scan Registration Weight")
-        self.source_pc_chbox.checked = False
-        chbox_tile_3dobj_3.add_child(self.source_pc_chbox)
-        self.source_pc_name = "source_pc"   
-
         self.range_circle_chbox = gui.Checkbox("Range Rings")
         self.range_circle_chbox.checked = False
         self.range_circle_chbox.set_on_checked(self._on_range_circle_chbox)
@@ -400,6 +388,40 @@ class SLAM_GUI:
         self.panel.add_child(chbox_tile_3dobj)
         self.panel.add_child(chbox_tile_3dobj_2)
         self.panel.add_child(chbox_tile_3dobj_3)
+        
+        self.panel.add_child(gui.Label("Scan Color Options"))
+        chbox_tile_scan_color = gui.Horiz(0.5 * em, gui.Margins(margin))
+
+        # mode 1
+        self.scan_color_chbox = gui.Checkbox("Color")
+        self.scan_color_chbox.checked = True
+        self.scan_color_chbox.set_on_checked(self._on_scan_color_chbox)
+        chbox_tile_scan_color.add_child(self.scan_color_chbox)
+        
+        # mode 2
+        self.scan_regis_color_chbox = gui.Checkbox("Registration Weight")
+        self.scan_regis_color_chbox.checked = False
+        self.scan_regis_color_chbox.set_on_checked(self._on_scan_regis_color_chbox)
+        chbox_tile_scan_color.add_child(self.scan_regis_color_chbox)
+
+        # mode 3
+        self.scan_height_color_chbox = gui.Checkbox("Height")
+        self.scan_height_color_chbox.checked = False
+        self.scan_height_color_chbox.set_on_checked(self._on_scan_height_color_chbox)
+        chbox_tile_scan_color.add_child(self.scan_height_color_chbox)
+
+        self.panel.add_child(chbox_tile_scan_color)
+        
+        scan_point_size_slider_tile = gui.Horiz(0.5 * em, gui.Margins(margin))
+        scan_point_size_slider_label = gui.Label("Scan point size (1-6)   ")
+        self.scan_point_size_slider = gui.Slider(gui.Slider.INT)
+        self.scan_point_size_slider.set_limits(1, 6)
+        self.scan_point_size_slider.int_value = self.scan_render_init_size_unit
+        self.scan_point_size_slider.set_on_value_changed(self._on_scan_point_size_changed)
+        scan_point_size_slider_tile.add_child(scan_point_size_slider_label)
+        scan_point_size_slider_tile.add_child(self.scan_point_size_slider)
+        self.panel.add_child(scan_point_size_slider_tile)
+
 
         self.panel.add_child(gui.Label("Neural Point Color Options"))
         chbox_tile_neuralpoint = gui.Horiz(0.5 * em, gui.Margins(margin))
@@ -440,17 +462,29 @@ class SLAM_GUI:
         map_point_size_slider_tile.add_child(self.map_point_size_slider)
         self.panel.add_child(map_point_size_slider_tile)
 
-        scan_point_size_slider_tile = gui.Horiz(0.5 * em, gui.Margins(margin))
-        scan_point_size_slider_label = gui.Label("Scan point size (1-6)   ")
-        self.scan_point_size_slider = gui.Slider(gui.Slider.INT)
-        self.scan_point_size_slider.set_limits(1, 6)
-        self.scan_point_size_slider.int_value = self.scan_render_init_size_unit
-        self.scan_point_size_slider.set_on_value_changed(self._on_scan_point_size_changed)
-        scan_point_size_slider_tile.add_child(scan_point_size_slider_label)
-        scan_point_size_slider_tile.add_child(self.scan_point_size_slider)
-        self.panel.add_child(scan_point_size_slider_tile)
+        self.panel.add_child(gui.Label("Mesh Color Options"))
 
-        self.panel.add_child(gui.Label("Mesh Reconstruction Options"))
+        chbox_tile_mesh_color = gui.Horiz(0.5 * em, gui.Margins(margin))
+        
+        # mode 1
+        self.mesh_normal_chbox = gui.Checkbox("Normal")
+        self.mesh_normal_chbox.checked = True
+        self.mesh_normal_chbox.set_on_checked(self._on_mesh_normal_chbox)
+        chbox_tile_mesh_color.add_child(self.mesh_normal_chbox)
+
+        # mode 2
+        self.mesh_color_chbox = gui.Checkbox("Color")
+        self.mesh_color_chbox.checked = False
+        self.mesh_color_chbox.set_on_checked(self._on_mesh_color_chbox)
+        chbox_tile_mesh_color.add_child(self.mesh_color_chbox)
+        
+        # mode 3
+        self.mesh_height_chbox = gui.Checkbox("Height")
+        self.mesh_height_chbox.checked = False
+        self.mesh_height_chbox.set_on_checked(self._on_mesh_height_chbox)
+        chbox_tile_mesh_color.add_child(self.mesh_height_chbox)
+
+        self.panel.add_child(chbox_tile_mesh_color)
 
         mesh_freq_frame_slider_tile = gui.Horiz(0.5 * em, gui.Margins(margin))
         mesh_freq_frame_slider_label = gui.Label("Mesh update per X frames (1-100)")
@@ -602,13 +636,6 @@ class SLAM_GUI:
     def _on_mesh_chbox(self, is_checked):
         self.visualize_mesh()
 
-    def _on_cmesh_chbox(self, is_checked):
-        if is_checked:
-            self.mesh_render.shader = "defaultLit"
-        else:
-            self.mesh_render.shader = "normals"
-        self.visualize_mesh()
-
     def _on_scan_chbox(self, is_checked):
         self.visualize_scan()
     
@@ -646,29 +673,72 @@ class SLAM_GUI:
         else:
             self.widget3d.scene.remove_geometry(self.range_circle_name)
 
+    def _on_mesh_normal_chbox(self, is_checked):
+        if is_checked:
+            self.mesh_render.shader = "normals"
+            self.mesh_color_chbox.checked = False
+            self.mesh_height_chbox.checked = False
+        self.visualize_mesh()
+
+    def _on_mesh_color_chbox(self, is_checked):
+        if is_checked:
+            self.mesh_render.shader = "defaultLit"
+            self.mesh_normal_chbox.checked = False
+            self.mesh_height_chbox.checked = False
+        self.visualize_mesh()
+
+    def _on_mesh_height_chbox(self, is_checked):
+        if is_checked:
+            self.mesh_render.shader = "defaultLit"
+            self.mesh_normal_chbox.checked = False
+            self.mesh_color_chbox.checked = False
+        self.visualize_mesh()
+
+    def _on_scan_color_chbox(self, is_checked):
+        if is_checked:
+            self.scan_height_color_chbox.checked = False
+            self.scan_regis_color_chbox.checked = False
+        self.visualize_scan()
+    
+    def _on_scan_regis_color_chbox(self, is_checked):
+        if is_checked:
+            self.scan_height_color_chbox.checked = False
+            self.scan_color_chbox.checked = False
+        self.visualize_scan()
+
+    def _on_scan_height_color_chbox(self, is_checked):
+        if is_checked:
+            self.scan_color_chbox.checked = False
+            self.scan_regis_color_chbox.checked = False
+        self.visualize_scan()
+
     def _on_neuralpoint_geofeature_chbox(self, is_checked):
         if is_checked:
             self.neuralpoint_colorfeature_chbox.checked = False
             self.neuralpoint_height_chbox.checked = False
             self.neuralpoint_ts_chbox.checked = False
+        self.visualize_neural_points()
 
     def _on_neuralpoint_colorfeature_chbox(self, is_checked):
         if is_checked:
             self.neuralpoint_geofeature_chbox.checked = False
             self.neuralpoint_height_chbox.checked = False
             self.neuralpoint_ts_chbox.checked = False
+        self.visualize_neural_points()
 
     def _on_neuralpoint_ts_chbox(self, is_checked):
         if is_checked:
             self.neuralpoint_geofeature_chbox.checked = False
             self.neuralpoint_height_chbox.checked = False
             self.neuralpoint_colorfeature_chbox.checked = False
+        self.visualize_neural_points()
 
     def _on_neuralpoint_height_chbox(self, is_checked):
         if is_checked:
             self.neuralpoint_geofeature_chbox.checked = False
             self.neuralpoint_ts_chbox.checked = False
             self.neuralpoint_colorfeature_chbox.checked = False
+        self.visualize_neural_points()
 
     def _on_neural_point_point_size_changed(self, value):
         self.neural_points_render.point_size = value * self.window.scaling
@@ -815,12 +885,21 @@ class SLAM_GUI:
                 o3d.utility.Vector3dVector(data_packet.mesh_verts),
                 o3d.utility.Vector3iVector(data_packet.mesh_faces),
                 )
-            if data_packet.mesh_verts_rgb is not None:    
-                self.mesh.vertex_colors = o3d.utility.Vector3dVector(data_packet.mesh_verts_rgb)
             self.mesh.compute_vertex_normals()
+            
+            if data_packet.mesh_verts_rgb is not None:
+                self.mesh.vertex_colors = o3d.utility.Vector3dVector(data_packet.mesh_verts_rgb)
+            
+            if self.mesh_height_chbox.checked:
+                z_values = np.array(self.mesh.vertices, dtype=np.float64)[:, 2]
+                z_min, z_max = z_values.min(), z_values.max()
+                z_normalized = (z_values - z_min) / (z_max - z_min + 1e-6)
+                color_map = cm.get_cmap("jet")
+                mesh_verts_colors_np = color_map(z_normalized)[:, :3].astype(np.float64)
+                self.mesh.vertex_colors = o3d.utility.Vector3dVector(mesh_verts_colors_np)
 
-            if self.ego_chbox.checked:
-                self.mesh.transform(np.linalg.inv(self.cur_pose))
+        if self.ego_chbox.checked:
+            self.mesh.transform(np.linalg.inv(self.cur_pose))
 
         self.widget3d.scene.remove_geometry(self.mesh_name)
         self.widget3d.scene.add_geometry(self.mesh_name, self.mesh, self.mesh_render) 
@@ -864,42 +943,46 @@ class SLAM_GUI:
                 neural_point_vis_down_rate = find_closest_prime(point_count // 200000)
 
             if local_mask is not None and self.local_map_chbox.checked:
-                neural_point_position = data_packet.neural_points_data["position"][local_mask].detach().cpu().numpy()
+                neural_point_position = data_packet.neural_points_data["position"][local_mask]
             else:
-                neural_point_position = data_packet.neural_points_data["position"].detach().cpu().numpy()
+                neural_point_position = data_packet.neural_points_data["position"]
+
+            neural_point_position_np = neural_point_position[::neural_point_vis_down_rate, :].detach().cpu().numpy()
                     
-            neural_point_colors = None
+            neural_point_colors_np = None
             
             if "color_pca_geo" in dict_keys and self.neuralpoint_geofeature_chbox.checked:
                 if local_mask is not None and self.local_map_chbox.checked:
-                    neural_point_colors = data_packet.neural_points_data["color_pca_geo"][local_mask].detach().cpu().numpy()
+                    neural_point_colors = data_packet.neural_points_data["color_pca_geo"][local_mask]
                 else:
-                    neural_point_colors = data_packet.neural_points_data["color_pca_geo"].detach().cpu().numpy()
+                    neural_point_colors = data_packet.neural_points_data["color_pca_geo"]
+                neural_point_colors_np = neural_point_colors[::neural_point_vis_down_rate, :].detach().cpu().numpy()
             elif "color_pca_color" in dict_keys and self.neuralpoint_colorfeature_chbox.checked:
                 if local_mask is not None and self.local_map_chbox.checked:
-                    neural_point_colors = data_packet.neural_points_data["color_pca_color"][local_mask].detach().cpu().numpy()
+                    neural_point_colors = data_packet.neural_points_data["color_pca_color"][local_mask]
                 else:
-                    neural_point_colors = data_packet.neural_points_data["color_pca_color"].detach().cpu().numpy()
+                    neural_point_colors = data_packet.neural_points_data["color_pca_color"]
+                neural_point_colors_np = neural_point_colors[::neural_point_vis_down_rate, :].detach().cpu().numpy()
             elif "ts" in dict_keys and self.neuralpoint_ts_chbox.checked:
-                max_ts = torch.max(data_packet.neural_points_data["ts"]) * 1.0
                 if local_mask is not None and self.local_map_chbox.checked:
-                    ts_np = (data_packet.neural_points_data["ts"][local_mask]/max_ts).detach().cpu().numpy()
+                    ts_np = (data_packet.neural_points_data["ts"][local_mask])
                 else:
-                    ts_np = (data_packet.neural_points_data["ts"]/max_ts).detach().cpu().numpy()
+                    ts_np = (data_packet.neural_points_data["ts"])
+                ts_np = ts_np[::neural_point_vis_down_rate].detach().cpu().numpy()
+                ts_np = ts_np / ts_np.max()
                 color_map = cm.get_cmap("jet")
-                neural_point_colors = color_map(ts_np)[:, :3].astype(np.float64)
-
+                neural_point_colors_np = color_map(ts_np)[:, :3].astype(np.float64)
             elif self.neuralpoint_height_chbox.checked:
-                z_values = neural_point_position[:, 2]
+                z_values = neural_point_position_np[:, 2]
                 z_min, z_max = z_values.min(), z_values.max()
                 z_normalized = (z_values - z_min) / (z_max - z_min + 1e-6)
                 color_map = cm.get_cmap("jet")
-                neural_point_colors = color_map(z_normalized)[:, :3].astype(np.float64)
+                neural_point_colors_np = color_map(z_normalized)[:, :3].astype(np.float64)
+                
+            self.neural_points.points = o3d.utility.Vector3dVector(neural_point_position_np)
 
-            self.neural_points.points = o3d.utility.Vector3dVector(neural_point_position[::neural_point_vis_down_rate, :])
-
-            if neural_point_colors is not None:
-                self.neural_points.colors = o3d.utility.Vector3dVector(neural_point_colors[::neural_point_vis_down_rate, :])
+            if neural_point_colors_np is not None:
+                self.neural_points.colors = o3d.utility.Vector3dVector(neural_point_colors_np)
             else:
                 self.neural_points.paint_uniform_color(LIGHTBLUE)
 
@@ -920,8 +1003,16 @@ class SLAM_GUI:
             if data_packet.current_pointcloud_rgb is not None:
                 self.scan.colors = o3d.utility.Vector3dVector(data_packet.current_pointcloud_rgb)
         
-            if not (self.config.color_on or self.config.semantic_on or self.source_pc_chbox.checked):
+            if not (self.config.color_on or self.config.semantic_on or self.scan_regis_color_chbox.checked):
                 self.scan.paint_uniform_color(SILVER)
+
+            if self.scan_height_color_chbox.checked:
+                z_values = data_packet.current_pointcloud_xyz[:, 2]
+                z_min, z_max = z_values.min(), z_values.max()
+                z_normalized = (z_values - z_min) / (z_max - z_min + 1e-6)
+                color_map = cm.get_cmap("jet")
+                scan_colors_np = color_map(z_normalized)[:, :3].astype(np.float64)
+                self.scan.colors = o3d.utility.Vector3dVector(scan_colors_np)
 
             if self.ego_chbox.checked:
                 self.scan.transform(np.linalg.inv(self.cur_pose))
@@ -951,7 +1042,7 @@ class SLAM_GUI:
         packet = ControlPacket()
         packet.flag_pause = not self.slider_slam.is_on
         packet.flag_vis = self.slider_vis.is_on
-        packet.flag_source = self.source_pc_chbox.checked
+        packet.flag_source = self.scan_regis_color_chbox.checked
         packet.flag_mesh = self.mesh_chbox.checked
         packet.flag_sdf = self.sdf_chbox.checked
         packet.flag_global = not self.local_map_chbox.checked

@@ -11,7 +11,8 @@ import time
 import numpy as np
 import open3d as o3d
 import torch
-import torch.multiprocessing as mp
+# import torch.multiprocessing as mp
+import multiprocessing as mp
 import dtyper as typer
 import wandb
 from rich import print
@@ -71,7 +72,7 @@ $ python3 pin_slam.py <path-to-config-file.yaml>:page_facing_up: -i <data-dir>:o
 # Process a given [bold]ROS1/ROS2 [/bold]rosbag file (directory:open_file_folder:, ".bag":page_facing_up:)
 $ python3 pin_slam.py <path-to-config-file.yaml>:page_facing_up: rosbag -i <path-to-my-rosbag>[:open_file_folder:/:page_facing_up:] -dvsm
 
-# Use a more specific dataloader: {", ".join(_available_dl_help)}
+# Use a more specific dataloader: select from {", ".join(_available_dl_help)}
 # For example, to process KITTI dataset sequence 00:
 $ python3 pin_slam.py ./config/lidar_slam/run_kitti.yaml kitti 00 -i <path-to-kitti-root>:open_file_folder: -dvsm
 

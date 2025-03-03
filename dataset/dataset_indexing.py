@@ -19,8 +19,8 @@ def set_dataset_path(config: Config, dataset_name: str = '', seq: str = ''):
         config.data_loader_name = dataset_name
         config.data_loader_seq = seq
         print('Using data loader for specific dataset or specific input data format')
-        from dataset.dataloaders import available_dataloaders 
-        print('Available dataloaders:', available_dataloaders())
+        # from dataset.dataloaders import available_dataloaders 
+        # print('Available dataloaders:', available_dataloaders())
     
     # not recommended
     else:

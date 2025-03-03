@@ -277,6 +277,9 @@ python3 pin_slam.py ./config/lidar_slam/run.yaml rosbag -i data/m2dgr/street_01.
 
 # Newer College 128 sequence stairs
 python3 pin_slam.py ./config/lidar_slam/run_ncd_128_s.yaml rosbag -i data/ncd128/staris/ -vsmd
+
+# Hilti sequence uzh_tracking_area_run2
+python3 pin_slam.py ./config/lidar_slam/run_hilti.yaml rosbag -i data/Hilti/uzh_tracking_area_run2.bag -vsmd
 ```
 
 The SLAM results and logs will be output in the `output_root` folder set in the config file or specified by the `-o OUTPUT_PATH` flag. 
