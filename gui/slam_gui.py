@@ -118,8 +118,8 @@ class SLAM_GUI:
 
     # has some issue here
     def init_widget(self):
-        # self.window_w, self.window_h = 1600, 900
-        self.window_w, self.window_h = 2560, 1600
+        self.window_w, self.window_h = 1600, 900
+        # self.window_w, self.window_h = 2560, 1600
 
         self.window = gui.Application.instance.create_window(
            "📍 PIN-SLAM Viewer", self.window_w, self.window_h
@@ -258,9 +258,6 @@ class SLAM_GUI:
 
         viewpoint_tile = gui.Horiz(0.5 * em, gui.Margins(margin))
 
-        ##Check boxes
-        # chbox_tile = gui.Horiz(0.5 * em, gui.Margins(margin))
-
         self.local_map_chbox = gui.Checkbox("Local Map")
         self.local_map_chbox.checked = self.local_map_default_on
         viewpoint_tile.add_child(self.local_map_chbox)
@@ -280,6 +277,10 @@ class SLAM_GUI:
         self.fly_chbox.set_on_checked(self._set_mouse_mode)
         viewpoint_tile.add_child(self.fly_chbox)
 
+        self.panel.add_child(viewpoint_tile)
+
+        viewpoint_tile_2 = gui.Horiz(0.5 * em, gui.Margins(margin))
+
         ##Combo panels for preset views 
         combo_tile3 = gui.Vert(0.5 * em, gui.Margins(margin))
         self.combo_preset_cams = gui.Combobox()
@@ -289,7 +290,7 @@ class SLAM_GUI:
         # self.combo_preset_cams.set_on_selection_changed(self._on_combo_preset_cams) 
         # combo_tile3.add_child(gui.Label("Preset"))
         combo_tile3.add_child(self.combo_preset_cams)
-        viewpoint_tile.add_child(combo_tile3)
+        viewpoint_tile_2.add_child(combo_tile3)
 
         self.save_view_btn = gui.Button("Save")
         self.save_view_btn.set_on_clicked(
@@ -301,22 +302,22 @@ class SLAM_GUI:
             self._on_load_view_btn
         )  # set the callback function
 
-        self.reset_view_btn = gui.Button("Reset")
+        self.reset_view_btn = gui.Button("Reset Viewpoint")
         self.reset_view_btn.set_on_clicked(
             self._on_reset_view_btn
         )  # set the callback function
 
-        viewpoint_tile.add_child(self.save_view_btn)
-        viewpoint_tile.add_child(self.load_view_btn)
-        viewpoint_tile.add_child(self.reset_view_btn)
+        viewpoint_tile_2.add_child(self.save_view_btn)
+        viewpoint_tile_2.add_child(self.load_view_btn)
+        viewpoint_tile_2.add_child(self.reset_view_btn)
         
-        self.panel.add_child(viewpoint_tile)
+        self.panel.add_child(viewpoint_tile_2)
 
         self.panel.add_child(gui.Label("3D Objects"))
 
         chbox_tile_3dobj = gui.Horiz(0.5 * em, gui.Margins(margin))
 
-        self.scan_chbox = gui.Checkbox("Current Scan")
+        self.scan_chbox = gui.Checkbox("Scan")
         self.scan_chbox.checked = True
         self.scan_chbox.set_on_checked(self._on_scan_chbox)
         chbox_tile_3dobj.add_child(self.scan_chbox)
@@ -334,7 +335,7 @@ class SLAM_GUI:
         chbox_tile_3dobj.add_child(self.mesh_chbox)
         self.mesh_name = "pin_mesh"
 
-        self.sdf_chbox = gui.Checkbox("SDF Slice")
+        self.sdf_chbox = gui.Checkbox("SDF")
         self.sdf_chbox.checked = self.sdf_default_on
         self.sdf_chbox.set_on_checked(self._on_sdf_chbox)
         chbox_tile_3dobj.add_child(self.sdf_chbox)
@@ -348,25 +349,25 @@ class SLAM_GUI:
         
         chbox_tile_3dobj_2 = gui.Horiz(0.5 * em, gui.Margins(margin))
 
-        self.gt_traj_chbox = gui.Checkbox("GT Trajectory")
+        self.gt_traj_chbox = gui.Checkbox("GT Traj.")
         self.gt_traj_chbox.checked = False
         self.gt_traj_chbox.set_on_checked(self._on_gt_traj_chbox)
         chbox_tile_3dobj_2.add_child(self.gt_traj_chbox)
         self.gt_traj_name = "gt_trajectory"
 
-        self.slam_traj_chbox = gui.Checkbox("SLAM Trajectory")
+        self.slam_traj_chbox = gui.Checkbox("SLAM Traj.")
         self.slam_traj_chbox.checked = False
         self.slam_traj_chbox.set_on_checked(self._on_slam_traj_chbox)
         chbox_tile_3dobj_2.add_child(self.slam_traj_chbox)
         self.slam_traj_name = "slam_trajectory"
 
-        self.odom_traj_chbox = gui.Checkbox("Odom. Trajectory")
+        self.odom_traj_chbox = gui.Checkbox("Odom. Traj.")
         self.odom_traj_chbox.checked = False
         self.odom_traj_chbox.set_on_checked(self._on_odom_traj_chbox)
         chbox_tile_3dobj_2.add_child(self.odom_traj_chbox)
         self.odom_traj_name = "odom_trajectory"
 
-        self.loop_edges_chbox = gui.Checkbox("Loop Closures")
+        self.loop_edges_chbox = gui.Checkbox("Loops")
         self.loop_edges_chbox.checked = False
         chbox_tile_3dobj_2.add_child(self.loop_edges_chbox)
         self.loop_edges_name = "loop_edges"
@@ -427,19 +428,19 @@ class SLAM_GUI:
         chbox_tile_neuralpoint = gui.Horiz(0.5 * em, gui.Margins(margin))
 
         # mode 1
-        self.neuralpoint_geofeature_chbox = gui.Checkbox("Geometric Feature")
+        self.neuralpoint_geofeature_chbox = gui.Checkbox("Geo. Feature")
         self.neuralpoint_geofeature_chbox.checked = (self.neural_point_color_default_mode==1)
         self.neuralpoint_geofeature_chbox.set_on_checked(self._on_neuralpoint_geofeature_chbox)
         chbox_tile_neuralpoint.add_child(self.neuralpoint_geofeature_chbox)
 
         # mode 2
-        self.neuralpoint_colorfeature_chbox = gui.Checkbox("Photometric Feature")
+        self.neuralpoint_colorfeature_chbox = gui.Checkbox("Photo. Feature")
         self.neuralpoint_colorfeature_chbox.checked = (self.neural_point_color_default_mode==2)
         self.neuralpoint_colorfeature_chbox.set_on_checked(self._on_neuralpoint_colorfeature_chbox)
         chbox_tile_neuralpoint.add_child(self.neuralpoint_colorfeature_chbox)
 
         # mode 3
-        self.neuralpoint_ts_chbox = gui.Checkbox("Timestep")
+        self.neuralpoint_ts_chbox = gui.Checkbox("Time")
         self.neuralpoint_ts_chbox.checked = (self.neural_point_color_default_mode==3)
         self.neuralpoint_ts_chbox.set_on_checked(self._on_neuralpoint_ts_chbox)
         chbox_tile_neuralpoint.add_child(self.neuralpoint_ts_chbox)
@@ -550,8 +551,6 @@ class SLAM_GUI:
             self._on_screenshot_btn
         )  # set the callback function
         chbox_save_tile.add_child(self.screenshot_btn)
-        
-        self.panel.add_child(chbox_save_tile)
 
         self.screenshot_3d_btn = gui.Button("3D Screenshot")
         self.screenshot_3d_btn.set_on_clicked(
@@ -560,7 +559,6 @@ class SLAM_GUI:
         chbox_save_tile.add_child(self.screenshot_3d_btn)
         
         self.panel.add_child(chbox_save_tile)
-
 
         ## Info Tab
         tab_margins = gui.Margins(0, int(np.round(0.5 * em)), 0, 0)

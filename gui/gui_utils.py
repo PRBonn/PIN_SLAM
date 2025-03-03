@@ -138,7 +138,7 @@ def get_latest_queue(q):
                 del message
             message = message_latest
         except queue.Empty:
-            if q.qsize() < 1:
+            if q.empty():
                 break
     return message
 
@@ -169,7 +169,7 @@ class ParamsGUI:
         mesh_default_on: bool = False,
         sdf_default_on: bool = False,   
         neural_point_map_default_on: bool = False,
-        neural_point_color_default_mode: int = 1, # 1: geo feature pca, 2: photo feature pca, 3: time, 4: stability
+        neural_point_color_default_mode: int = 1, # 1: geo feature pca, 2: photo feature pca, 3: time, 4: height
         neural_point_vis_down_rate: int = 1,
     ):
         self.q_main2vis = q_main2vis
