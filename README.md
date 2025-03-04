@@ -123,6 +123,12 @@ PIN-SLAM can run at the sensor frame rate on a moderate GPU.
 
 * Windows/MacOS with CPU-only mode
 
+### 0. Clone the repository
+
+```
+git clone git@github.com:PRBonn/PIN_SLAM.git
+cd PIN_SLAM
+```
 
 ### 1. Set up conda environment
 
@@ -149,12 +155,6 @@ pip3 install -r requirements.txt
 
 ## Run PIN-SLAM
 
-### Clone the repository
-
-```
-git clone git@github.com:PRBonn/PIN_SLAM.git
-cd PIN_SLAM
-```
 
 ### Sanity test
 
@@ -361,6 +361,9 @@ python3 vis_pin_map.py ./experiments/sanity_test_*  -m 0.2 -c neural_points.ply 
 
 ## Docker
 
+<details>
+  <summary>[Details (click to expand)]</summary>
+
 Thanks [@schneider-daniel](https://github.com/schneider-daniel) for providing a docker container.
 
 Build the docker container:
@@ -376,6 +379,7 @@ After building the container, configure the storage path in `start_docker.sh` an
 sudo chmod +x ./start_docker.sh
 ./start_docker.sh
 ```
+</details>
 
 ## Citation
 
