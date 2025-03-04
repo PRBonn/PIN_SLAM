@@ -1232,7 +1232,7 @@ class SLAM_GUI:
     def _update_thread(self):
         while True:
             if self.local_map_chbox.checked:
-                time.sleep(0.15)
+                time.sleep(0.1)
             elif self.slam_finished:
                 time.sleep(1.5)
             else:

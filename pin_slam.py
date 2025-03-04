@@ -47,7 +47,7 @@ from utils.tools import (
 from utils.tracker import Tracker
 
 from gui import slam_gui
-from gui.gui_utils import ParamsGUI, VisPacket, ControlPacket
+from gui.gui_utils import ParamsGUI, VisPacket, ControlPacket, get_latest_queue
 
 '''
     📍PIN-SLAM: LiDAR SLAM Using a Point-Based Implicit Neural Representation for Achieving Global Map Consistency
@@ -200,8 +200,8 @@ def run_pin_slam(
     q_main2vis = q_vis2main = None
     if config.o3d_vis_on:
         # communicator between the processes
-        q_main2vis = mp.Queue(maxsize=5) 
-        q_vis2main = mp.Queue(maxsize=1)
+        q_main2vis = mp.Queue() 
+        q_vis2main = mp.Queue()
 
         params_gui = ParamsGUI(
             q_main2vis=q_main2vis,
@@ -411,7 +411,7 @@ def run_pin_slam(
         if config.o3d_vis_on:
 
             if not q_vis2main.empty():
-                control_packet: ControlPacket = q_vis2main.get()
+                control_packet: ControlPacket = get_latest_queue(q_vis2main)
 
                 vis_visualize_on = control_packet.flag_vis
                 vis_global_on = control_packet.flag_global
@@ -428,7 +428,7 @@ def run_pin_slam(
                 while control_packet.flag_pause:
                     time.sleep(0.1)
                     if not q_vis2main.empty():
-                        control_packet = q_vis2main.get()
+                        control_packet = get_latest_queue(q_vis2main)
                         if not control_packet.flag_pause:
                             break
 
@@ -538,6 +538,8 @@ def run_pin_slam(
 
     if config.save_merged_pc:
         dataset.write_merged_point_cloud() # replay: save merged point cloud map
+
+    remove_gpu_cache()
     
     if config.o3d_vis_on:
        

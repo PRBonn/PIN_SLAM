@@ -58,6 +58,7 @@ class SLAMDataset(Dataset):
                 data_dir=Path(config.pc_path),
                 sequence=config.data_loader_seq,
                 topic=config.data_loader_seq,
+                cam_name=config.data_loader_seq,
             )
             config.end_frame = min(len(self.loader), config.end_frame)
             used_frame_count = int((config.end_frame - config.begin_frame) / config.step_frame)

@@ -19,11 +19,10 @@ from model.decoder import Decoder
 from model.neural_points import NeuralPoints
 from utils.config import Config
 from utils.mesher import Mesher
-from utils.tools import setup_experiment, split_chunks, load_decoders
-from utils.visualizer import MapVisualizer
+from utils.tools import setup_experiment, split_chunks, load_decoders, remove_gpu_cache
 
 from gui import slam_gui
-from gui.gui_utils import ParamsGUI, VisPacket, ControlPacket
+from gui.gui_utils import ParamsGUI, VisPacket
 
 
 '''
@@ -104,8 +103,8 @@ def vis_pin_map(
     q_main2vis = q_vis2main = None
     if o3d_vis_on:
         # communicator between the processes
-        q_main2vis = mp.Queue(maxsize=5) 
-        q_vis2main = mp.Queue(maxsize=1)
+        q_main2vis = mp.Queue() 
+        q_vis2main = mp.Queue()
 
         params_gui = ParamsGUI(
             q_main2vis=q_main2vis,
@@ -143,6 +142,8 @@ def vis_pin_map(
         cur_mesh = mesher.recon_aabb_collections_mesh(chunks_aabb, mesh_res_m, out_mesh_path, False, config.semantic_on, 
                                                       config.color_on, filter_isolated_mesh=True, mesh_min_nn=mc_nn)
         print("Reconstructing the global mesh done")
+    
+    remove_gpu_cache()
 
     if o3d_vis_on:
 
