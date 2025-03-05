@@ -20,48 +20,96 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+import importlib
 import os
 import sys
 
+from natsort import natsorted
 
 class McapDataloader:
     def __init__(self, data_dir: str, topic: str, *_, **__):
         """Standalone .mcap dataloader withouth any ROS distribution."""
         # Conditional imports to avoid injecting dependencies for non mcap users
+
         try:
-            from mcap.reader import make_reader
-            from mcap_ros2.reader import read_ros2_messages
-        except ImportError as e:
+            self.make_reader = importlib.import_module("mcap.reader").make_reader
+            self.read_ros2_messages = importlib.import_module("mcap_ros2.reader").read_ros2_messages
+        except ModuleNotFoundError:
             print("mcap plugins not installed: 'pip install mcap-ros2-support'")
             exit(1)
 
         from utils.point_cloud2 import read_point_cloud
 
-        # we expect `data_dir` param to be a path to the .mcap file, so rename for clarity
-        assert os.path.isfile(data_dir), "mcap dataloader expects an existing MCAP file"
-        self.sequence_id = os.path.basename(data_dir).split(".")[0]
-        mcap_file = str(data_dir)
+        # Handle both single file and directory inputs
+        if os.path.isfile(data_dir):
+            self.mcap_files = [data_dir]
+        elif os.path.isdir(data_dir):
+            self.mcap_files = natsorted([
+                os.path.join(data_dir, f) for f in os.listdir(data_dir)
+                if f.endswith('.mcap')
+            ])
+            assert len(self.mcap_files) > 0, f"No .mcap files found in directory: {data_dir}"
+            if len(self.mcap_files) > 1:
+                print("Reading multiple .mcap files in directory:")
+                print("\n".join([os.path.basename(path) for path in self.mcap_files]))
+        else:
+            raise ValueError(f"Input path {data_dir} is neither a file nor directory")
 
-        self.bag = make_reader(open(mcap_file, "rb"))
+        # Initialize with first file
+        self.current_file_idx = 0
+        self.sequence_id = os.path.basename(self.mcap_files[0]).split(".")[0]
+        self._initialize_current_file(self.mcap_files[0], topic)
+        
+        self.read_point_cloud = read_point_cloud
+        
+        # Calculate total number of scans across all files
+        self.total_scans = self._calculate_total_scans(topic)
+
+    def _initialize_current_file(self, mcap_file: str, topic: str):
+        """Initialize readers for a new mcap file."""
+        if hasattr(self, 'bag'):
+            del self.bag
+        self.bag = self.make_reader(open(mcap_file, "rb"))
         self.summary = self.bag.get_summary()
         self.topic = self.check_topic(topic)
         self.n_scans = self._get_n_scans()
-        self.msgs = read_ros2_messages(mcap_file, topics=topic)
-        self.read_point_cloud = read_point_cloud
-        self.use_global_visualizer = True
+        self.msgs = self.read_ros2_messages(mcap_file, topics=topic)
+        self.current_scan = 0
 
     def __del__(self):
         if hasattr(self, "bag"):
             del self.bag
 
+    def _calculate_total_scans(self, topic: str) -> int:
+        """Calculate total number of scans across all mcap files."""
+        total = 0
+        for file in self.mcap_files:
+            bag = self.make_reader(open(file, "rb"))
+            summary = bag.get_summary()
+            total += sum(
+                count
+                for (id, count) in summary.statistics.channel_message_counts.items()
+                if summary.channels[id].topic == topic
+            )
+            del bag  # Clean up the reader
+        return total
+
     def __getitem__(self, idx):
+        # Check if we need to move to next file
+        while self.current_scan >= self.n_scans:
+            self.current_file_idx += 1
+            if self.current_file_idx >= len(self.mcap_files):
+                raise IndexError("Index out of range")
+            self._initialize_current_file(self.mcap_files[self.current_file_idx], self.topic)
+
         msg = next(self.msgs).ros_msg
+        self.current_scan += 1
         points, point_ts = self.read_point_cloud(msg)
         frame_data = {"points": points, "point_ts": point_ts}
         return frame_data
 
     def __len__(self):
-        return self.n_scans
+        return self.total_scans
 
     def _get_n_scans(self) -> int:
         return sum(

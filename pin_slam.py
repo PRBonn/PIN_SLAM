@@ -11,8 +11,7 @@ import time
 import numpy as np
 import open3d as o3d
 import torch
-# import torch.multiprocessing as mp
-import multiprocessing as mp
+import torch.multiprocessing as mp
 import dtyper as typer
 import wandb
 from rich import print
