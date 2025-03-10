@@ -59,7 +59,8 @@ def setup_experiment(config: Config, argv=None, debug_mode: bool = False):
         print("Using the pure CPU mode, this would be slow")
         
     # set X service (FIXME)
-    os.environ["DISPLAY"] = ":0"
+    if "DISPLAY" not in os.environ:
+        os.environ["DISPLAY"] = ":0"
 
     # set the random seed for all
     seed_anything(config.seed)
