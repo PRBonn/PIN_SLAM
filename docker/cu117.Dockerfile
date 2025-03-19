@@ -7,14 +7,22 @@ ENV CV_VERSION=4.2.0
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TORCH_CUDA_ARCH_LIST="3.5;5.0;6.0;6.1;7.0;7.5;8.0;8.6+PTX"
 
+# Install python3.10 on Ubuntu 20.04 using deadsnakes PPA
+RUN apt-get update && \
+    apt-get install software-properties-common -y && \
+    add-apt-repository ppa:deadsnakes/ppa && \
+    apt-get update && apt-get install -y \
+    python3.10 && \
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
+
 # Get all dependencies
 RUN apt-get update && apt-get install -y \
     git zip unzip libssl-dev libcairo2-dev lsb-release libgoogle-glog-dev libgflags-dev libatlas-base-dev libeigen3-dev software-properties-common \
     build-essential cmake pkg-config libapr1-dev autoconf automake libtool curl libc6 libboost-all-dev debconf libomp5 libstdc++6 \
     libqt5core5a libqt5xml5 libqt5gui5 libqt5widgets5 libqt5concurrent5 libqt5opengl5 libcap2 libusb-1.0-0 libatk-adaptor neovim \
-    python3-pip python3-tornado python3-dev python3-numpy python3-virtualenv libpcl-dev libgoogle-glog-dev libgflags-dev libatlas-base-dev \
+    python3-tornado python3-dev python3-numpy python3-virtualenv libpcl-dev libgoogle-glog-dev libgflags-dev libatlas-base-dev \
     libsuitesparse-dev python3-pcl pcl-tools libgtk2.0-dev libavcodec-dev libavformat-dev libswscale-dev libtbb2 libtbb-dev libjpeg-dev \
-    libpng-dev libtiff-dev libdc1394-22-dev xfce4-terminal python3.8 python3-pip \
+    libpng-dev libtiff-dev libdc1394-22-dev xfce4-terminal \
     libclang-dev \
     libatk-bridge2.0 \
     libfontconfig1-dev \
@@ -71,7 +79,9 @@ rm -rf /opencv
 WORKDIR /
 ENV OpenCV_DIR=/usr/share/OpenCV
 
+RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3
 RUN python3 -m pip install --upgrade pip
+RUN python3 -m pip install --upgrade setuptools
 
 # PyTorch for CUDA 11.7
 RUN python3 -m pip install torch==2.0.0 torchvision==0.15.0 torchaudio==2.0.0 --index-url https://download.pytorch.org/whl/cu117
