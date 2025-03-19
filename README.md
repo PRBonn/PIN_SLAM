@@ -243,7 +243,7 @@ python3 pin_slam.py ./config/rgbd_slam/run_replica.yaml replica room0 -vsm
 
 We also support loading data from rosbag, mcap or pcap (ros2) using specific data loaders (originally from [KISS-ICP](https://github.com/PRBonn/kiss-icp)). You need to set the flag `-d` to use such data loaders. For example:
 ```
-# Run on a rosbag or a folder of rosbags with certain point cloud topic
+# Run on a rosbag or a folder of rosbags with certain point cloud topic, the same applies for mcap bags
 python3 pin_slam.py ./config/lidar_slam/run.yaml rosbag point_cloud_topic_name -i /path/to/the/rosbag -vsmd
 
 # If there's only one topic for point cloud in the rosbag, you can omit it
@@ -383,6 +383,10 @@ sudo chmod +x ./start_docker.sh
 
 ## Citation
 
+<details>
+  <summary>[Details (click to expand)]</summary>
+
+
 If you use PIN-SLAM for any academic work, please cite our original [paper](https://ieeexplore.ieee.org/document/10582536).
 
 ```
@@ -397,6 +401,7 @@ If you use PIN-SLAM for any academic work, please cite our original [paper](http
   url = {https://www.ipb.uni-bonn.de/wp-content/papercite-data/pdf/pan2024tro.pdf}
 }
 ```
+</details>
 
 ## Contact
 If you have any questions, please contact:

@@ -554,6 +554,8 @@ def run_pin_slam(
             if cur_mesh is not None:
                 packet_to_vis.add_mesh(np.array(cur_mesh.vertices, dtype=np.float64), np.array(cur_mesh.triangles), np.array(cur_mesh.vertex_colors, dtype=np.float64))
                 cur_mesh = None
+                
+            packet_to_vis.add_traj(odom_poses, gt_poses, pgo_poses, loop_edges)
 
             q_main2vis.put(packet_to_vis)
             time.sleep(1.0) 

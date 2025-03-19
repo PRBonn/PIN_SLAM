@@ -90,11 +90,11 @@ class VisPacket:
                     self.neural_points_data["local_mask"] = neural_points.local_mask[:-1]
 
                 if pca_color_on:
-                    geo_feature_3d, _ = feature_pca_torch(neural_points.geo_features[:-1], principal_components=neural_points.geo_feature_pca, down_rate=59)
+                    geo_feature_3d, _ = feature_pca_torch(neural_points.geo_features[:-1], principal_components=neural_points.geo_feature_pca, down_rate=97)
                     self.neural_points_data["color_pca_geo"] = geo_feature_3d
 
                     if neural_points.color_on:
-                        color_feature_3d, _ = feature_pca_torch(neural_points.color_features[:-1], principal_components=neural_points.color_feature_pca, down_rate=59)
+                        color_feature_3d, _ = feature_pca_torch(neural_points.color_features[:-1], principal_components=neural_points.color_feature_pca, down_rate=97)
                         self.neural_points_data["color_pca_color"] = color_feature_3d
 
 

@@ -280,7 +280,7 @@ class Config:
         
         # mesh reconstruction, marching cubes related
         self.mc_res_m: float = 0.3 # resolution for marching cubes
-        self.pad_voxel: int = 2 # pad x voxels on each side
+        self.pad_voxel: int = 3 # pad x voxels on each side
         self.skip_top_voxel: int = 2 # slip the top x voxels (mainly for visualization indoor, remove the roof)
         self.mc_mask_on: bool = True # use mask for marching cubes to avoid the artifacts
         self.mesh_min_nn: int = 8  # The minimum number of the neighbor neural points for a valid SDF prediction for meshing, too small would cause some artifacts (more complete but less accurate), too large would lead to lots of holes (more accurate but less complete)

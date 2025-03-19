@@ -16,7 +16,7 @@ from model.decoder import Decoder
 from model.neural_points import NeuralPoints
 from utils.config import Config
 from utils.semantic_kitti_utils import sem_kitti_color_map
-
+from utils.tools import remove_gpu_cache
 
 class Mesher:
     def __init__(
@@ -542,6 +542,8 @@ class Mesher:
                 use_torch_mc,
             )
             mesh_merged += cur_mesh
+
+            remove_gpu_cache() # deal with high GPU memory consumption when meshing (TODO)
 
         mesh_merged.remove_duplicated_vertices()
 

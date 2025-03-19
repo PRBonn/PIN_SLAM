@@ -506,9 +506,9 @@ class SLAM_GUI:
         self.panel.add_child(mesh_mc_res_slider_tile)
 
         mesh_min_nn_slider_tile = gui.Horiz(0.5 * em, gui.Margins(margin))
-        mesh_min_nn_slider_label = gui.Label("Mesh query min neighbors (6-25)  ")
+        mesh_min_nn_slider_label = gui.Label("Mesh query min neighbors (5-25)  ")
         self.mesh_min_nn_slider = gui.Slider(gui.Slider.INT)
-        self.mesh_min_nn_slider.set_limits(6, 25)
+        self.mesh_min_nn_slider.set_limits(5, 25)
         self.mesh_min_nn_slider.int_value = self.config.mesh_min_nn
         mesh_min_nn_slider_tile.add_child(mesh_min_nn_slider_label)
         mesh_min_nn_slider_tile.add_child(self.mesh_min_nn_slider)
@@ -1071,6 +1071,8 @@ class SLAM_GUI:
             self.slam_finished = True
             self.local_map_chbox.checked = False
             self.ego_chbox.checked = False
+            self.scan_chbox.checked = False
+            self.followcam_chbox.checked = False
 
         if data_packet.travel_dist is not None:
             self.dist_info.text = "Travel Distance: {:.2f} m".format(data_packet.travel_dist)

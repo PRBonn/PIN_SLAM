@@ -826,18 +826,15 @@ def feature_pca_torch(data, principal_components = None,
 
         # normalize to show as rgb
         if normalize: 
-            # min_vals = data_pca.min(dim=0, keepdim=True).values
-            # max_vals = data_pca.max(dim=0, keepdim=True).values
 
             # # deal with outliers
-            quantile_down_rate = 31 # quantile has count limit, downsample the data to avoid the limit
+            quantile_down_rate = 37 # quantile has count limit, downsample the data to avoid the limit
             min_vals = torch.quantile(data_pca[::quantile_down_rate], 0.02, dim=0, keepdim=True)
             max_vals = torch.quantile(data_pca[::quantile_down_rate], 0.98, dim=0, keepdim=True)
 
             # Normalize to range [0, 1]
-            data_pca = (data_pca - min_vals) / (max_vals - min_vals)
-
-            data_pca = data_pca.clamp(0, 1)
+            data_pca.sub_(min_vals).div_(max_vals - min_vals)
+            # data_pca = data_pca.clamp(0, 1)
 
     return data_pca, principal_components
 
