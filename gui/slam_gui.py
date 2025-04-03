@@ -497,9 +497,9 @@ class SLAM_GUI:
         self.panel.add_child(mesh_freq_frame_slider_tile)
         
         mesh_mc_res_slider_tile = gui.Horiz(0.5 * em, gui.Margins(margin))
-        mesh_mc_res_slider_label = gui.Label("Mesh MC resolution (5cm-100cm)")
+        mesh_mc_res_slider_label = gui.Label("Mesh MC resolution (1cm-100cm)")
         self.mesh_mc_res_slider = gui.Slider(gui.Slider.INT)
-        self.mesh_mc_res_slider.set_limits(5, 100)
+        self.mesh_mc_res_slider.set_limits(1, 100)
         self.mesh_mc_res_slider.int_value = int(self.config.mc_res_m * 100)
         mesh_mc_res_slider_tile.add_child(mesh_mc_res_slider_label)
         mesh_mc_res_slider_tile.add_child(self.mesh_mc_res_slider)

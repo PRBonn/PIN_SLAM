@@ -169,7 +169,7 @@ class TUMDataset:
         frame_data = {"points": points_xyzrgb}
 
         if self.load_img:
-            rgb_image = np.array(rgb_image)
+            rgb_image = np.array(self.rgb_frames[idx])
             rgb_image_dict = {"cam": rgb_image}
             frame_data["img"] = rgb_image_dict
 

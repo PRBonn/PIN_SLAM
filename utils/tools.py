@@ -396,7 +396,7 @@ def write_to_json(filename: Path, content: dict):
 
 
 def color_to_intensity(colors: torch.tensor):
-    intensity = 0.144 * colors[:, 0] + 0.299 * colors[:, 1] + 0.587 * colors[:, 2]
+    intensity = 0.299 * colors[:, 0] + 0.587 * colors[:, 1] + 0.114 * colors[:, 2] # thanks @zhSlamer (issue #46)
     return intensity.unsqueeze(1)
 
 
