@@ -790,7 +790,8 @@ def feature_pca_torch(data, principal_components = None,
                      principal_dim: int = 3,
                      down_rate: int = 1,
                      project_data: bool = True,
-                     normalize: bool = True):
+                     normalize: bool = True,
+                     chunk_size: int = 16384):
     """
         do PCA to a NxD torch tensor to get the data along the K principle dimensions
         N is the data count, D is the dimension of the data
@@ -823,7 +824,13 @@ def feature_pca_torch(data, principal_components = None,
     data_pca = None
     if project_data:
         # Step 5: Project data onto the top 3 principal components
-        data_pca = torch.matmul(data_centered, principal_components) # N, D @ D, P
+        data_pca_chunks = []
+        for i in range(0, N, chunk_size):
+            chunk = data_centered[i:i + chunk_size]
+            chunk_pca = torch.matmul(chunk, principal_components)  # N, D @ D, P
+            data_pca_chunks.append(chunk_pca)
+
+        data_pca = torch.cat(data_pca_chunks, dim=0)
 
         # normalize to show as rgb
         if normalize: 
