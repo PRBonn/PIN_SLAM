@@ -419,5 +419,6 @@ If you have any questions, please contact:
 
 [4DNDF (CVPR 24)](https://github.com/PRBonn/4dNDF): 3D LiDAR Mapping in Dynamic Environments using a 4D Implicit Neural Representation
 
-[PINGS](https://github.com/PRBonn/PINGS): Gaussian Splatting Meets Distance Fields within a Point-Based Implicit Neural Map
+[ENM-MCL (ICRA 25)](https://github.com/PRBonn/enm-mcl): Efficient Neural Map for Monte Carlo Localization
 
+[PINGS](https://github.com/PRBonn/PINGS): Gaussian Splatting Meets Distance Fields within a Point-Based Implicit Neural Map

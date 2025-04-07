@@ -51,15 +51,14 @@ class Mesher:
     ):
         """query the sdf value, semantic label and marching cubes mask for points
         Args:
-            coord: Nx3 torch tensor, the coordinates of all N (axbxc) query points in the scaled
-                kaolin coordinate system [-1,1]
+            coord: Nx3 torch tensor, the coordinates of all N (axbxc) query points
             bs: batch size for the inference
         Returns:
             sdf_pred: Ndim numpy array or torch tensor, signed distance value (scaled) at each query point
             sem_pred: Ndim numpy array or torch tenosr, semantic label prediction at each query point
             mc_mask:  Ndim bool numpy array or torch tensor, marching cubes mask at each query point
         """
-        # the coord torch tensor is already scaled in the [-1,1] coordinate system
+
         sample_count = coord.shape[0]
         iter_n = math.ceil(sample_count / bs)
         if query_sdf:
@@ -170,9 +169,8 @@ class Mesher:
         Args:
             bbx: open3d bounding box, in world coordinate system, with unit m
             voxel_size: scalar, marching cubes voxel size with unit m
-        Returns:
-            coord: Nx3 torch tensor, the coordinates of all N (axbxc) query points in the scaled
-                kaolin coordinate system [-1,1]
+        Returns: (torch tensor)
+            coord: Nx3 torch tensor, the coordinates of all N (axbxc) query points
             voxel_num_xyz: 3dim numpy array, the number of voxels on each axis for the bbx
             voxel_origin: 3dim numpy array the coordinate of the bottom-left corner of the 3d grids
                 for marching cubes, in world coordinate system with unit m
@@ -592,7 +590,7 @@ class Mesher:
             query_locally,
             mesh_min_nn,
             out_torch=use_torch_mc,
-        )
+        ) # outputs are already numpy array
 
         mc_sdf, _, _, mc_mask = self.assign_to_bbx(
             sdf_pred, None, None, mc_mask, voxel_num_xyz
@@ -610,8 +608,6 @@ class Mesher:
                 torch.utils.dlpack.to_dlpack(faces)
             )
             mesh = mesh.to_legacy()
-            mesh.remove_duplicated_vertices()
-            mesh.compute_vertex_normals()
         else:
             # np cpu version
             verts, faces = self.mc_mesh(

@@ -10,6 +10,7 @@ import time
 from datetime import datetime
 
 import cv2
+import torch
 import os
 import matplotlib.cm as cm
 import numpy as np
@@ -580,6 +581,12 @@ class SLAM_GUI:
         self.dist_info = gui.Label("Travel Distance: 0.00 m")
         tab_info.add_child(self.dist_info)
 
+        self.gpu_mem_info = gui.Label("GPU Memory Usage: 0.00 GB")
+        tab_info.add_child(self.gpu_mem_info)
+
+        self.fps_info = gui.Label("SLAM FPS: 0.0 Hz")
+        tab_info.add_child(self.fps_info)
+
         tabs.add_tab("Info", tab_info)
         self.panel.add_child(tabs)
 
@@ -878,6 +885,9 @@ class SLAM_GUI:
         if data_packet is None:
             data_packet = self.cur_data_packet
 
+        if data_packet is None:
+            return
+
         if data_packet.mesh_verts is not None and data_packet.mesh_faces is not None:
             self.mesh = o3d.geometry.TriangleMesh(
                 o3d.utility.Vector3dVector(data_packet.mesh_verts),
@@ -907,6 +917,9 @@ class SLAM_GUI:
         if data_packet is None:
             data_packet = self.cur_data_packet
 
+        if data_packet is None:
+            return
+
         if self.sdf_pool_chbox.checked and data_packet.sdf_pool_xyz is not None and data_packet.sdf_pool_rgb is not None:
             self.sdf_pool.points = o3d.utility.Vector3dVector(data_packet.sdf_pool_xyz)
             self.sdf_pool.colors = o3d.utility.Vector3dVector(data_packet.sdf_pool_rgb)
@@ -923,6 +936,9 @@ class SLAM_GUI:
     def visualize_neural_points(self, data_packet = None):
         if data_packet is None:
             data_packet = self.cur_data_packet
+        
+        if data_packet is None:
+            return
         
         if self.neural_point_chbox.checked:
 
@@ -996,6 +1012,9 @@ class SLAM_GUI:
         if data_packet is None:
             data_packet = self.cur_data_packet
 
+        if data_packet is None:
+            return
+
         if self.scan_chbox.checked and data_packet.current_pointcloud_xyz is not None:
             self.scan.points = o3d.utility.Vector3dVector(data_packet.current_pointcloud_xyz)
             if data_packet.current_pointcloud_rgb is not None:
@@ -1023,6 +1042,9 @@ class SLAM_GUI:
     def visualize_sdf_slice(self, data_packet = None):
         if data_packet is None:
             data_packet = self.cur_data_packet
+        
+        if data_packet is None:
+            return
 
         if self.sdf_chbox.checked and data_packet.sdf_slice_xyz is not None and data_packet.sdf_slice_rgb is not None:
             self.sdf_slice.points = o3d.utility.Vector3dVector(data_packet.sdf_slice_xyz)
@@ -1088,6 +1110,12 @@ class SLAM_GUI:
             )
             
             self.visualize_neural_points()
+
+        if data_packet.gpu_mem_usage_gb is not None:
+            self.gpu_mem_info.text = f"GPU Memory Usage: {data_packet.gpu_mem_usage_gb:.2f} GB"
+        
+        if data_packet.cur_fps is not None:
+            self.fps_info.text = f"SLAM FPS: {data_packet.cur_fps:.1f} Hz"
         
         self.visualize_scan()
 

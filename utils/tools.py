@@ -140,6 +140,16 @@ def remove_gpu_cache():
     if cuda_available:
         torch.cuda.empty_cache()
 
+def get_gpu_memory_usage_gb(return_cached: bool = True):
+    cuda_available = torch.cuda.is_available()
+    if cuda_available:
+        if return_cached:
+            return torch.cuda.memory_cached() / (1024 ** 3)
+        else:
+            return torch.cuda.memory_allocated() / (1024 ** 3)
+    else:
+        return 0.0
+
 def setup_optimizer(
     config: Config,
     neural_point_feat,

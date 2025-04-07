@@ -41,7 +41,8 @@ from utils.tools import (
     split_chunks,
     transform_torch,
     remove_gpu_cache,
-    create_bbx_o3d
+    create_bbx_o3d,
+    get_gpu_memory_usage_gb,
 )
 from utils.tracker import Tracker
 
@@ -230,6 +231,7 @@ def run_pin_slam(
 
     cur_mesh = None
     cur_sdf_slice = None
+    cur_fps = 0.0
         
     # for each frame
     # frame id as the processed frame, possible skipping done in data loader
@@ -450,7 +452,7 @@ def run_pin_slam(
                         cur_mesh = mesher.recon_aabb_collections_mesh(chunks_aabb, vis_mesh_mc_res_m, None, True, config.semantic_on, config.color_on, filter_isolated_mesh=True, mesh_min_nn=vis_mesh_min_nn)    
                     else:
                         aabb = global_neural_pcd_down.get_axis_aligned_bounding_box()
-                        chunks_aabb = split_chunks(global_neural_pcd_down, aabb, vis_mesh_mc_res_m * 300) # reconstruct in chunks
+                        chunks_aabb = split_chunks(global_neural_pcd_down, aabb, vis_mesh_mc_res_m * 200) # reconstruct in chunks
                         cur_mesh = mesher.recon_aabb_collections_mesh(chunks_aabb, vis_mesh_mc_res_m, None, False, config.semantic_on, config.color_on, filter_isolated_mesh=True, mesh_min_nn=vis_mesh_min_nn)    
                 
                 # cur_sdf_slice = None
@@ -468,7 +470,7 @@ def run_pin_slam(
                 odom_poses, gt_poses, pgo_poses = dataset.get_poses_np_for_vis()
                 loop_edges = pgm.loop_edges_vis if config.pgo_on else None
 
-                packet_to_vis: VisPacket = VisPacket(frame_id=frame_id, travel_dist=travel_dist[-1])
+                packet_to_vis: VisPacket = VisPacket(frame_id=frame_id, travel_dist=travel_dist[-1], gpu_mem_usage_gb=get_gpu_memory_usage_gb(), cur_fps=cur_fps)
 
                 if not neural_points.is_empty():
                     packet_to_vis.add_neural_points_data(neural_points, only_local_map=(not vis_global_on), pca_color_on=config.decoder_freezed)
@@ -497,6 +499,7 @@ def run_pin_slam(
 
         cur_frame_process_time = np.array([T2-T1, T3-T2, T5-T4, T6-T5, T4-T3]) # loop & pgo in the end, visualization and I/O time excluded
         dataset.time_table.append(cur_frame_process_time) # in s
+        cur_fps = 1.0 / (np.sum(np.array(dataset.time_table[-10:]), axis=1).mean() + 1e-6)
 
         if config.wandb_vis_on:
             wandb_log_content = {'frame': frame_id, 'timing(s)/preprocess': T2-T1, 'timing(s)/tracking': T3-T2, 'timing(s)/pgo': T4-T3, 'timing(s)/mapping': T6-T4} 
@@ -524,7 +527,7 @@ def run_pin_slam(
     output_mc_res_m = config.mc_res_m*0.6
     mc_cm_str = str(round(output_mc_res_m*1e2))
     if config.save_mesh:    
-        chunks_aabb = split_chunks(neural_pcd, neural_pcd.get_axis_aligned_bounding_box(), output_mc_res_m * 300) # reconstruct in chunks
+        chunks_aabb = split_chunks(neural_pcd, neural_pcd.get_axis_aligned_bounding_box(), output_mc_res_m * 200) # reconstruct in chunks
         mesh_path = os.path.join(run_path, "mesh", "mesh_" + mc_cm_str + "cm.ply")
         print("Reconstructing the global mesh with resolution {} cm".format(mc_cm_str))
         cur_mesh = mesher.recon_aabb_collections_mesh(chunks_aabb, output_mc_res_m, mesh_path, False, config.semantic_on, config.color_on, filter_isolated_mesh=True, mesh_min_nn=config.mesh_min_nn)
@@ -554,7 +557,7 @@ def run_pin_slam(
             if cur_mesh is not None:
                 packet_to_vis.add_mesh(np.array(cur_mesh.vertices, dtype=np.float64), np.array(cur_mesh.triangles), np.array(cur_mesh.vertex_colors, dtype=np.float64))
                 cur_mesh = None
-                
+
             packet_to_vis.add_traj(odom_poses, gt_poses, pgo_poses, loop_edges)
 
             q_main2vis.put(packet_to_vis)

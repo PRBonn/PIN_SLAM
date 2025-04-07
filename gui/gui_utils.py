@@ -24,6 +24,8 @@ class VisPacket:
         gt_poses=None,
         slam_poses=None,
         travel_dist=None,
+        gpu_mem_usage_gb=None,
+        cur_fps=None,
         slam_finished=False,
     ):
         self.has_neural_points = False
@@ -45,6 +47,8 @@ class VisPacket:
         self.sdf_pool_rgb = None
 
         self.travel_dist = travel_dist
+        self.gpu_mem_usage_gb = gpu_mem_usage_gb
+        self.cur_fps = cur_fps
         self.slam_finished = slam_finished
 
         self.finish = finish
