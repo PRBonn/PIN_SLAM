@@ -52,7 +52,11 @@
 ----
 **Update: New GUI**
 
+![coloseum_pin_gui_fast](https://github.com/user-attachments/assets/490b3652-25d3-4a8a-97ef-50a64f3a00d5)
+
 ![demo_new_gui_ipb_car](https://github.com/user-attachments/assets/0f426606-c680-42f8-a6ab-f047d5291788)
+
+
 
 
 <!-- TABLE OF CONTENTS -->
