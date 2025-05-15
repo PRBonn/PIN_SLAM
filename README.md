@@ -425,4 +425,4 @@ If you have any questions, please contact:
 
 [ENM-MCL (ICRA 25)](https://github.com/PRBonn/enm-mcl): Efficient Neural Map for Monte Carlo Localization
 
-[PINGS](https://github.com/PRBonn/PINGS): Gaussian Splatting Meets Distance Fields within a Point-Based Implicit Neural Map
+[PINGS (RSS 25)](https://github.com/PRBonn/PINGS): Gaussian Splatting Meets Distance Fields within a Point-Based Implicit Neural Map
